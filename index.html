@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>천로역정 성경 레이스</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .bg-stripes-gray { background-image: linear-gradient(135deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent); background-size: 10px 10px; }
+        /* 하늘 배경 */
+        .bg-sky-texture { 
+            background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%);
+        }
+        @keyframes wiggle { 0%, 100% { transform: rotate(-3deg) scale(1.1); } 50% { transform: rotate(3deg) scale(1.1); } }
+        .animate-wiggle { animation: wiggle 0.3s ease-in-out infinite; }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-float-slow { animation: float 10s ease-in-out infinite; }
+        @keyframes float { 0% { transform: translateX(0px); } 50% { transform: translateX(10px); } 100% { transform: translateX(0px); } }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 산 배경 장식 (CSS Draw) */
+        .mountain-back {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60%;
+            background: #86efac; /* 연한 초록 */
+            clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%);
+            z-index: 1;
+            opacity: 0.8;
+        }
+        .mountain-front {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 45%;
+            background: #4ade80; /* 진한 초록 */
+            clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%);
+            z-index: 2;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // ====================================================================
+        // [수정됨] 노션 키 삭제 -> Supabase 서버 주소 입력란으로 변경
+        // 나중에 Supabase에 배포하고 나온 주소를 아래 따옴표 안에 넣으세요.
+        // 예: "https://abcdefg.supabase.co/functions/v1/notion-proxy"
+        // ====================================================================
+        const SUPABASE_FUNCTION_URL = "YOUR_SUPABASE_FUNCTION_URL_HERE"; 
+
+        // --- Firebase Config ---
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        let db, auth;
+        try {
+            if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                db = firebase.firestore();
+            }
+        } catch (e) { console.error("Firebase init failed:", e); }
+
+        // --- 아이콘 ---
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const icons = {
+                crown: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m2 4 3 12h14l3-12-6 7-4-3-4 3-6-7zm5 16h10"/></svg>,
+                trophy: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+                users: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+                book: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
+                arrowRight: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
+                mapPin: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>,
+                back: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>,
+                check: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12"/></svg>,
+                flame: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+                info: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
+                close: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+                trash: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+                download: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+                refresh: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>,
+                edit: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+                helpbook: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            };
+            return icons[name] || null;
+        };
+
+        const LEVEL_SYSTEM = [
+            { min: 0, title: '응애 나 아기 성도', emoji: '🍼' },
+            { min: 30, title: '설교 때 꿀잠자는 유두고', emoji: '😴' },
+            { min: 100, title: '형들 도시락 배달하는 다윗', emoji: '🍱' },
+            { min: 200, title: '예수님 보려고 나무 탄 삭개오', emoji: '🌳' },
+            { min: 350, title: '돌맹이로 골리앗 잡은 용사', emoji: '🪨' },
+            { min: 550, title: '사자 밥 될 뻔한 다니엘', emoji: '🦁' },
+            { min: 800, title: '지팡이로 홍해 가른 모세', emoji: '🌊' },
+            { min: 1200, title: '불병거 타고 승천하는 엘리야', emoji: '🔥' }
+        ];
+
+        // --- 플랜 및 버전 데이터 ---
+        const PLAN_TYPES = [
+            { id: '1year', title: '일년 일독', desc: '1년에 성경 1독을 합니다.' },
+            { id: 'nt', title: '신약 일독', desc: '1년 동안 신약 1독을 합니다.' }
+        ];
+
+        const BIBLE_VERSIONS = {
+            '1year': [
+                { id: 'revised', name: '개역개정', desc: '교회에서 평소에 사용하는 성경', tagName: '개역개정 일년일독' },
+                { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 일년일독' },
+                { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 일년일독' }
+            ],
+            'nt': [
+                { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 신약일독' },
+                { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 신약일독' },
+                { id: 'message', name: '메시지 성경', desc: '현대 문화와 일상 언어로 생생하게 재해석한 의역 성경', tagName: '메시지 신약일독' }
+            ]
+        };
+
+        const seniorSubgroups = Array.from({length: 14}, (_, i) => `${i + 1}구역`).concat(['여성실버1', '여성실버2', '남자실버', '젊은부부']);
+        const youthSubgroups = ['유리 목장', '아영 목장', '화목 목장', '민혁 목장'];
+        const middleHighSubgroups = ['1목장', '2목장', '3목장', '4목장'];
+        const elementarySubgroups = ['1학년', '2학년', '3학년', '4학년', '5학년', '6학년'];
+        const kindergartenSubgroups = ['소망반', '빌립반', '믿음반'];
+
+        const MOCK_COMMUNITIES = [
+          { id: 'senior', name: '장년부', avgDay: 82, color: 'bg-orange-500', icon: '🏔️', subgroups: seniorSubgroups },
+          { id: 'youth', name: '청년부', avgDay: 45, color: 'bg-blue-500', icon: '🏃', subgroups: youthSubgroups },
+          { id: 'middlehigh', name: '중고등부', avgDay: 30, color: 'bg-purple-500', icon: '🏫', subgroups: middleHighSubgroups },
+          { id: 'elementary', name: '유초등부', avgDay: 20, color: 'bg-yellow-500', icon: '🐥', subgroups: elementarySubgroups },
+          { id: 'kinder', name: '유아유치부', avgDay: 10, color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
+        ];
+
+        const GHOST_RUNNERS = [
+          { name: '김철수', day: 42, score: 450, gender: 'male' },
+          { name: '이영희', day: 48, score: 560, gender: 'female' },
+          { name: '박목사', day: 90, score: 1300, gender: 'male' },
+          { name: '최집사', day: 15, score: 80, gender: 'female' },
+        ];
+
+        const TOTAL_DAYS = 365;
+        const PANIC_DISTANCE = 5;
+
+        // 창세기 1장 전체 텍스트 (데모용)
+        const GENESIS_1 = `### 1. 태초에 하나님이 천지를 창조하시니라
+2. 땅이 혼돈하고 공허하며 흑암이 깊음 위에 있고 하나님의 영은 수면 위에 운행하시니라
+3. 하나님이 이르시되 빛이 있으라 하시니 빛이 있었고
+4. 빛이 하나님이 보시기에 좋았더라 하나님이 빛과 어둠을 나누사
+(중략)`;
+
+        // --- Markdown Renderer ---
+        const MarkdownRenderer = ({ content }) => {
+            if (!content) return null;
+            const lines = content.split('\n');
+            return (
+                <div className="space-y-4">
+                    {lines.map((line, i) => {
+                        const trimmed = line.trim();
+                        if (trimmed.startsWith('### ')) return <h3 key={i} className="text-lg font-bold text-slate-800 mt-4 mb-2 border-b border-slate-200 pb-1">{trimmed.slice(4)}</h3>;
+                        if (trimmed.startsWith('## ')) return <h2 key={i} className="text-xl font-bold text-slate-800 mt-5 mb-2">{trimmed.slice(3)}</h2>;
+                        if (trimmed.startsWith('# ')) return <h1 key={i} className="text-2xl font-bold text-slate-800 mt-6 mb-3">{trimmed.slice(2)}</h1>;
+                        if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={i} className="list-disc list-inside ml-4 text-slate-700 font-serif">{trimmed.slice(2)}</li>;
+                        if (/^\d+\.\s/.test(trimmed)) return <li key={i} className="list-decimal list-inside ml-4 text-slate-700 font-serif">{trimmed.replace(/^\d+\.\s/, '')}</li>;
+                        if (trimmed.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-blue-300 pl-4 italic text-slate-600 my-4 bg-slate-50 p-2 rounded font-serif">{trimmed.slice(2)}</blockquote>;
+                        if (trimmed === '') return <div key={i} className="h-2"></div>;
+                        return <p key={i} className="text-slate-700 leading-relaxed font-serif text-lg">{line}</p>;
+                    })}
+                </div>
+            );
+        };
+
+        // --- Main Component ---
+        const App = () => {
+            const [view, setView] = React.useState('login'); 
+            const [loginName, setLoginName] = React.useState('');
+            const [loginPw, setLoginPw] = React.useState('');
+            const [tempUser, setTempUser] = React.useState(null); 
+            const [currentUser, setCurrentUser] = React.useState(null); 
+            const [errorMsg, setErrorMsg] = React.useState('');
+            const [showConfetti, setShowConfetti] = React.useState(false);
+            const [levelUpToast, setLevelUpToast] = React.useState(null);
+            const [subgroupStats, setSubgroupStats] = React.useState({});
+            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', loading: false });
+            const [hasReadToday, setHasReadToday] = React.useState(false);
+            const [showScoreInfo, setShowScoreInfo] = React.useState(false);
+            const [showReadingGuide, setShowReadingGuide] = React.useState(false); 
+            const [bonusToast, setBonusToast] = React.useState(null);
+            
+            const [selectedPlanType, setSelectedPlanType] = React.useState(null);
+
+            const [isAdmin, setIsAdmin] = React.useState(false);
+            const [allUsers, setAllUsers] = React.useState([]);
+            const [editingUser, setEditingUser] = React.useState(null); 
+
+            const getLevelInfo = (score) => {
+                const level = [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
+                return level;
+            };
+
+            const downloadCSV = () => {
+                if (allUsers.length === 0) {
+                    alert("데이터가 없습니다.");
+                    return;
+                }
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
+                csvContent += "이름,부서,소그룹,현재Day,총점수,연속일수,마지막읽은날,플랜ID\n";
+                allUsers.forEach(u => {
+                    const row = `${u.name},${u.communityName},${u.subgroupId},${u.currentDay},${u.score},${u.streak},${u.lastReadDate || '없음'},${u.planId || '1year_revised'}`;
+                    csvContent += row + "\r\n";
+                });
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `성경통독_전체기록_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const deleteUser = (userName) => {
+                if (confirm(`${userName}님의 데이터를 정말 삭제하시겠습니까?`)) {
+                    localStorage.removeItem(`user_${userName}`);
+                    setAllUsers(prev => prev.filter(u => u.name !== userName));
+                    alert("삭제되었습니다.");
+                }
+            };
+
+            const startEditUser = (user) => {
+                setEditingUser({ ...user });
+            };
+
+            const saveEditUser = () => {
+                if (!editingUser) return;
+                localStorage.setItem(`user_${editingUser.name}`, JSON.stringify(editingUser));
+                setAllUsers(prev => prev.map(u => u.name === editingUser.name ? editingUser : u));
+                setEditingUser(null);
+                alert("수정되었습니다.");
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                setErrorMsg('');
+                if(!loginName.trim() || !loginPw.trim()) {
+                    setErrorMsg("이름과 암호를 모두 입력해주세요.");
+                    return;
+                }
+                if (loginName === 'admin' && loginPw === '08283') {
+                    const users = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key.startsWith('user_')) {
+                            try { users.push(JSON.parse(localStorage.getItem(key))); } catch(e) {}
+                        }
+                    }
+                    setAllUsers(users);
+                    setIsAdmin(true);
+                    return;
+                }
+                const userKey = `user_${loginName.trim()}`;
+                const storedUser = localStorage.getItem(userKey);
+                if (storedUser) {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.password === loginPw) {
+                        if (!parsedUser.startDate) {
+                            parsedUser.startDate = new Date().toDateString();
+                            localStorage.setItem(userKey, JSON.stringify(parsedUser));
+                        }
+                        if (parsedUser.score === undefined) parsedUser.score = parsedUser.currentDay * 10;
+                        setCurrentUser(parsedUser);
+                        const todayStr = new Date().toDateString();
+                        setHasReadToday(parsedUser.lastReadDate === todayStr);
+                        setView('dashboard');
+                    } else {
+                        setErrorMsg("암호가 틀렸습니다.");
+                    }
+                } else {
+                    const newUserBase = {
+                        name: loginName.trim(),
+                        password: loginPw,
+                        startDate: new Date().toDateString(), 
+                        currentDay: 1,
+                        streak: 0,
+                        score: 0, 
+                        lastReadDate: null,
+                        gender: Math.random() > 0.5 ? 'male' : 'female',
+                    };
+                    setTempUser(newUserBase);
+                    setTempUser(prev => ({...newUserBase})); // Ensure clean slate
+                    setView('plan_type_select'); 
+                }
+            };
+
+            const handlePlanTypeSelect = (typeId) => {
+                setSelectedPlanType(typeId);
+                setView('bible_version_select');
+            };
+
+            const handleVersionSelect = (versionId) => {
+                const fullPlanId = `${selectedPlanType}_${versionId}`;
+                if (tempUser) {
+                    setTempUser(prev => ({ ...prev, planId: fullPlanId }));
+                    setView('community_select');
+                } 
+                else if (currentUser) {
+                    const updatedUser = { ...currentUser, planId: fullPlanId };
+                    setCurrentUser(updatedUser);
+                    localStorage.setItem(`user_${updatedUser.name}`, JSON.stringify(updatedUser));
+                    setView('dashboard');
+                    setShowConfetti(true); 
+                    setTimeout(() => setShowConfetti(false), 2000);
+                }
+            };
+
+            const handleCommunitySelect = (commId, commName) => {
+                setTempUser(prev => ({ ...prev, communityId: commId, communityName: commName }));
+                setView('subgroup_select');
+            };
+
+            const handleSubgroupSelect = (subgroup) => {
+                const finalUser = { ...tempUser, subgroupId: subgroup };
+                const userKey = `user_${finalUser.name}`;
+                localStorage.setItem(userKey, JSON.stringify(finalUser));
+                setCurrentUser(finalUser);
+                setTempUser(null); // Clear tempUser after signup
+                setView('dashboard');
+            };
+
+            // --- [수정된 부분] Supabase Edge Function 호출 로직 ---
+            const fetchNotionData = async (planId, currentDay) => {
+                if (!SUPABASE_FUNCTION_URL || SUPABASE_FUNCTION_URL.includes("YOUR_")) {
+                    console.warn("Supabase URL이 설정되지 않았습니다.");
+                    return { title: null, text: "서버 연결 설정이 필요합니다.\n관리자에게 문의해주세요." };
+                }
+
+                const [planType, version] = (planId || '1year_revised').split('_');
+                const targetTag = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.tagName || '개역개정 일년일독';
+                
+                // 오늘 날짜 매칭 (년도 무시, 2025년 기준 월/일)
+                const targetDate = new Date(2025, 0, currentDay); 
+                const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(targetDate.getDate()).padStart(2, '0');
+                const targetDateStr = `${mm}-${dd}`;
+                
+                console.log(`Requesting Server: Tag=[${targetTag}], Date=[${targetDateStr}]`);
+
+                try {
+                    // 내 서버(Supabase)에 "이 태그와 이 날짜의 글을 줘"라고 요청
+                    const response = await fetch(SUPABASE_FUNCTION_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            tag: targetTag,
+                            date: targetDateStr
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+                    const data = await response.json();
+                    
+                    if (data.error) return { title: null, text: `[오류] ${data.error}` };
+                    
+                    // 서버가 다 처리해서 title과 text만 깔끔하게 줍니다.
+                    return { title: data.title, text: data.text };
+
+                } catch (e) {
+                    console.error("Fetch Error:", e);
+                    return { title: null, text: "서버와 통신 중 오류가 발생했습니다.\n인터넷 연결을 확인해주세요." };
+                }
+            };
+
+            React.useEffect(() => {
+                if (view !== 'dashboard' || !currentUser) return;
+
+                const loadVerse = async () => {
+                    setVerseData(prev => ({ ...prev, loading: true }));
+                    const { currentDay, planId } = currentUser;
+                    const [planType, version] = (planId || '1year_revised').split('_');
+                    const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
+                    
+                    const notionData = await fetchNotionData(planId, currentDay);
+                    
+                    if (notionData && notionData.text && !notionData.text.startsWith('[오류]')) {
+                        setVerseData({ 
+                            title: `${planTypeName} DAY ${currentDay}일`,
+                            subtitle: notionData.title || `(제목 없음)`,
+                            text: notionData.text, 
+                            loading: false 
+                        });
+                    } else {
+                        const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
+                        // 데모 모드 (1일차는 보여줌, 서버 오류 시에도 창세기 1장 예시)
+                        const isFirstDay = currentDay === 1;
+                        const hasError = !notionData || notionData.text.includes('오류') || notionData.text.includes('서버');
+                        
+                        let displayText;
+                        if (isFirstDay && hasError) {
+                            displayText = GENESIS_1; // 1일차인데 서버 안 되면 일단 창세기 보여줌
+                        } else {
+                            displayText = notionData?.text || `데이터를 불러올 수 없습니다.\n\n1. 노션 연동 상태를 확인하세요.\n2. '${versionName}' 태그가 정확한지 확인하세요.\n3. 오늘 날짜에 해당하는 데이터가 있는지 확인하세요.`;
+                        }
+
+                        setTimeout(() => {
+                            setVerseData({ 
+                                title: `${planTypeName} DAY ${currentDay}일`, 
+                                subtitle: `${versionName} 읽기`,
+                                text: displayText,
+                                loading: false 
+                            });
+                        }, 500);
+                    }
+                };
+
+                loadVerse();
+
+                const comm = MOCK_COMMUNITIES.find(c => c.id === currentUser.communityId);
+                if (comm) {
+                    const stats = {};
+                    comm.subgroups.forEach(sub => {
+                        let rate = Math.floor(Math.random() * 50) + 30;
+                        stats[sub] = rate;
+                    });
+                    if (!hasReadToday) {
+                        stats[currentUser.subgroupId] = Math.max(0, stats[currentUser.subgroupId] - 5);
+                    }
+                    setSubgroupStats(stats);
+                }
+
+            }, [view, currentUser?.currentDay, currentUser?.planId]);
+
+            const handleRead = () => {
+                const todayStr = new Date().toDateString();
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toDateString();
+
+                let newStreak = currentUser.streak || 0;
+                if (currentUser.lastReadDate === yesterdayStr) {
+                    newStreak += 1;
+                } else if (currentUser.lastReadDate !== todayStr) {
+                    newStreak = 1;
+                }
+                
+                const streakBonus = Math.min(newStreak, 5);
+                const pointsEarned = 10 + streakBonus;
+                const newScore = (currentUser.score || 0) + pointsEarned;
+                
+                const oldLevel = getLevelInfo(currentUser.score || 0);
+                const newLevel = getLevelInfo(newScore);
+                
+                if (newLevel.min > oldLevel.min) {
+                    setLevelUpToast(newLevel);
+                    setTimeout(() => setLevelUpToast(null), 4000);
+                }
+
+                setBonusToast({ basic: 10, streak: streakBonus, total: pointsEarned });
+                setTimeout(() => setBonusToast(null), 4000);
+
+                const newDay = currentUser.currentDay + 1;
+                const updatedUser = { 
+                    ...currentUser, 
+                    currentDay: newDay, 
+                    streak: newStreak,
+                    score: newScore,
+                    lastReadDate: todayStr 
+                };
+                
+                setCurrentUser(updatedUser);
+                setHasReadToday(true);
+                localStorage.setItem(`user_${currentUser.name}`, JSON.stringify(updatedUser));
+                
+                setShowConfetti(true);
+                setTimeout(() => setShowConfetti(false), 3000);
+            };
+
+            const handleLogout = () => {
+                setCurrentUser(null);
+                setIsAdmin(false);
+                setTempUser(null);
+                setLoginName('');
+                setLoginPw('');
+                setErrorMsg('');
+                setView('login');
+                setHasReadToday(false);
+                setEditingUser(null);
+            };
+
+            const handleChangeVersionStart = () => {
+                setSelectedPlanType(null); 
+                setTempUser(null); 
+                setView('plan_type_select');
+            };
+
+            const getSubgroupRanking = () => {
+                if (!currentUser || !subgroupStats) return [];
+                const currentStats = { ...subgroupStats };
+                if (hasReadToday) {
+                    currentStats[currentUser.subgroupId] = Math.min(100, currentStats[currentUser.subgroupId] + 5);
+                }
+                return Object.entries(currentStats)
+                    .map(([name, rate]) => ({ name, rate }))
+                    .sort((a, b) => b.rate - a.rate);
+            };
+
+            // ================= VIEW RENDERING =================
+
+            // 관리자 모드
+            if (isAdmin) {
+                return (
+                    <div className="min-h-screen bg-slate-100 p-6">
+                        <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6">
+                            <div className="flex justify-between items-center mb-6 border-b pb-4">
+                                <h1 className="text-2xl font-bold text-slate-800">🛠️ 관리자 모드</h1>
+                                <button onClick={handleLogout} className="text-sm bg-slate-200 px-3 py-2 rounded hover:bg-slate-300">나가기</button>
+                            </div>
+                            
+                            <div className="mb-6 flex gap-2">
+                                <button onClick={downloadCSV} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold">
+                                    <Icon name="download" size={18}/> 엑셀(CSV) 다운로드
+                                </button>
+                                <div className="text-xs text-slate-500 flex items-center bg-slate-50 px-2 rounded">
+                                    * 전체 읽은 기록을 엑셀로 저장합니다.
+                                </div>
+                            </div>
+
+                            {/* 유저 수정 모달 */}
+                            {editingUser && (
+                                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                                        <h3 className="font-bold text-lg border-b pb-2">회원 정보 수정 ({editingUser.name})</h3>
+                                        
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">소속 공동체</label>
+                                            <select 
+                                                value={editingUser.communityId} 
+                                                onChange={e => {
+                                                    const comm = MOCK_COMMUNITIES.find(c => c.id === e.target.value);
+                                                    setEditingUser({
+                                                        ...editingUser, 
+                                                        communityId: comm.id, 
+                                                        communityName: comm.name,
+                                                        subgroupId: comm.subgroups[0] 
+                                                    });
+                                                }}
+                                                className="w-full border rounded p-2 text-sm"
+                                            >
+                                                {MOCK_COMMUNITIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">소그룹</label>
+                                            <select 
+                                                value={editingUser.subgroupId} 
+                                                onChange={e => setEditingUser({...editingUser, subgroupId: e.target.value})}
+                                                className="w-full border rounded p-2 text-sm"
+                                            >
+                                                {MOCK_COMMUNITIES.find(c => c.id === editingUser.communityId)?.subgroups.map(s => (
+                                                    <option key={s} value={s}>{s}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">성경 읽기 플랜</label>
+                                            <select 
+                                                value={editingUser.planId || '1year_revised'} 
+                                                onChange={e => setEditingUser({...editingUser, planId: e.target.value})}
+                                                className="w-full border rounded p-2 text-sm"
+                                            >
+                                                <optgroup label="일년 일독">
+                                                    {BIBLE_VERSIONS['1year'].map(v => <option key={`1year_${v.id}`} value={`1year_${v.id}`}>{v.name}</option>)}
+                                                </optgroup>
+                                                <optgroup label="신약 일독">
+                                                    {BIBLE_VERSIONS['nt'].map(v => <option key={`nt_${v.id}`} value={`nt_${v.id}`}>{v.name}</option>)}
+                                                </optgroup>
+                                            </select>
+                                        </div>
+
+                                        <div className="flex gap-2 pt-4">
+                                            <button onClick={saveEditUser} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">저장</button>
+                                            <button onClick={() => setEditingUser(null)} className="flex-1 bg-slate-200 text-slate-600 py-2 rounded hover:bg-slate-300">취소</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-slate-600">
+                                    <thead className="text-xs text-slate-700 uppercase bg-slate-50">
+                                        <tr>
+                                            <th className="px-4 py-3">이름</th>
+                                            <th className="px-4 py-3">부서 / 소그룹</th>
+                                            <th className="px-4 py-3 text-center">암호</th>
+                                            <th className="px-4 py-3 text-center">Day</th>
+                                            <th className="px-4 py-3 text-center">점수</th>
+                                            <th className="px-4 py-3 text-center">플랜</th>
+                                            <th className="px-4 py-3 text-center">관리</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {allUsers.length > 0 ? allUsers.map((u, idx) => (
+                                            <tr key={idx} className="border-b hover:bg-slate-50">
+                                                <td className="px-4 py-3 font-medium text-slate-900">{u.name}</td>
+                                                <td className="px-4 py-3">
+                                                    <span className="font-bold">{u.communityName}</span><br/>
+                                                    <span className="text-xs text-slate-400">{u.subgroupId}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-center text-slate-400">{u.password}</td>
+                                                <td className="px-4 py-3 text-center font-bold text-blue-600">{u.currentDay}</td>
+                                                <td className="px-4 py-3 text-center">{u.score}</td>
+                                                <td className="px-4 py-3 text-center text-xs text-slate-400 truncate max-w-[100px]">{u.planId}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <div className="flex justify-center gap-2">
+                                                        <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded">
+                                                            <Icon name="edit" size={16} />
+                                                        </button>
+                                                        <button onClick={() => deleteUser(u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded">
+                                                            <Icon name="trash" size={16} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan="7" className="px-4 py-6 text-center text-slate-400">데이터가 없습니다.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'login') {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative">
+                        <div className="absolute top-4 right-4">
+                            <button onClick={() => { setLoginName('admin'); setLoginPw(''); document.querySelector('input[type=password]').focus(); }} 
+                                className="text-xs text-slate-300 hover:text-slate-500">관리자</button>
+                        </div>
+
+                        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-slate-100">
+                            <div className="text-center mb-8">
+                                <div className="text-4xl mb-2">🏃‍♂️💨</div>
+                                <h1 className="text-2xl font-extrabold text-slate-800">천로역정 성경 레이스</h1>
+                                <p className="text-slate-400 text-sm mt-2">유쾌한 신앙생활의 시작!</p>
+                            </div>
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">이름</label>
+                                    <input type="text" value={loginName} onChange={e => setLoginName(e.target.value)} 
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="홍길동" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">암호</label>
+                                    <input type="password" value={loginPw} onChange={e => setLoginPw(e.target.value)} 
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="1글자도 가능해요" />
+                                </div>
+                                
+                                <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+                                    <p className="text-xs text-red-600 font-bold break-keep text-center">
+                                        ⚠️ 처음 오셨나요? <br/>
+                                        반드시 <span className="underline">실명</span>으로 가입해주세요.<br/>
+                                        (예: 홍길동)
+                                    </p>
+                                </div>
+
+                                {errorMsg && <p className="text-red-500 text-xs text-center">{errorMsg}</p>}
+                                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-95 mt-4">
+                                    입장하기
+                                </button>
+
+                                <p className="text-xs text-slate-400 text-center mt-3">
+                                    암호를 잊어버린 경우 사무실에 문의해주세요.
+                                </p>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'plan_type_select') {
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="w-full max-w-md mb-6">
+                            {/* 설정 변경 중이라면 뒤로가기 = 대시보드 */}
+                            {currentUser && !tempUser && (
+                                <button onClick={() => setView('dashboard')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4">
+                                    <Icon name="back" size={16} className="mr-1"/> 대시보드로 돌아가기
+                                </button>
+                            )}
+                            <h2 className="text-xl font-bold text-slate-800 text-center">
+                                {currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${tempUser.name}님!`}
+                            </h2>
+                            <p className="text-slate-500 text-sm text-center mt-1">어떤 계획으로 읽으시겠습니까?</p>
+                        </div>
+                        
+                        <div className="w-full max-w-md space-y-3">
+                            {PLAN_TYPES.map(type => (
+                                <button key={type.id} onClick={() => handlePlanTypeSelect(type.id)}
+                                    className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
+                                    <div className="font-bold text-slate-800 text-lg mb-1">{type.title}</div>
+                                    <div className="text-xs text-slate-400">{type.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'bible_version_select') {
+                const versions = BIBLE_VERSIONS[selectedPlanType];
+                const planTitle = PLAN_TYPES.find(t => t.id === selectedPlanType)?.title;
+
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="w-full max-w-md">
+                            <button onClick={() => setView('plan_type_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4">
+                                <Icon name="back" size={16} className="mr-1"/> 뒤로가기
+                            </button>
+                            <div className="text-center mb-6">
+                                <h2 className="text-xl font-bold text-slate-800">{planTitle} 버전 선택</h2>
+                                <div className="bg-yellow-50 text-yellow-800 text-xs font-bold p-2 rounded-lg mt-2 break-keep">
+                                    📢 오늘 설정하시면 기본적으로 1년간 이 버전으로 읽게 됩니다.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="w-full max-w-md space-y-3">
+                            {versions.map(ver => (
+                                <button key={ver.id} onClick={() => handleVersionSelect(ver.id)}
+                                    className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
+                                    <div className="font-bold text-slate-800 text-lg mb-1">{ver.name}</div>
+                                    <div className="text-xs text-slate-400">{ver.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'community_select') {
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-800">소속 공동체 선택</h2>
+                            <p className="text-slate-500 text-sm">어느 부서에 소속되어 계신가요?</p>
+                        </div>
+                        <div className="w-full max-w-md space-y-3">
+                            {MOCK_COMMUNITIES.map(comm => (
+                                <button key={comm.id} onClick={() => handleCommunitySelect(comm.id, comm.name)}
+                                    className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-4 text-left">
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${comm.color.replace('bg-', 'bg-opacity-10 text-')}`}>
+                                        {comm.icon}
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="font-bold text-slate-800 text-lg">{comm.name}</div>
+                                    </div>
+                                    <Icon name="arrowRight" className="text-slate-300"/>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'subgroup_select') {
+                const selectedComm = MOCK_COMMUNITIES.find(c => c.id === tempUser.communityId);
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="w-full max-w-md mb-4">
+                            <button onClick={() => setView('community_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600">
+                                <Icon name="back" size={16} className="mr-1"/> 뒤로가기
+                            </button>
+                        </div>
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-800">소그룹 선택</h2>
+                            <p className="text-slate-500 text-sm">{tempUser.communityName} 내의 소그룹을 선택해주세요.</p>
+                        </div>
+                        <div className="w-full max-w-md grid grid-cols-2 gap-3 h-[50vh] overflow-y-auto content-start">
+                            {selectedComm.subgroups.map((sub, idx) => (
+                                <button key={idx} onClick={() => handleSubgroupSelect(sub)}
+                                    className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-center flex flex-col items-center justify-center aspect-video">
+                                    <span className="text-2xl mb-2 opacity-80">🏕️</span>
+                                    <span className="font-bold text-slate-700 text-sm">{sub}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'dashboard' && currentUser) {
+                const { currentDay, score, subgroupId, communityName, planId, streak } = currentUser;
+                const [planType, version] = (planId || '1year_revised').split('_');
+                const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
+                const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '';
+
+                const myLevel = getLevelInfo(score || 0);
+
+                const progressPercent = Math.min((currentDay / TOTAL_DAYS) * 100, 100);
+                const closestChaserDistance = GHOST_RUNNERS
+                    .filter(r => r.day < currentDay)
+                    .reduce((minDist, r) => Math.min(minDist, currentDay - r.day), Infinity);
+                const isPanic = closestChaserDistance <= PANIC_DISTANCE;
+                
+                // [변경] 완독까지 남은 일수 계산
+                const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
+
+                const racers = [
+                    ...GHOST_RUNNERS.map(r => ({ ...r, isMe: false })), 
+                    { name: currentUser.name, day: currentDay, score: score, isMe: true, isPanic: isPanic }
+                ].sort((a, b) => a.day - b.day);
+                
+                const subgroupRanking = getSubgroupRanking();
+                
+                const topGroups = subgroupRanking.slice(0, 3);
+                const myGroupStats = subgroupRanking.find(r => r.name === subgroupId) || { name: subgroupId, rate: 0 };
+                const isMyGroupInTop3 = topGroups.some(g => g.name === subgroupId);
+
+                return (
+                    <div className="min-h-screen bg-slate-50 pb-20 overflow-hidden relative font-sans">
+                        {showConfetti && <div className="fixed inset-0 z-50 flex justify-center pt-40 pointer-events-none"><div className="text-6xl animate-bounce">🎊</div></div>}
+                        
+                        {levelUpToast && (
+                            <div className="fixed top-20 left-4 right-4 z-50 animate-bounce">
+                                <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-3">
+                                    <div className="text-3xl">{levelUpToast.emoji}</div>
+                                    <div>
+                                        <p className="text-xs text-yellow-400 font-bold">LEVEL UP!</p>
+                                        <p className="font-bold">{levelUpToast.title}(으)로 승급!</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {bonusToast && (
+                            <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-up">
+                                <div className="bg-blue-600 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 font-bold whitespace-nowrap">
+                                    <span>기본 10점</span>
+                                    <span>+</span>
+                                    <span>연속보너스 {bonusToast.streak}점</span>
+                                    <span>=</span>
+                                    <span className="text-yellow-300">총 {bonusToast.total}점 획득!</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {showScoreInfo && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowScoreInfo(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold">💡 점수 & 계급 안내</h3>
+                                        <button onClick={() => setShowScoreInfo(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    <div className="space-y-4 overflow-y-auto max-h-[60vh]">
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-2">
+                                            <h4 className="font-bold text-slate-800 mb-1">📖 천로역정 성경 레이스란?</h4>
+                                            <p className="text-xs text-slate-600 leading-relaxed">
+                                                순례자가 천국을 향해 걸어가듯, 우리도 매일 말씀을 읽으며 영적인 목적지를 향해 나아가는 레이스입니다.<br/>
+                                                나 혼자 걷는 길이 아니라, 우리 공동체(구역/목장)가 함께 격려하며 완주하는 기쁨을 누려보세요!
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <h4 className="font-bold text-blue-600 mb-1">나의 등급</h4>
+                                            <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                                <div className="text-3xl">{myLevel.emoji}</div>
+                                                <div>
+                                                    <div className="font-bold text-lg">{myLevel.title}</div>
+                                                    <div className="text-xs text-slate-500">현재 {score}점</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-700 mb-1">점수 모으는 법</h4>
+                                            <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
+                                                <li>매일 읽기 완료: <strong>+10점</strong></li>
+                                                <li>연속 읽기 보너스: <strong>매일 +1점씩 증가 (최대 +5점 유지)</strong><br/>
+                                                    <span className="text-xs text-red-500">* 하루라도 빠지면 다시 +1점부터 시작해요!</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-700 mb-1">천로역정 계급표</h4>
+                                            <div className="grid gap-2 text-sm">
+                                                {LEVEL_SYSTEM.map((lvl, idx) => (
+                                                    <div key={idx} className={`flex items-center gap-2 p-2 rounded ${lvl.title === myLevel.title ? 'bg-yellow-50 border border-yellow-200' : ''}`}>
+                                                        <span className="text-xl">{lvl.emoji}</span>
+                                                        <span className="flex-1">{lvl.title}</span>
+                                                        <span className="text-slate-400 text-xs">{lvl.min}pt~</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowScoreInfo(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 성경통독 114 안내 모달 [NEW] 상세화 */}
+                        {showReadingGuide && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowReadingGuide(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold text-slate-800">📖 성경통독 114 가이드</h3>
+                                        <button onClick={() => setShowReadingGuide(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    <div className="space-y-6 text-sm text-slate-600 leading-relaxed overflow-y-auto max-h-[60vh] pr-2">
+                                        
+                                        {/* 섹션 1: 114의 의미 */}
+                                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                            <h4 className="font-bold text-blue-700 mb-1">💡 성경통독 114란?</h4>
+                                            <p className="text-xs mb-2">
+                                                <strong>1년 1독 4회 효과!</strong><br/>
+                                                성경 전체를 1년에 1번 통독하지만, 3개월(한 분기)마다 성경 전체 시대를 볼 수 있도록 되어 있으며, 중복된 시대를 나누어 읽어 지루하지 않게 읽을 수 있습니다.
+                                            </p>
+                                        </div>
+
+                                        {/* 섹션 2: 분기별 읽기 순서 (상세 풀네임) */}
+                                        <div>
+                                            <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">📅 분기별 읽기</h4>
+                                            <div className="space-y-3 text-xs">
+                                                <div className="bg-green-50 p-2 rounded">
+                                                    <span className="font-bold text-green-700 block mb-1">1분기 (1-3월)</span>
+                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 1-11장, 출애굽기, 여호수아, 사사기, 룻기, 욥기, 다니엘, 에스라 1-6장, 학개, 스가랴, 에스라 7-10장, 느헤미야, 에스더</span>
+                                                    <span className="block text-slate-500"><strong>신약:</strong> 마태복음, 사도행전 1-5장, 로마서, 갈라디아서, 히브리서, 요한계시록 1-3장</span>
+                                                </div>
+                                                <div className="bg-green-50 p-2 rounded">
+                                                    <span className="font-bold text-green-700 block mb-1">2분기 (4-6월)</span>
+                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 12-26장, 레위기, 사무엘상, 사무엘하, 시편 1-72편, 이사야, 요엘, 오바댜, 나훔, 하박국</span>
+                                                    <span className="block text-slate-500"><strong>신약:</strong> 마가복음, 사도행전 6-12장, 고린도전서, 고린도후서, 데살로니가전서, 데살로니가후서, 야고보서, 유다서, 요한계시록 4-7장</span>
+                                                </div>
+                                                <div className="bg-green-50 p-2 rounded">
+                                                    <span className="font-bold text-green-700 block mb-1">3분기 (7-9월)</span>
+                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 27-36장, 민수기, 열왕기상 1-11장, 잠언, 전도서, 아가서, 열왕기상 12-22장, 열왕기하 1-14장, 요나, 열왕기하 15장, 아모스, 호세아, 열왕기하 16-23장, 스바냐, 열왕기하 24-25장, 에스겔</span>
+                                                    <span className="block text-slate-500"><strong>신약:</strong> 누가복음, 사도행전 13-20장, 에베소서, 빌립보서, 골로새서, 빌레몬서, 베드로전서, 베드로후서, 요한계시록 8-14장</span>
+                                                </div>
+                                                <div className="bg-green-50 p-2 rounded">
+                                                    <span className="font-bold text-green-700 block mb-1">4분기 (10-12월)</span>
+                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 37-50장, 신명기, 시편 90편, 역대상, 시편 73-150편, 역대하 1-28장, 미가, 역대하 29-36장, 예레미야, 예레미야애가, 말라기</span>
+                                                    <span className="block text-slate-500"><strong>신약:</strong> 요한복음, 사도행전 21-28장, 디모데전서, 디모데후서, 디도서, 요한일서, 요한이서, 요한삼서, 요한계시록 15-22장</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowReadingGuide(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-900 text-slate-300 text-[10px] py-1 px-4 flex justify-between items-center">
+                            <span>현재 버전: <strong>{planTypeName} - {versionName}</strong></span>
+                            <button onClick={handleChangeVersionStart} className="flex items-center gap-1 hover:text-white transition-colors">
+                                <Icon name="refresh" size={10} /> 읽는 버전 바꾸기
+                            </button>
+                        </div>
+
+                        <header className="bg-white shadow-sm border-b border-slate-100 pb-2 sticky top-0 z-30">
+                            <div className="px-4 py-2 flex justify-between items-center border-b border-slate-50">
+                                <button onClick={handleLogout} className="text-xs font-bold text-slate-400 flex items-center hover:text-slate-600">
+                                    <Icon name="back" size={12} className="mr-1"/> 로그아웃
+                                </button>
+                                <div className="flex items-center gap-2">
+                                    <div className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 ${streak > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-100 text-slate-400'}`}>
+                                        <Icon name="flame" size={12} className={streak > 0 ? "fill-orange-500 text-orange-600" : ""}/>
+                                        {streak}일
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <button onClick={() => setShowScoreInfo(true)} className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-blue-100 transition-colors">
+                                            {myLevel.emoji} {score || 0}pt <span className="bg-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border border-blue-200">?</span>
+                                        </button>
+                                        <button onClick={() => setShowReadingGuide(true)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-slate-200 transition-colors">
+                                            <Icon name="helpbook" size={14} className="text-slate-500"/>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 px-4 py-4 border-b border-slate-200">
+                                <div className="flex justify-between items-end mb-3">
+                                    <span className="text-sm font-bold text-slate-700 flex items-center gap-1">
+                                        🏆 {communityName} 실시간 랭킹
+                                    </span>
+                                    {/* 모바일 최적화: 긴 텍스트 잘림 방지 및 스타일 개선 */}
+                                    <span className="text-[10px] text-slate-400 shrink-0">매일 리셋</span>
+                                </div>
+                                <div className="space-y-3">
+                                    {topGroups.map((group, idx) => {
+                                        const isMyGroup = group.name === subgroupId;
+                                        const rankColor = idx === 0 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 
+                                                          idx === 1 ? 'bg-slate-200 text-slate-700 border-slate-300' :
+                                                          'bg-orange-100 text-orange-700 border-orange-200';
+                                        const barColor = idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : 'bg-orange-400';
+                                        
+                                        return (
+                                            <div key={idx} className="flex items-center gap-3">
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 ${rankColor}`}>
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1 min-w-0"> {/* min-w-0 for flex child truncation */}
+                                                    <div className="flex justify-between text-[10px] mb-1">
+                                                        <span className={`font-bold truncate pr-2 ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>
+                                                            {group.name} {isMyGroup && '(나)'}
+                                                        </span>
+                                                        <span className="font-bold text-slate-500 shrink-0">{group.rate}%</span>
+                                                    </div>
+                                                    <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100 relative">
+                                                        {/* [모바일 가독성] 텍스트 그림자 추가 */}
+                                                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${group.rate}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    
+                                    {!isMyGroupInTop3 && (
+                                        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-200 border-dashed">
+                                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200 shrink-0">
+                                                ?
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between text-[10px] mb-1">
+                                                    <span className="font-bold text-blue-600 truncate pr-2">{myGroupStats.name} (나)</span>
+                                                    <span className="font-bold text-slate-500 shrink-0">{myGroupStats.rate}%</span>
+                                                </div>
+                                                <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100">
+                                                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${myGroupStats.rate}%` }}></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* [강화된] 개인 레이스 트랙 디자인 (CSS Draw Only) */}
+                            <div className="relative w-full h-28 bg-map-texture overflow-hidden mt-0 border-t border-slate-200 bg-sky-texture">
+                                <div className="mountain-back"></div>
+                                <div className="mountain-front"></div>
+                                
+                                <div className="absolute top-2 left-10 text-2xl opacity-80 animate-float">☁️</div>
+                                <div className="absolute top-5 right-20 text-xl opacity-60 animate-float-slow">☁️</div>
+                                <div className="absolute top-8 left-1/2 text-lg opacity-50 animate-float" style={{animationDelay: '2s'}}>☁️</div>
+
+                                <div className="absolute bottom-2 left-5 text-sm z-10 opacity-90">🌸</div>
+                                <div className="absolute bottom-3 right-10 text-sm z-10 opacity-90">🌼</div>
+                                <div className="absolute bottom-4 left-1/3 text-xs z-10 opacity-80">🌱</div>
+
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col justify-center items-center z-20 group" style={{top: '60%'}}>
+                                    <div className="relative">
+                                        <div className="absolute inset-0 bg-yellow-400 rounded-full blur-xl opacity-70 group-hover:opacity-100 transition-opacity animate-pulse"></div>
+                                        <div className="absolute inset-0 bg-white rounded-full blur-md opacity-50 animate-ping"></div>
+                                        <span className="text-5xl relative z-10 drop-shadow-2xl filter brightness-110">🏰</span>
+                                    </div>
+                                    <span className="text-[9px] font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded-full mt-2 shadow-sm border border-slate-200 relative z-20">천국성</span>
+                                </div>
+                                
+                                {racers.map((racer, idx) => {
+                                    const p = Math.min((racer.day / TOTAL_DAYS) * 100, 100);
+                                    const isMe = racer.isMe;
+                                    const racerLevel = getLevelInfo(racer.score || 0);
+                                    
+                                    return (
+                                        <div key={idx} className="absolute transition-all duration-1000 ease-out flex flex-col items-center"
+                                            style={{ left: `calc(${p}% - 16px)`, top: isMe ? '50%' : `${40+(idx%3)*10}%`, zIndex: isMe ? 50 : idx + 20 }}>
+                                            <div className={`text-[9px] px-1.5 py-0.5 rounded-full mb-1 shadow-sm font-bold truncate max-w-[80px] ${isMe ? 'bg-blue-600 text-white' : 'bg-white/90 text-slate-500'}`}>
+                                                {racer.name}
+                                            </div>
+                                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xl shadow-md border-[3px] transition-transform bg-white ${isMe ? `border-blue-400 ${racer.isPanic ? 'animate-wiggle':''}` : 'border-white opacity-80 grayscale'}`}>
+                                                {racer.isPanic && isMe ? '😱' : racerLevel.emoji}
+                                                {racer.isPanic && isMe && <span className="absolute -top-1 -right-1 text-sm animate-ping">💦</span>}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            
+                            <div className="bg-white border-b border-slate-100 py-1 text-center">
+                                <button onClick={() => setShowScoreInfo(true)} className="text-xs text-slate-500 flex items-center justify-center gap-1 mx-auto hover:text-blue-600">
+                                    현재 나의 등급: <span className="font-bold text-slate-800">{myLevel.emoji} {myLevel.title}</span> (클릭하여 확인)
+                                </button>
+                            </div>
+                        </header>
+
+                        <main className="px-4 py-6 max-w-md mx-auto space-y-8">
+                            <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+                                <div className={`p-6 text-white relative ${isPanic ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-indigo-600 to-blue-700'}`}>
+                                    {/* 완독 D-Day 배지 [NEW] */}
+                                    <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                        🏁 완독 D-{daysRemaining}
+                                    </div>
+                                    
+                                    <h2 className="text-xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
+                                    <p className="opacity-90 text-sm font-bold text-white/90 mb-2">{verseData.subtitle}</p>
+                                    <p className="opacity-80 text-xs">
+                                        {isPanic ? '😱 쫓아오고 있어요! 어서 읽으세요!' 
+                                            : `${currentUser.name}님, 오늘도 힘내세요!`}
+                                    </p>
+                                </div>
+                                <div className="p-6">
+                                    {/* Markdown Renderer Applied */}
+                                    <div className={`mb-8 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
+                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
+                                    </div>
+                                    
+                                    <button onClick={handleRead} disabled={verseData.loading} className={`w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 ${isPanic ? 'bg-red-600 shadow-red-200' : 'bg-slate-900 shadow-blue-200'}`}>
+                                        <Icon name="book" size={18}/>
+                                        <span>
+                                            {hasReadToday 
+                                                ? '한 장 더 읽기 (미리 읽기)' 
+                                                : '오늘 말씀 읽기 완료'
+                                            }
+                                        </span>
+                                    </button>
+                                    
+                                    <div className="mt-4 bg-yellow-50 p-3 rounded-xl border border-yellow-100 text-center">
+                                        <p className="text-xs text-yellow-700 font-bold">
+                                            💡 바빠서 못 읽으셨나요? <br/>
+                                            주일에 밀린 말씀을 몰아서 읽어도 괜찮습니다! 포기하지 마세요!
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-slate-700 flex items-center">
+                                        <Icon name="users" size={18} className="mr-2 text-indigo-500"/>
+                                        {communityName} 전체 순위
+                                    </h3>
+                                    <span className="text-[10px] bg-red-50 text-red-500 px-2 py-1 rounded-full font-bold">매일 리셋!</span>
+                                </div>
+                                <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                                    {subgroupRanking.map((group, idx) => {
+                                        const isMyGroup = group.name === subgroupId;
+                                        const percentage = group.rate; 
+                                        return (
+                                            <div key={idx} className={`relative ${isMyGroup ? 'bg-blue-50 p-2 rounded-lg -mx-2' : ''}`}>
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>
+                                                        {idx+1}위. {group.name} {isMyGroup && '(우리팀)'}
+                                                    </span>
+                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-400'}`}>{group.rate}%</span>
+                                                </div>
+                                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className={`h-full rounded-full transition-all duration-1000 ${isMyGroup ? 'bg-blue-500' : 'bg-slate-300'}`} style={{ width: `${percentage}%` }}></div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                );
+            }
+
+            return null;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
