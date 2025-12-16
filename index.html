@@ -20,6 +20,11 @@
         .bg-sky-texture { 
             background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%);
         }
+        .bg-map-texture {
+            background-color: #f0fdf4; /* 아주 연한 초록 */
+            background-image: radial-gradient(#86efac 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
         @keyframes wiggle { 0%, 100% { transform: rotate(-3deg) scale(1.1); } 50% { transform: rotate(3deg) scale(1.1); } }
         .animate-wiggle { animation: wiggle 0.3s ease-in-out infinite; }
         .animate-float { animation: float 6s ease-in-out infinite; }
@@ -149,12 +154,8 @@
           { id: 'kinder', name: '유아유치부', avgDay: 10, color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
         ];
 
-        const GHOST_RUNNERS = [
-          { name: '김철수', day: 42, score: 450, gender: 'male' },
-          { name: '이영희', day: 48, score: 560, gender: 'female' },
-          { name: '박목사', day: 90, score: 1300, gender: 'male' },
-          { name: '최집사', day: 15, score: 80, gender: 'female' },
-        ];
+        // [수정] 예시 러너 데이터 삭제 (정식 서비스용 빈 배열)
+        const GHOST_RUNNERS = [];
 
         const TOTAL_DAYS = 365;
         const PANIC_DISTANCE = 5;
@@ -434,11 +435,13 @@
                 if (comm) {
                     const stats = {};
                     comm.subgroups.forEach(sub => {
-                        let rate = Math.floor(Math.random() * 50) + 30;
-                        stats[sub] = rate;
+                        // [수정] 랜덤 점수 생성 제거 -> 모두 0점부터 시작
+                        stats[sub] = 0; 
                     });
-                    if (!hasReadToday) {
-                        stats[currentUser.subgroupId] = Math.max(0, stats[currentUser.subgroupId] - 5);
+                    
+                    // 내가 속한 그룹 점수 반영 (UI 확인용)
+                    if (hasReadToday) {
+                        stats[currentUser.subgroupId] = (stats[currentUser.subgroupId] || 0) + 1;
                     }
                     setSubgroupStats(stats);
                 }
