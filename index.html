@@ -257,7 +257,10 @@
                 alert("수정되었습니다.");
             };
 
-            const handleLogin = (e) => {
+            const handleLogin = async (e) => {
+                // ✅ Firebase 익명 로그인 (버튼 눌렀을 때 1줄)
+                if (auth) { try { await auth.signInAnonymously(); } catch (err) { console.error('Anonymous sign-in failed:', err); setErrorMsg('Firebase 로그인에 실패했습니다. (잠시 후 다시 시도)'); return; } }
+
                 e.preventDefault();
                 setErrorMsg('');
                 if(!loginName.trim() || !loginPw.trim()) {
@@ -1187,4 +1190,4 @@
         root.render(<App />);
     </script>
 </body>
-</html>
+</html><!-- 여기 전체 index.html 코드를 붙여주세요. -->
