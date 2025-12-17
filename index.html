@@ -62,23 +62,20 @@
 
     <script type="text/babel">
         // ====================================================================
-        // [수정됨] 노션 키 삭제 -> Supabase 서버 주소 입력란으로 변경
-        // 나중에 Supabase에 배포하고 나온 주소를 아래 따옴표 안에 넣으세요.
-        // 예: "https://abcdefg.supabase.co/functions/v1/notion-proxy"
+        // Supabase 서버 주소
         // ====================================================================
         const SUPABASE_FUNCTION_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy";
 
         // --- Firebase Config ---
         const firebaseConfig = {
-  apiKey: "AIzaSyAOMubppe1JZbBh0VBv7UIbZyY2S1RI9fw",
-  authDomain: "bible-sungseo.firebaseapp.com",
-  projectId: "bible-sungseo",
-  storageBucket: "bible-sungseo.firebasestorage.app",
-  messagingSenderId: "1061949588108",
-  appId: "1:1061949588108:web:e8e3bbd6c3f73afa5131a9"
-};
+            apiKey: "AIzaSyAOMubppe1JZbBh0VBv7UIbZyY2S1RI9fw",
+            authDomain: "bible-sungseo.firebaseapp.com",
+            projectId: "bible-sungseo",
+            storageBucket: "bible-sungseo.firebasestorage.app",
+            messagingSenderId: "1061949588108",
+            appId: "1:1061949588108:web:e8e3bbd6c3f73afa5131a9"
+        };
         
-
         let db, auth;
         try {
             if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
@@ -87,6 +84,33 @@
                 db = firebase.firestore();
             }
         } catch (e) { console.error("Firebase init failed:", e); }
+
+        // ✅ [추가] 이름을 "가짜 이메일"로 바꿔서 이메일/비번 로그인처럼 쓰기
+        const makePseudoEmail = (name) => {
+            const clean = String(name || "").trim();
+            // 한글/공백도 들어가니 encode로 안전하게
+            return `${encodeURIComponent(clean)}@bible.local`;
+        };
+
+        // ✅ [추가] Firestore 문서를 상태 객체로 변환
+        const userDocToState = (doc) => {
+            const d = doc.data();
+            return {
+                uid: doc.id,
+                name: d.name,
+                password: d.password,
+                startDate: d.startDate,
+                currentDay: d.currentDay ?? 1,
+                streak: d.streak ?? 0,
+                score: d.score ?? 0,
+                lastReadDate: d.lastReadDate ?? null,
+                gender: d.gender ?? (Math.random() > 0.5 ? "male" : "female"),
+                communityId: d.communityId ?? null,
+                communityName: d.communityName ?? null,
+                subgroupId: d.subgroupId ?? null,
+                planId: d.planId ?? "1year_revised",
+            };
+        };
 
         // --- 아이콘 ---
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -155,7 +179,6 @@
           { id: 'kinder', name: '유아유치부', avgDay: 10, color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
         ];
 
-        // [수정] 예시 러너 데이터 삭제 (정식 서비스용 빈 배열)
         const GHOST_RUNNERS = [];
 
         const TOTAL_DAYS = 365;
@@ -237,11 +260,17 @@
                 document.body.removeChild(link);
             };
 
-            const deleteUser = (userName) => {
+            // ✅ [수정] deleteUser - Firestore에서 삭제
+            const deleteUser = async (uid, userName) => {
                 if (confirm(`${userName}님의 데이터를 정말 삭제하시겠습니까?`)) {
-                    localStorage.removeItem(`user_${userName}`);
-                    setAllUsers(prev => prev.filter(u => u.name !== userName));
-                    alert("삭제되었습니다.");
+                    try {
+                        await db.collection('users').doc(uid).delete();
+                        setAllUsers(prev => prev.filter(u => u.uid !== uid));
+                        alert("삭제되었습니다.");
+                    } catch (e) {
+                        console.error(e);
+                        alert("삭제 실패");
+                    }
                 }
             };
 
@@ -249,67 +278,126 @@
                 setEditingUser({ ...user });
             };
 
-            const saveEditUser = () => {
+            // ✅ [수정] saveEditUser - Firestore에 저장
+            const saveEditUser = async () => {
                 if (!editingUser) return;
-                localStorage.setItem(`user_${editingUser.name}`, JSON.stringify(editingUser));
-                setAllUsers(prev => prev.map(u => u.name === editingUser.name ? editingUser : u));
-                setEditingUser(null);
-                alert("수정되었습니다.");
+                try {
+                    await db.collection('users').doc(editingUser.uid).set({
+                        communityId: editingUser.communityId,
+                        communityName: editingUser.communityName,
+                        subgroupId: editingUser.subgroupId,
+                        planId: editingUser.planId,
+                        currentDay: editingUser.currentDay,
+                        score: editingUser.score,
+                        streak: editingUser.streak,
+                        lastReadDate: editingUser.lastReadDate || null,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+
+                    setAllUsers(prev => prev.map(u => u.uid === editingUser.uid ? editingUser : u));
+                    setEditingUser(null);
+                    alert("수정되었습니다.");
+                } catch (e) {
+                    console.error(e);
+                    alert("수정 실패");
+                }
             };
 
+            // ✅ [전체 교체] handleLogin - Email/Password 로그인
             const handleLogin = async (e) => {
-                // ✅ Firebase 익명 로그인 (버튼 눌렀을 때 1줄)
-                if (auth) { try { await auth.signInAnonymously(); } catch (err) { console.error('Anonymous sign-in failed:', err); setErrorMsg('Firebase 로그인에 실패했습니다. (잠시 후 다시 시도)'); return; } }
-
                 e.preventDefault();
                 setErrorMsg('');
+
                 if(!loginName.trim() || !loginPw.trim()) {
                     setErrorMsg("이름과 암호를 모두 입력해주세요.");
                     return;
                 }
+
+                // ✅ 관리자 로그인 → Firestore에서 전체 유저 목록 불러오기
                 if (loginName === 'admin' && loginPw === '08283') {
-                    const users = [];
-                    for (let i = 0; i < localStorage.length; i++) {
-                        const key = localStorage.key(i);
-                        if (key.startsWith('user_')) {
-                            try { users.push(JSON.parse(localStorage.getItem(key))); } catch(e) {}
-                        }
+                    try {
+                        // 관리자도 로그인 상태가 있어야 rules 통과하므로 "익명" 1회
+                        if (auth && !auth.currentUser) await auth.signInAnonymously();
+
+                        const snap = await db.collection('users').get();
+                        const users = snap.docs.map(doc => userDocToState(doc));
+                        setAllUsers(users);
+                        setIsAdmin(true);
+                        return;
+                    } catch (err) {
+                        console.error(err);
+                        setErrorMsg('관리자 데이터 로딩 실패');
+                        return;
                     }
-                    setAllUsers(users);
-                    setIsAdmin(true);
-                    return;
                 }
-                const userKey = `user_${loginName.trim()}`;
-                const storedUser = localStorage.getItem(userKey);
-                if (storedUser) {
-                    const parsedUser = JSON.parse(storedUser);
-                    if (parsedUser.password === loginPw) {
-                        if (!parsedUser.startDate) {
-                            parsedUser.startDate = new Date().toDateString();
-                            localStorage.setItem(userKey, JSON.stringify(parsedUser));
+
+                // ✅ 일반 유저: Email/Password 로그인 (이름을 가짜 이메일로 변환)
+                try {
+                    const email = makePseudoEmail(loginName);
+                    let cred = null;
+
+                    try {
+                        cred = await auth.signInWithEmailAndPassword(email, loginPw);
+                    } catch (err) {
+                        // 없으면 회원가입 생성
+                        if (err?.code === 'auth/user-not-found') {
+                            cred = await auth.createUserWithEmailAndPassword(email, loginPw);
+                        } else if (err?.code === 'auth/wrong-password') {
+                            setErrorMsg("암호가 틀렸습니다.");
+                            return;
+                        } else {
+                            console.error(err);
+                            setErrorMsg("로그인 실패(잠시 후 다시 시도)");
+                            return;
                         }
-                        if (parsedUser.score === undefined) parsedUser.score = parsedUser.currentDay * 10;
-                        setCurrentUser(parsedUser);
-                        const todayStr = new Date().toDateString();
-                        setHasReadToday(parsedUser.lastReadDate === todayStr);
-                        setView('dashboard');
-                    } else {
-                        setErrorMsg("암호가 틀렸습니다.");
                     }
-                } else {
-                    const newUserBase = {
-                        name: loginName.trim(),
-                        password: loginPw,
-                        startDate: new Date().toDateString(), 
-                        currentDay: 1,
-                        streak: 0,
-                        score: 0, 
-                        lastReadDate: null,
-                        gender: Math.random() > 0.5 ? 'male' : 'female',
-                    };
-                    setTempUser(newUserBase);
-                    setTempUser(prev => ({...newUserBase})); // Ensure clean slate
-                    setView('plan_type_select'); 
+
+                    const uid = cred.user.uid;
+                    const ref = db.collection('users').doc(uid);
+                    const doc = await ref.get();
+
+                    // Firestore에 처음이면 기본 유저 문서 생성
+                    if (!doc.exists) {
+                        const newUserBase = {
+                            name: loginName.trim(),
+                            password: loginPw,
+                            startDate: new Date().toDateString(),
+                            currentDay: 1,
+                            streak: 0,
+                            score: 0,
+                            lastReadDate: null,
+                            gender: Math.random() > 0.5 ? 'male' : 'female',
+                            planId: "1year_revised",
+                            communityId: null,
+                            communityName: null,
+                            subgroupId: null,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        };
+                        await ref.set(newUserBase);
+                        setTempUser({ ...newUserBase, uid });
+                        setView('plan_type_select'); // 회원가입 흐름 계속
+                        return;
+                    }
+
+                    // 기존 유저면 상태로 로드
+                    const user = userDocToState(doc);
+                    setCurrentUser(user);
+
+                    const todayStr = new Date().toDateString();
+                    setHasReadToday(user.lastReadDate === todayStr);
+
+                    // 가입 완료 여부에 따라 화면 분기
+                    if (!user.communityId || !user.subgroupId) {
+                        setTempUser(user);
+                        setView('plan_type_select');
+                    } else {
+                        setView('dashboard');
+                    }
+
+                } catch (err) {
+                    console.error(err);
+                    setErrorMsg("로그인 처리 중 오류");
                 }
             };
 
@@ -318,7 +406,8 @@
                 setView('bible_version_select');
             };
 
-            const handleVersionSelect = (versionId) => {
+            // ✅ [수정] handleVersionSelect - Firestore에 저장
+            const handleVersionSelect = async (versionId) => {
                 const fullPlanId = `${selectedPlanType}_${versionId}`;
                 if (tempUser) {
                     setTempUser(prev => ({ ...prev, planId: fullPlanId }));
@@ -327,7 +416,13 @@
                 else if (currentUser) {
                     const updatedUser = { ...currentUser, planId: fullPlanId };
                     setCurrentUser(updatedUser);
-                    localStorage.setItem(`user_${updatedUser.name}`, JSON.stringify(updatedUser));
+                    
+                    // ✅ Firestore에 저장
+                    try {
+                        const uid = auth.currentUser?.uid;
+                        if (uid) await db.collection('users').doc(uid).set({ planId: fullPlanId, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    } catch (e) { console.error(e); }
+                    
                     setView('dashboard');
                     setShowConfetti(true); 
                     setTimeout(() => setShowConfetti(false), 2000);
@@ -339,16 +434,27 @@
                 setView('subgroup_select');
             };
 
-            const handleSubgroupSelect = (subgroup) => {
+            // ✅ [전체 교체] handleSubgroupSelect - Firestore에 저장
+            const handleSubgroupSelect = async (subgroup) => {
                 const finalUser = { ...tempUser, subgroupId: subgroup };
-                const userKey = `user_${finalUser.name}`;
-                localStorage.setItem(userKey, JSON.stringify(finalUser));
                 setCurrentUser(finalUser);
-                setTempUser(null); // Clear tempUser after signup
+                setTempUser(null);
                 setView('dashboard');
+
+                try {
+                    const uid = auth.currentUser?.uid || finalUser.uid;
+                    if (!uid) return;
+                    await db.collection('users').doc(uid).set({
+                        ...finalUser,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                } catch (e) {
+                    console.error(e);
+                    alert("서버 저장 실패(인터넷 확인)");
+                }
             };
 
-            // --- [수정된 부분] Supabase Edge Function 호출 로직 ---
+            // --- Supabase Edge Function 호출 로직 ---
             const fetchNotionData = async (planId, currentDay) => {
                 if (!SUPABASE_FUNCTION_URL || SUPABASE_FUNCTION_URL.includes("YOUR_")) {
                     console.warn("Supabase URL이 설정되지 않았습니다.");
@@ -367,7 +473,6 @@
                 console.log(`Requesting Server: Tag=[${targetTag}], Date=[${targetDateStr}]`);
 
                 try {
-                    // 내 서버(Supabase)에 "이 태그와 이 날짜의 글을 줘"라고 요청
                     const response = await fetch(SUPABASE_FUNCTION_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -382,7 +487,6 @@
                     
                     if (data.error) return { title: null, text: `[오류] ${data.error}` };
                     
-                    // 서버가 다 처리해서 title과 text만 깔끔하게 줍니다.
                     return { title: data.title, text: data.text };
 
                 } catch (e) {
@@ -411,13 +515,12 @@
                         });
                     } else {
                         const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
-                        // 데모 모드 (1일차는 보여줌, 서버 오류 시에도 창세기 1장 예시)
                         const isFirstDay = currentDay === 1;
                         const hasError = !notionData || notionData.text.includes('오류') || notionData.text.includes('서버');
                         
                         let displayText;
                         if (isFirstDay && hasError) {
-                            displayText = GENESIS_1; // 1일차인데 서버 안 되면 일단 창세기 보여줌
+                            displayText = GENESIS_1;
                         } else {
                             displayText = notionData?.text || `데이터를 불러올 수 없습니다.\n\n1. 노션 연동 상태를 확인하세요.\n2. '${versionName}' 태그가 정확한지 확인하세요.\n3. 오늘 날짜에 해당하는 데이터가 있는지 확인하세요.`;
                         }
@@ -439,11 +542,9 @@
                 if (comm) {
                     const stats = {};
                     comm.subgroups.forEach(sub => {
-                        // [수정] 랜덤 점수 생성 제거 -> 모두 0점부터 시작
                         stats[sub] = 0; 
                     });
                     
-                    // 내가 속한 그룹 점수 반영 (UI 확인용)
                     if (hasReadToday) {
                         stats[currentUser.subgroupId] = (stats[currentUser.subgroupId] || 0) + 1;
                     }
@@ -452,7 +553,8 @@
 
             }, [view, currentUser?.currentDay, currentUser?.planId]);
 
-            const handleRead = () => {
+            // ✅ [수정] handleRead - Firestore에 저장
+            const handleRead = async () => {
                 const todayStr = new Date().toDateString();
                 const yesterday = new Date();
                 yesterday.setDate(yesterday.getDate() - 1);
@@ -491,13 +593,32 @@
                 
                 setCurrentUser(updatedUser);
                 setHasReadToday(true);
-                localStorage.setItem(`user_${currentUser.name}`, JSON.stringify(updatedUser));
+                
+                // ✅ Firestore에 저장
+                try {
+                    const uid = auth.currentUser?.uid;
+                    if (uid) {
+                        await db.collection('users').doc(uid).set({
+                            currentDay: updatedUser.currentDay,
+                            streak: updatedUser.streak,
+                            score: updatedUser.score,
+                            lastReadDate: updatedUser.lastReadDate,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        }, { merge: true });
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert("서버 저장 실패(인터넷 확인)");
+                }
                 
                 setShowConfetti(true);
                 setTimeout(() => setShowConfetti(false), 3000);
             };
 
             const handleLogout = () => {
+                // Firebase 로그아웃
+                if (auth) auth.signOut();
+                
                 setCurrentUser(null);
                 setIsAdmin(false);
                 setTempUser(null);
@@ -639,7 +760,8 @@
                                                         <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded">
                                                             <Icon name="edit" size={16} />
                                                         </button>
-                                                        <button onClick={() => deleteUser(u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded">
+                                                        {/* ✅ [수정] uid와 userName 전달 */}
+                                                        <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded">
                                                             <Icon name="trash" size={16} />
                                                         </button>
                                                     </div>
@@ -717,7 +839,7 @@
                                 </button>
                             )}
                             <h2 className="text-xl font-bold text-slate-800 text-center">
-                                {currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${tempUser.name}님!`}
+                                {currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${tempUser?.name || ''}님!`}
                             </h2>
                             <p className="text-slate-500 text-sm text-center mt-1">어떤 계획으로 읽으시겠습니까?</p>
                         </div>
@@ -792,7 +914,7 @@
             }
 
             if (view === 'subgroup_select') {
-                const selectedComm = MOCK_COMMUNITIES.find(c => c.id === tempUser.communityId);
+                const selectedComm = MOCK_COMMUNITIES.find(c => c.id === tempUser?.communityId);
                 return (
                     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
                         <div className="w-full max-w-md mb-4">
@@ -802,10 +924,10 @@
                         </div>
                         <div className="text-center mb-6">
                             <h2 className="text-xl font-bold text-slate-800">소그룹 선택</h2>
-                            <p className="text-slate-500 text-sm">{tempUser.communityName} 내의 소그룹을 선택해주세요.</p>
+                            <p className="text-slate-500 text-sm">{tempUser?.communityName} 내의 소그룹을 선택해주세요.</p>
                         </div>
                         <div className="w-full max-w-md grid grid-cols-2 gap-3 h-[50vh] overflow-y-auto content-start">
-                            {selectedComm.subgroups.map((sub, idx) => (
+                            {selectedComm?.subgroups.map((sub, idx) => (
                                 <button key={idx} onClick={() => handleSubgroupSelect(sub)}
                                     className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-center flex flex-col items-center justify-center aspect-video">
                                     <span className="text-2xl mb-2 opacity-80">🏕️</span>
@@ -831,7 +953,6 @@
                     .reduce((minDist, r) => Math.min(minDist, currentDay - r.day), Infinity);
                 const isPanic = closestChaserDistance <= PANIC_DISTANCE;
                 
-                // [변경] 완독까지 남은 일수 계산
                 const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
 
                 const racers = [
@@ -926,7 +1047,7 @@
                             </div>
                         )}
 
-                        {/* 성경통독 114 안내 모달 [NEW] 상세화 */}
+                        {/* 성경통독 114 안내 모달 */}
                         {showReadingGuide && (
                             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowReadingGuide(false)}>
                                 <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -945,7 +1066,7 @@
                                             </p>
                                         </div>
 
-                                        {/* 섹션 2: 분기별 읽기 순서 (상세 풀네임) */}
+                                        {/* 섹션 2: 분기별 읽기 순서 */}
                                         <div>
                                             <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">📅 분기별 읽기</h4>
                                             <div className="space-y-3 text-xs">
@@ -1010,7 +1131,6 @@
                                     <span className="text-sm font-bold text-slate-700 flex items-center gap-1">
                                         🏆 {communityName} 실시간 랭킹
                                     </span>
-                                    {/* 모바일 최적화: 긴 텍스트 잘림 방지 및 스타일 개선 */}
                                     <span className="text-[10px] text-slate-400 shrink-0">매일 리셋</span>
                                 </div>
                                 <div className="space-y-3">
@@ -1026,7 +1146,7 @@
                                                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 ${rankColor}`}>
                                                     {idx + 1}
                                                 </div>
-                                                <div className="flex-1 min-w-0"> {/* min-w-0 for flex child truncation */}
+                                                <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between text-[10px] mb-1">
                                                         <span className={`font-bold truncate pr-2 ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>
                                                             {group.name} {isMyGroup && '(나)'}
@@ -1034,7 +1154,6 @@
                                                         <span className="font-bold text-slate-500 shrink-0">{group.rate}%</span>
                                                     </div>
                                                     <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100 relative">
-                                                        {/* [모바일 가독성] 텍스트 그림자 추가 */}
                                                         <div className={`h-full rounded-full ${barColor}`} style={{ width: `${group.rate}%` }}></div>
                                                     </div>
                                                 </div>
@@ -1061,7 +1180,7 @@
                                 </div>
                             </div>
 
-                            {/* [강화된] 개인 레이스 트랙 디자인 (CSS Draw Only) */}
+                            {/* 개인 레이스 트랙 */}
                             <div className="relative w-full h-28 bg-map-texture overflow-hidden mt-0 border-t border-slate-200 bg-sky-texture">
                                 <div className="mountain-back"></div>
                                 <div className="mountain-front"></div>
@@ -1113,7 +1232,6 @@
                         <main className="px-4 py-6 max-w-md mx-auto space-y-8">
                             <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
                                 <div className={`p-6 text-white relative ${isPanic ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-indigo-600 to-blue-700'}`}>
-                                    {/* 완독 D-Day 배지 [NEW] */}
                                     <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
                                         🏁 완독 D-{daysRemaining}
                                     </div>
@@ -1126,7 +1244,6 @@
                                     </p>
                                 </div>
                                 <div className="p-6">
-                                    {/* Markdown Renderer Applied */}
                                     <div className={`mb-8 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
                                         {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
                                     </div>
@@ -1190,4 +1307,4 @@
         root.render(<App />);
     </script>
 </body>
-</html><!-- 여기 전체 index.html 코드를 붙여주세요. -->
+</html>
