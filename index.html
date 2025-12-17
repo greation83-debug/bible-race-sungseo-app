@@ -8,23 +8,14 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        .bg-stripes-gray { background-image: linear-gradient(135deg, #e2e8f0 25%, transparent 25%, transparent 50%, #e2e8f0 50%, #e2e8f0 75%, transparent 75%, transparent); background-size: 10px 10px; }
-        /* 하늘 배경 */
-        .bg-sky-texture { 
-            background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%);
-        }
-        .bg-map-texture {
-            background-color: #f0fdf4; /* 아주 연한 초록 */
-            background-image: radial-gradient(#86efac 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
+        .bg-sky-texture { background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%); }
+        .bg-map-texture { background-color: #f0fdf4; background-image: radial-gradient(#86efac 1px, transparent 1px); background-size: 20px 20px; }
         @keyframes wiggle { 0%, 100% { transform: rotate(-3deg) scale(1.1); } 50% { transform: rotate(3deg) scale(1.1); } }
         .animate-wiggle { animation: wiggle 0.3s ease-in-out infinite; }
         .animate-float { animation: float 6s ease-in-out infinite; }
@@ -32,41 +23,16 @@
         @keyframes float { 0% { transform: translateX(0px); } 50% { transform: translateX(10px); } 100% { transform: translateX(0px); } }
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        
-        /* 산 배경 장식 (CSS Draw) */
-        .mountain-back {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 60%;
-            background: #86efac; /* 연한 초록 */
-            clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%);
-            z-index: 1;
-            opacity: 0.8;
-        }
-        .mountain-front {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 45%;
-            background: #4ade80; /* 진한 초록 */
-            clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%);
-            z-index: 2;
-        }
+        .mountain-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: #86efac; clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%); z-index: 1; opacity: 0.8; }
+        .mountain-front { position: absolute; bottom: 0; left: 0; width: 100%; height: 45%; background: #4ade80; clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%); z-index: 2; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800">
     <div id="root"></div>
 
     <script type="text/babel">
-        // ====================================================================
-        // Supabase 서버 주소
-        // ====================================================================
         const SUPABASE_FUNCTION_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy";
 
-        // --- Firebase Config ---
         const firebaseConfig = {
             apiKey: "AIzaSyAOMubppe1JZbBh0VBv7UIbZyY2S1RI9fw",
             authDomain: "bible-sungseo.firebaseapp.com",
@@ -78,41 +44,24 @@
         
         let db, auth;
         try {
-            if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
-                firebase.initializeApp(firebaseConfig);
-                auth = firebase.auth();
-                db = firebase.firestore();
-            }
+            firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.firestore();
         } catch (e) { console.error("Firebase init failed:", e); }
 
-        // ✅ [추가] 이름을 "가짜 이메일"로 바꿔서 이메일/비번 로그인처럼 쓰기
-        const makePseudoEmail = (name) => {
-            const clean = String(name || "").trim();
-            // 한글/공백도 들어가니 encode로 안전하게
-            return `${encodeURIComponent(clean)}@bible.local`;
-        };
+        const makePseudoEmail = (name) => `${encodeURIComponent(String(name || "").trim())}@bible.local`;
 
-        // ✅ [추가] Firestore 문서를 상태 객체로 변환
         const userDocToState = (doc) => {
             const d = doc.data();
             return {
-                uid: doc.id,
-                name: d.name,
-                password: d.password,
-                startDate: d.startDate,
-                currentDay: d.currentDay ?? 1,
-                streak: d.streak ?? 0,
-                score: d.score ?? 0,
-                lastReadDate: d.lastReadDate ?? null,
-                gender: d.gender ?? (Math.random() > 0.5 ? "male" : "female"),
-                communityId: d.communityId ?? null,
-                communityName: d.communityName ?? null,
-                subgroupId: d.subgroupId ?? null,
-                planId: d.planId ?? "1year_revised",
+                uid: doc.id, name: d.name, password: d.password, startDate: d.startDate,
+                currentDay: d.currentDay ?? 1, streak: d.streak ?? 0, score: d.score ?? 0,
+                lastReadDate: d.lastReadDate ?? null, gender: d.gender ?? "male",
+                communityId: d.communityId ?? null, communityName: d.communityName ?? null,
+                subgroupId: d.subgroupId ?? null, planId: d.planId ?? "1year_revised",
             };
         };
 
-        // --- 아이콘 ---
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
                 crown: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m2 4 3 12h14l3-12-6 7-4-3-4 3-6-7zm5 16h10"/></svg>,
@@ -120,17 +69,15 @@
                 users: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
                 book: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
                 arrowRight: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
-                mapPin: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>,
                 back: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>,
-                check: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12"/></svg>,
                 flame: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
-                info: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>,
                 close: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
                 trash: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
                 download: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
                 refresh: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>,
                 edit: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
-                helpbook: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                helpbook: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+                chart: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             };
             return icons[name] || null;
         };
@@ -146,7 +93,6 @@
             { min: 1200, title: '불병거 타고 승천하는 엘리야', emoji: '🔥' }
         ];
 
-        // --- 플랜 및 버전 데이터 ---
         const PLAN_TYPES = [
             { id: '1year', title: '일년 일독', desc: '1년에 성경 1독을 합니다.' },
             { id: 'nt', title: '신약 일독', desc: '1년 동안 신약 1독을 합니다.' }
@@ -172,26 +118,22 @@
         const kindergartenSubgroups = ['소망반', '빌립반', '믿음반'];
 
         const MOCK_COMMUNITIES = [
-          { id: 'senior', name: '장년부', avgDay: 82, color: 'bg-orange-500', icon: '🏔️', subgroups: seniorSubgroups },
-          { id: 'youth', name: '청년부', avgDay: 45, color: 'bg-blue-500', icon: '🏃', subgroups: youthSubgroups },
-          { id: 'middlehigh', name: '중고등부', avgDay: 30, color: 'bg-purple-500', icon: '🏫', subgroups: middleHighSubgroups },
-          { id: 'elementary', name: '유초등부', avgDay: 20, color: 'bg-yellow-500', icon: '🐥', subgroups: elementarySubgroups },
-          { id: 'kinder', name: '유아유치부', avgDay: 10, color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
+          { id: 'senior', name: '장년부', color: 'bg-orange-500', icon: '🏔️', subgroups: seniorSubgroups },
+          { id: 'youth', name: '청년부', color: 'bg-blue-500', icon: '🏃', subgroups: youthSubgroups },
+          { id: 'middlehigh', name: '중고등부', color: 'bg-purple-500', icon: '🏫', subgroups: middleHighSubgroups },
+          { id: 'elementary', name: '유초등부', color: 'bg-yellow-500', icon: '🐥', subgroups: elementarySubgroups },
+          { id: 'kinder', name: '유아유치부', color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
         ];
-
-        const GHOST_RUNNERS = [];
 
         const TOTAL_DAYS = 365;
         const PANIC_DISTANCE = 5;
 
-        // 창세기 1장 전체 텍스트 (데모용)
         const GENESIS_1 = `### 1. 태초에 하나님이 천지를 창조하시니라
 2. 땅이 혼돈하고 공허하며 흑암이 깊음 위에 있고 하나님의 영은 수면 위에 운행하시니라
 3. 하나님이 이르시되 빛이 있으라 하시니 빛이 있었고
 4. 빛이 하나님이 보시기에 좋았더라 하나님이 빛과 어둠을 나누사
 (중략)`;
 
-        // --- Markdown Renderer ---
         const MarkdownRenderer = ({ content }) => {
             if (!content) return null;
             const lines = content.split('\n');
@@ -212,7 +154,6 @@
             );
         };
 
-        // --- Main Component ---
         const App = () => {
             const [view, setView] = React.useState('login'); 
             const [loginName, setLoginName] = React.useState('');
@@ -228,358 +169,221 @@
             const [showScoreInfo, setShowScoreInfo] = React.useState(false);
             const [showReadingGuide, setShowReadingGuide] = React.useState(false); 
             const [bonusToast, setBonusToast] = React.useState(null);
-            
             const [selectedPlanType, setSelectedPlanType] = React.useState(null);
-
             const [isAdmin, setIsAdmin] = React.useState(false);
             const [allUsers, setAllUsers] = React.useState([]);
-            const [editingUser, setEditingUser] = React.useState(null); 
+            const [editingUser, setEditingUser] = React.useState(null);
+            const [communityMembers, setCommunityMembers] = React.useState([]);
 
-            const getLevelInfo = (score) => {
-                const level = [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
-                return level;
+            const getLevelInfo = (score) => [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
+
+            const loadCommunityMembers = async (communityId) => {
+                if (!db || !communityId) return [];
+                try {
+                    const snap = await db.collection('users').where('communityId', '==', communityId).get();
+                    const members = snap.docs.map(doc => userDocToState(doc));
+                    setCommunityMembers(members);
+                    return members;
+                } catch (e) { console.error(e); return []; }
+            };
+
+            const calculateSubgroupStats = (members, communityId) => {
+                const todayStr = new Date().toDateString();
+                const comm = MOCK_COMMUNITIES.find(c => c.id === communityId);
+                if (!comm) return {};
+                const stats = {};
+                comm.subgroups.forEach(sub => {
+                    const subMembers = members.filter(m => m.subgroupId === sub);
+                    const totalCount = subMembers.length;
+                    const readTodayCount = subMembers.filter(m => m.lastReadDate === todayStr).length;
+                    const rate = totalCount > 0 ? Math.round((readTodayCount / totalCount) * 100) : 0;
+                    stats[sub] = { rate, readCount: readTodayCount, totalCount };
+                });
+                return stats;
             };
 
             const downloadCSV = () => {
-                if (allUsers.length === 0) {
-                    alert("데이터가 없습니다.");
-                    return;
-                }
-                let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
-                csvContent += "이름,부서,소그룹,현재Day,총점수,연속일수,마지막읽은날,플랜ID\n";
+                if (allUsers.length === 0) { alert("데이터가 없습니다."); return; }
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF이름,부서,소그룹,현재Day,총점수,연속일수,마지막읽은날,플랜ID\n";
                 allUsers.forEach(u => {
-                    const row = `${u.name},${u.communityName},${u.subgroupId},${u.currentDay},${u.score},${u.streak},${u.lastReadDate || '없음'},${u.planId || '1year_revised'}`;
-                    csvContent += row + "\r\n";
+                    csvContent += `${u.name},${u.communityName},${u.subgroupId},${u.currentDay},${u.score},${u.streak},${u.lastReadDate || '없음'},${u.planId || '1year_revised'}\r\n`;
                 });
-                const encodedUri = encodeURI(csvContent);
                 const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
+                link.setAttribute("href", encodeURI(csvContent));
                 link.setAttribute("download", `성경통독_전체기록_${new Date().toISOString().slice(0,10)}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
             };
 
-            // ✅ [수정] deleteUser - Firestore에서 삭제
             const deleteUser = async (uid, userName) => {
                 if (confirm(`${userName}님의 데이터를 정말 삭제하시겠습니까?`)) {
                     try {
                         await db.collection('users').doc(uid).delete();
                         setAllUsers(prev => prev.filter(u => u.uid !== uid));
                         alert("삭제되었습니다.");
-                    } catch (e) {
-                        console.error(e);
-                        alert("삭제 실패");
-                    }
+                    } catch (e) { console.error(e); alert("삭제 실패"); }
                 }
             };
 
-            const startEditUser = (user) => {
-                setEditingUser({ ...user });
-            };
+            const startEditUser = (user) => setEditingUser({ ...user });
 
-            // ✅ [수정] saveEditUser - Firestore에 저장
             const saveEditUser = async () => {
                 if (!editingUser) return;
                 try {
                     await db.collection('users').doc(editingUser.uid).set({
-                        communityId: editingUser.communityId,
-                        communityName: editingUser.communityName,
-                        subgroupId: editingUser.subgroupId,
-                        planId: editingUser.planId,
-                        currentDay: editingUser.currentDay,
-                        score: editingUser.score,
-                        streak: editingUser.streak,
-                        lastReadDate: editingUser.lastReadDate || null,
+                        communityId: editingUser.communityId, communityName: editingUser.communityName,
+                        subgroupId: editingUser.subgroupId, planId: editingUser.planId,
+                        currentDay: editingUser.currentDay, score: editingUser.score,
+                        streak: editingUser.streak, lastReadDate: editingUser.lastReadDate || null,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     }, { merge: true });
-
                     setAllUsers(prev => prev.map(u => u.uid === editingUser.uid ? editingUser : u));
-                    setEditingUser(null);
-                    alert("수정되었습니다.");
-                } catch (e) {
-                    console.error(e);
-                    alert("수정 실패");
-                }
+                    setEditingUser(null); alert("수정되었습니다.");
+                } catch (e) { console.error(e); alert("수정 실패"); }
             };
 
-            // ✅ [전체 교체] handleLogin - Email/Password 로그인
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setErrorMsg('');
+                if(!loginName.trim() || !loginPw.trim()) { setErrorMsg("이름과 암호를 모두 입력해주세요."); return; }
 
-                if(!loginName.trim() || !loginPw.trim()) {
-                    setErrorMsg("이름과 암호를 모두 입력해주세요.");
-                    return;
-                }
-
-                // ✅ 관리자 로그인 → Firestore에서 전체 유저 목록 불러오기
                 if (loginName === 'admin' && loginPw === '08283') {
                     try {
-                        // 관리자도 로그인 상태가 있어야 rules 통과하므로 "익명" 1회
                         if (auth && !auth.currentUser) await auth.signInAnonymously();
-
                         const snap = await db.collection('users').get();
-                        const users = snap.docs.map(doc => userDocToState(doc));
-                        setAllUsers(users);
+                        setAllUsers(snap.docs.map(doc => userDocToState(doc)));
                         setIsAdmin(true);
                         return;
-                    } catch (err) {
-                        console.error(err);
-                        setErrorMsg('관리자 데이터 로딩 실패');
-                        return;
-                    }
+                    } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
                 }
 
-                // ✅ 일반 유저: Email/Password 로그인 (이름을 가짜 이메일로 변환)
                 try {
                     const email = makePseudoEmail(loginName);
                     let cred = null;
-
                     try {
                         cred = await auth.signInWithEmailAndPassword(email, loginPw);
                     } catch (err) {
-                        // Firebase 새 에러 코드: auth/invalid-login-credentials (user-not-found + wrong-password 통합)
                         if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials') {
-                            // 먼저 회원가입 시도
                             try {
                                 cred = await auth.createUserWithEmailAndPassword(email, loginPw);
                             } catch (signupErr) {
-                                // 회원가입도 실패하면 암호가 틀린 것 또는 다른 문제
-                                if (signupErr?.code === 'auth/email-already-in-use') {
-                                    setErrorMsg("암호가 틀렸습니다.");
-                                } else if (signupErr?.code === 'auth/weak-password') {
-                                    setErrorMsg("암호는 6자리 이상이어야 합니다.");
-                                } else {
-                                    console.error(signupErr);
-                                    setErrorMsg("로그인 실패(잠시 후 다시 시도)");
-                                }
+                                if (signupErr?.code === 'auth/email-already-in-use') { setErrorMsg("암호가 틀렸습니다."); }
+                                else if (signupErr?.code === 'auth/weak-password') { setErrorMsg("암호는 6자리 이상이어야 합니다."); }
+                                else { console.error(signupErr); setErrorMsg("로그인 실패(잠시 후 다시 시도)"); }
                                 return;
                             }
-                        } else if (err?.code === 'auth/wrong-password') {
-                            setErrorMsg("암호가 틀렸습니다.");
-                            return;
-                        } else {
-                            console.error(err);
-                            setErrorMsg("로그인 실패(잠시 후 다시 시도)");
-                            return;
-                        }
+                        } else if (err?.code === 'auth/wrong-password') { setErrorMsg("암호가 틀렸습니다."); return; }
+                        else { console.error(err); setErrorMsg("로그인 실패(잠시 후 다시 시도)"); return; }
                     }
 
                     const uid = cred.user.uid;
                     const ref = db.collection('users').doc(uid);
                     const doc = await ref.get();
 
-                    // Firestore에 처음이면 기본 유저 문서 생성
                     if (!doc.exists) {
                         const newUserBase = {
-                            name: loginName.trim(),
-                            password: loginPw,
-                            startDate: new Date().toDateString(),
-                            currentDay: 1,
-                            streak: 0,
-                            score: 0,
-                            lastReadDate: null,
-                            gender: Math.random() > 0.5 ? 'male' : 'female',
-                            planId: "1year_revised",
-                            communityId: null,
-                            communityName: null,
-                            subgroupId: null,
+                            name: loginName.trim(), password: loginPw, startDate: new Date().toDateString(),
+                            currentDay: 1, streak: 0, score: 0, lastReadDate: null, gender: 'male',
+                            planId: "1year_revised", communityId: null, communityName: null, subgroupId: null,
                             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                         };
                         await ref.set(newUserBase);
                         setTempUser({ ...newUserBase, uid });
-                        setView('plan_type_select'); // 회원가입 흐름 계속
+                        setView('plan_type_select');
                         return;
                     }
 
-                    // 기존 유저면 상태로 로드
                     const user = userDocToState(doc);
                     setCurrentUser(user);
+                    setHasReadToday(user.lastReadDate === new Date().toDateString());
 
-                    const todayStr = new Date().toDateString();
-                    setHasReadToday(user.lastReadDate === todayStr);
-
-                    // 가입 완료 여부에 따라 화면 분기
                     if (!user.communityId || !user.subgroupId) {
                         setTempUser(user);
                         setView('plan_type_select');
-                    } else {
-                        setView('dashboard');
-                    }
-
-                } catch (err) {
-                    console.error(err);
-                    setErrorMsg("로그인 처리 중 오류");
-                }
+                    } else { setView('dashboard'); }
+                } catch (err) { console.error(err); setErrorMsg("로그인 처리 중 오류"); }
             };
 
-            const handlePlanTypeSelect = (typeId) => {
-                setSelectedPlanType(typeId);
-                setView('bible_version_select');
-            };
+            const handlePlanTypeSelect = (typeId) => { setSelectedPlanType(typeId); setView('bible_version_select'); };
 
-            // ✅ [수정] handleVersionSelect - Firestore에 저장
             const handleVersionSelect = async (versionId) => {
                 const fullPlanId = `${selectedPlanType}_${versionId}`;
-                if (tempUser) {
-                    setTempUser(prev => ({ ...prev, planId: fullPlanId }));
-                    setView('community_select');
-                } 
+                if (tempUser) { setTempUser(prev => ({ ...prev, planId: fullPlanId })); setView('community_select'); } 
                 else if (currentUser) {
                     const updatedUser = { ...currentUser, planId: fullPlanId };
                     setCurrentUser(updatedUser);
-                    
-                    // ✅ Firestore에 저장
                     try {
                         const uid = auth.currentUser?.uid;
                         if (uid) await db.collection('users').doc(uid).set({ planId: fullPlanId, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                     } catch (e) { console.error(e); }
-                    
                     setView('dashboard');
-                    setShowConfetti(true); 
-                    setTimeout(() => setShowConfetti(false), 2000);
+                    setShowConfetti(true); setTimeout(() => setShowConfetti(false), 2000);
                 }
             };
 
-            const handleCommunitySelect = (commId, commName) => {
-                setTempUser(prev => ({ ...prev, communityId: commId, communityName: commName }));
-                setView('subgroup_select');
-            };
+            const handleCommunitySelect = (commId, commName) => { setTempUser(prev => ({ ...prev, communityId: commId, communityName: commName })); setView('subgroup_select'); };
 
-            // ✅ [전체 교체] handleSubgroupSelect - Firestore에 저장
             const handleSubgroupSelect = async (subgroup) => {
                 const finalUser = { ...tempUser, subgroupId: subgroup };
-                setCurrentUser(finalUser);
-                setTempUser(null);
-                setView('dashboard');
-
+                setCurrentUser(finalUser); setTempUser(null); setView('dashboard');
                 try {
                     const uid = auth.currentUser?.uid || finalUser.uid;
-                    if (!uid) return;
-                    await db.collection('users').doc(uid).set({
-                        ...finalUser,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    }, { merge: true });
-                } catch (e) {
-                    console.error(e);
-                    alert("서버 저장 실패(인터넷 확인)");
-                }
+                    if (uid) await db.collection('users').doc(uid).set({ ...finalUser, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                } catch (e) { console.error(e); alert("서버 저장 실패"); }
             };
 
-            // --- Supabase Edge Function 호출 로직 ---
             const fetchNotionData = async (planId, currentDay) => {
-                if (!SUPABASE_FUNCTION_URL || SUPABASE_FUNCTION_URL.includes("YOUR_")) {
-                    console.warn("Supabase URL이 설정되지 않았습니다.");
-                    return { title: null, text: "서버 연결 설정이 필요합니다.\n관리자에게 문의해주세요." };
-                }
-
+                if (!SUPABASE_FUNCTION_URL) return { title: null, text: "서버 연결 설정이 필요합니다." };
                 const [planType, version] = (planId || '1year_revised').split('_');
                 const targetTag = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.tagName || '개역개정 일년일독';
-                
-                // 오늘 날짜 매칭 (년도 무시, 2025년 기준 월/일)
                 const targetDate = new Date(2025, 0, currentDay); 
                 const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
                 const dd = String(targetDate.getDate()).padStart(2, '0');
-                const targetDateStr = `${mm}-${dd}`;
-                
-                console.log(`Requesting Server: Tag=[${targetTag}], Date=[${targetDateStr}]`);
-
                 try {
                     const response = await fetch(SUPABASE_FUNCTION_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            tag: targetTag,
-                            date: targetDateStr
-                        })
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tag: targetTag, date: `${mm}-${dd}` })
                     });
-
                     if (!response.ok) throw new Error(`Server Error: ${response.status}`);
                     const data = await response.json();
-                    
                     if (data.error) return { title: null, text: `[오류] ${data.error}` };
-                    
                     return { title: data.title, text: data.text };
-
-                } catch (e) {
-                    console.error("Fetch Error:", e);
-                    return { title: null, text: "서버와 통신 중 오류가 발생했습니다.\n인터넷 연결을 확인해주세요." };
-                }
+                } catch (e) { console.error(e); return { title: null, text: "서버와 통신 중 오류가 발생했습니다." }; }
             };
 
             React.useEffect(() => {
                 if (view !== 'dashboard' || !currentUser) return;
-
-                const loadVerse = async () => {
+                const loadData = async () => {
                     setVerseData(prev => ({ ...prev, loading: true }));
-                    const { currentDay, planId } = currentUser;
+                    const { currentDay, planId, communityId } = currentUser;
                     const [planType, version] = (planId || '1year_revised').split('_');
                     const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
-                    
                     const notionData = await fetchNotionData(planId, currentDay);
                     
-                    if (notionData && notionData.text && !notionData.text.startsWith('[오류]')) {
-                        setVerseData({ 
-                            title: `${planTypeName} DAY ${currentDay}일`,
-                            subtitle: notionData.title || `(제목 없음)`,
-                            text: notionData.text, 
-                            loading: false 
-                        });
+                    if (notionData?.text && !notionData.text.startsWith('[오류]')) {
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, loading: false });
                     } else {
                         const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
-                        const isFirstDay = currentDay === 1;
-                        const hasError = !notionData || notionData.text.includes('오류') || notionData.text.includes('서버');
-                        
-                        let displayText;
-                        if (isFirstDay && hasError) {
-                            displayText = GENESIS_1;
-                        } else {
-                            displayText = notionData?.text || `데이터를 불러올 수 없습니다.\n\n1. 노션 연동 상태를 확인하세요.\n2. '${versionName}' 태그가 정확한지 확인하세요.\n3. 오늘 날짜에 해당하는 데이터가 있는지 확인하세요.`;
-                        }
+                        const displayText = currentDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: `${versionName} 읽기`, text: displayText, loading: false });
+                    }
 
-                        setTimeout(() => {
-                            setVerseData({ 
-                                title: `${planTypeName} DAY ${currentDay}일`, 
-                                subtitle: `${versionName} 읽기`,
-                                text: displayText,
-                                loading: false 
-                            });
-                        }, 500);
+                    if (communityId) {
+                        const members = await loadCommunityMembers(communityId);
+                        if (members?.length > 0) setSubgroupStats(calculateSubgroupStats(members, communityId));
                     }
                 };
+                loadData();
+            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId]);
 
-                loadVerse();
-
-                const comm = MOCK_COMMUNITIES.find(c => c.id === currentUser.communityId);
-                if (comm) {
-                    const stats = {};
-                    comm.subgroups.forEach(sub => {
-                        stats[sub] = 0; 
-                    });
-                    
-                    if (hasReadToday) {
-                        stats[currentUser.subgroupId] = (stats[currentUser.subgroupId] || 0) + 1;
-                    }
-                    setSubgroupStats(stats);
-                }
-
-            }, [view, currentUser?.currentDay, currentUser?.planId]);
-
-            // ✅ [수정] handleRead - Firestore에 저장
             const handleRead = async () => {
                 const todayStr = new Date().toDateString();
-                const yesterday = new Date();
-                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
                 const yesterdayStr = yesterday.toDateString();
 
                 let newStreak = currentUser.streak || 0;
-                if (currentUser.lastReadDate === yesterdayStr) {
-                    newStreak += 1;
-                } else if (currentUser.lastReadDate !== todayStr) {
-                    newStreak = 1;
-                }
+                if (currentUser.lastReadDate === yesterdayStr) newStreak += 1;
+                else if (currentUser.lastReadDate !== todayStr) newStreak = 1;
                 
                 const streakBonus = Math.min(newStreak, 5);
                 const pointsEarned = 10 + streakBonus;
@@ -587,155 +391,133 @@
                 
                 const oldLevel = getLevelInfo(currentUser.score || 0);
                 const newLevel = getLevelInfo(newScore);
-                
-                if (newLevel.min > oldLevel.min) {
-                    setLevelUpToast(newLevel);
-                    setTimeout(() => setLevelUpToast(null), 4000);
-                }
+                if (newLevel.min > oldLevel.min) { setLevelUpToast(newLevel); setTimeout(() => setLevelUpToast(null), 4000); }
 
                 setBonusToast({ basic: 10, streak: streakBonus, total: pointsEarned });
                 setTimeout(() => setBonusToast(null), 4000);
 
                 const newDay = currentUser.currentDay + 1;
-                const updatedUser = { 
-                    ...currentUser, 
-                    currentDay: newDay, 
-                    streak: newStreak,
-                    score: newScore,
-                    lastReadDate: todayStr 
-                };
+                const updatedUser = { ...currentUser, currentDay: newDay, streak: newStreak, score: newScore, lastReadDate: todayStr };
                 
                 setCurrentUser(updatedUser);
                 setHasReadToday(true);
                 
-                // ✅ Firestore에 저장
                 try {
                     const uid = auth.currentUser?.uid;
-                    if (uid) {
-                        await db.collection('users').doc(uid).set({
-                            currentDay: updatedUser.currentDay,
-                            streak: updatedUser.streak,
-                            score: updatedUser.score,
-                            lastReadDate: updatedUser.lastReadDate,
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        }, { merge: true });
-                    }
-                } catch (e) {
-                    console.error(e);
-                    alert("서버 저장 실패(인터넷 확인)");
+                    if (uid) await db.collection('users').doc(uid).set({
+                        currentDay: newDay, streak: newStreak, score: newScore, lastReadDate: todayStr,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                } catch (e) { console.error(e); alert("서버 저장 실패"); }
+
+                if (currentUser.communityId) {
+                    const members = await loadCommunityMembers(currentUser.communityId);
+                    const updatedMembers = members.map(m => m.uid === updatedUser.uid ? updatedUser : m);
+                    setCommunityMembers(updatedMembers);
+                    setSubgroupStats(calculateSubgroupStats(updatedMembers, currentUser.communityId));
                 }
                 
-                setShowConfetti(true);
-                setTimeout(() => setShowConfetti(false), 3000);
+                setShowConfetti(true); setTimeout(() => setShowConfetti(false), 3000);
             };
 
             const handleLogout = () => {
-                // Firebase 로그아웃
                 if (auth) auth.signOut();
-                
-                setCurrentUser(null);
-                setIsAdmin(false);
-                setTempUser(null);
-                setLoginName('');
-                setLoginPw('');
-                setErrorMsg('');
-                setView('login');
-                setHasReadToday(false);
-                setEditingUser(null);
+                setCurrentUser(null); setIsAdmin(false); setTempUser(null); setLoginName(''); setLoginPw('');
+                setErrorMsg(''); setView('login'); setHasReadToday(false); setEditingUser(null); setCommunityMembers([]);
             };
 
-            const handleChangeVersionStart = () => {
-                setSelectedPlanType(null); 
-                setTempUser(null); 
-                setView('plan_type_select');
-            };
+            const handleChangeVersionStart = () => { setSelectedPlanType(null); setTempUser(null); setView('plan_type_select'); };
 
             const getSubgroupRanking = () => {
-                if (!currentUser || !subgroupStats) return [];
-                const currentStats = { ...subgroupStats };
-                if (hasReadToday) {
-                    currentStats[currentUser.subgroupId] = Math.min(100, currentStats[currentUser.subgroupId] + 5);
-                }
-                return Object.entries(currentStats)
-                    .map(([name, rate]) => ({ name, rate }))
+                if (!currentUser || !subgroupStats || Object.keys(subgroupStats).length === 0) return [];
+                return Object.entries(subgroupStats)
+                    .map(([name, data]) => ({ name, rate: data.rate || 0, readCount: data.readCount || 0, totalCount: data.totalCount || 0 }))
                     .sort((a, b) => b.rate - a.rate);
             };
 
-            // ================= VIEW RENDERING =================
+            const getAdminStats = () => {
+                const todayStr = new Date().toDateString();
+                const totalUsers = allUsers.length;
+                const readToday = allUsers.filter(u => u.lastReadDate === todayStr).length;
+                const readRate = totalUsers > 0 ? Math.round((readToday / totalUsers) * 100) : 0;
+                const communityStats = {};
+                MOCK_COMMUNITIES.forEach(comm => {
+                    const commUsers = allUsers.filter(u => u.communityId === comm.id);
+                    const commTotal = commUsers.length;
+                    const commRead = commUsers.filter(u => u.lastReadDate === todayStr).length;
+                    communityStats[comm.id] = { name: comm.name, total: commTotal, readToday: commRead, rate: commTotal > 0 ? Math.round((commRead / commTotal) * 100) : 0 };
+                });
+                return { totalUsers, readToday, readRate, communityStats };
+            };
 
-            // 관리자 모드
+            // ========== VIEWS ==========
+
             if (isAdmin) {
+                const adminStats = getAdminStats();
                 return (
-                    <div className="min-h-screen bg-slate-100 p-6">
-                        <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-6">
-                            <div className="flex justify-between items-center mb-6 border-b pb-4">
-                                <h1 className="text-2xl font-bold text-slate-800">🛠️ 관리자 모드</h1>
-                                <button onClick={handleLogout} className="text-sm bg-slate-200 px-3 py-2 rounded hover:bg-slate-300">나가기</button>
-                            </div>
-                            
-                            <div className="mb-6 flex gap-2">
+                    <div className="min-h-screen bg-slate-100 p-4">
+                        <div className="max-w-5xl mx-auto space-y-6">
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h1 className="text-2xl font-bold text-slate-800">🛠️ 관리자 모드</h1>
+                                    <button onClick={handleLogout} className="text-sm bg-slate-200 px-3 py-2 rounded hover:bg-slate-300">나가기</button>
+                                </div>
                                 <button onClick={downloadCSV} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold">
-                                    <Icon name="download" size={18}/> 엑셀(CSV) 다운로드
+                                    <Icon name="download" size={18}/> CSV 다운로드
                                 </button>
-                                <div className="text-xs text-slate-500 flex items-center bg-slate-50 px-2 rounded">
-                                    * 전체 읽은 기록을 엑셀로 저장합니다.
+                            </div>
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Icon name="chart" size={20} className="text-blue-500"/> 📊 오늘 통계 ({new Date().toLocaleDateString('ko-KR')})
+                                </h2>
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    <div className="bg-blue-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-blue-600">{adminStats.totalUsers}</div>
+                                        <div className="text-xs text-slate-500">전체 회원</div>
+                                    </div>
+                                    <div className="bg-green-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-green-600">{adminStats.readToday}</div>
+                                        <div className="text-xs text-slate-500">오늘 읽은 사람</div>
+                                    </div>
+                                    <div className="bg-orange-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-orange-600">{adminStats.readRate}%</div>
+                                        <div className="text-xs text-slate-500">오늘 참여율</div>
+                                    </div>
+                                </div>
+                                <h3 className="font-bold text-slate-700 mb-2">📌 공동체별 오늘 현황</h3>
+                                <div className="space-y-2">
+                                    {Object.entries(adminStats.communityStats).map(([id, stat]) => (
+                                        <div key={id} className="flex items-center gap-3">
+                                            <div className="w-20 text-sm font-bold text-slate-600">{stat.name}</div>
+                                            <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${stat.rate}%` }}></div>
+                                            </div>
+                                            <div className="text-sm text-slate-500 w-28 text-right">{stat.readToday}/{stat.total}명 ({stat.rate}%)</div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
 
-                            {/* 유저 수정 모달 */}
                             {editingUser && (
                                 <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
                                     <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
                                         <h3 className="font-bold text-lg border-b pb-2">회원 정보 수정 ({editingUser.name})</h3>
-                                        
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 mb-1">소속 공동체</label>
-                                            <select 
-                                                value={editingUser.communityId} 
-                                                onChange={e => {
-                                                    const comm = MOCK_COMMUNITIES.find(c => c.id === e.target.value);
-                                                    setEditingUser({
-                                                        ...editingUser, 
-                                                        communityId: comm.id, 
-                                                        communityName: comm.name,
-                                                        subgroupId: comm.subgroups[0] 
-                                                    });
-                                                }}
-                                                className="w-full border rounded p-2 text-sm"
-                                            >
+                                            <select value={editingUser.communityId} onChange={e => {
+                                                const comm = MOCK_COMMUNITIES.find(c => c.id === e.target.value);
+                                                setEditingUser({ ...editingUser, communityId: comm.id, communityName: comm.name, subgroupId: comm.subgroups[0] });
+                                            }} className="w-full border rounded p-2 text-sm">
                                                 {MOCK_COMMUNITIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                             </select>
                                         </div>
-
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 mb-1">소그룹</label>
-                                            <select 
-                                                value={editingUser.subgroupId} 
-                                                onChange={e => setEditingUser({...editingUser, subgroupId: e.target.value})}
-                                                className="w-full border rounded p-2 text-sm"
-                                            >
-                                                {MOCK_COMMUNITIES.find(c => c.id === editingUser.communityId)?.subgroups.map(s => (
-                                                    <option key={s} value={s}>{s}</option>
-                                                ))}
+                                            <select value={editingUser.subgroupId} onChange={e => setEditingUser({...editingUser, subgroupId: e.target.value})} className="w-full border rounded p-2 text-sm">
+                                                {MOCK_COMMUNITIES.find(c => c.id === editingUser.communityId)?.subgroups.map(s => <option key={s} value={s}>{s}</option>)}
                                             </select>
                                         </div>
-
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-500 mb-1">성경 읽기 플랜</label>
-                                            <select 
-                                                value={editingUser.planId || '1year_revised'} 
-                                                onChange={e => setEditingUser({...editingUser, planId: e.target.value})}
-                                                className="w-full border rounded p-2 text-sm"
-                                            >
-                                                <optgroup label="일년 일독">
-                                                    {BIBLE_VERSIONS['1year'].map(v => <option key={`1year_${v.id}`} value={`1year_${v.id}`}>{v.name}</option>)}
-                                                </optgroup>
-                                                <optgroup label="신약 일독">
-                                                    {BIBLE_VERSIONS['nt'].map(v => <option key={`nt_${v.id}`} value={`nt_${v.id}`}>{v.name}</option>)}
-                                                </optgroup>
-                                            </select>
-                                        </div>
-
                                         <div className="flex gap-2 pt-4">
                                             <button onClick={saveEditUser} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">저장</button>
                                             <button onClick={() => setEditingUser(null)} className="flex-1 bg-slate-200 text-slate-600 py-2 rounded hover:bg-slate-300">취소</button>
@@ -744,50 +526,42 @@
                                 </div>
                             )}
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left text-slate-600">
-                                    <thead className="text-xs text-slate-700 uppercase bg-slate-50">
-                                        <tr>
-                                            <th className="px-4 py-3">이름</th>
-                                            <th className="px-4 py-3">부서 / 소그룹</th>
-                                            <th className="px-4 py-3 text-center">암호</th>
-                                            <th className="px-4 py-3 text-center">Day</th>
-                                            <th className="px-4 py-3 text-center">점수</th>
-                                            <th className="px-4 py-3 text-center">플랜</th>
-                                            <th className="px-4 py-3 text-center">관리</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {allUsers.length > 0 ? allUsers.map((u, idx) => (
-                                            <tr key={idx} className="border-b hover:bg-slate-50">
-                                                <td className="px-4 py-3 font-medium text-slate-900">{u.name}</td>
-                                                <td className="px-4 py-3">
-                                                    <span className="font-bold">{u.communityName}</span><br/>
-                                                    <span className="text-xs text-slate-400">{u.subgroupId}</span>
-                                                </td>
-                                                <td className="px-4 py-3 text-center text-slate-400">{u.password}</td>
-                                                <td className="px-4 py-3 text-center font-bold text-blue-600">{u.currentDay}</td>
-                                                <td className="px-4 py-3 text-center">{u.score}</td>
-                                                <td className="px-4 py-3 text-center text-xs text-slate-400 truncate max-w-[100px]">{u.planId}</td>
-                                                <td className="px-4 py-3 text-center">
-                                                    <div className="flex justify-center gap-2">
-                                                        <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded">
-                                                            <Icon name="edit" size={16} />
-                                                        </button>
-                                                        {/* ✅ [수정] uid와 userName 전달 */}
-                                                        <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded">
-                                                            <Icon name="trash" size={16} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )) : (
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">👥 전체 회원 목록</h2>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left text-slate-600">
+                                        <thead className="text-xs text-slate-700 uppercase bg-slate-50">
                                             <tr>
-                                                <td colSpan="7" className="px-4 py-6 text-center text-slate-400">데이터가 없습니다.</td>
+                                                <th className="px-3 py-3">이름</th>
+                                                <th className="px-3 py-3">부서/소그룹</th>
+                                                <th className="px-3 py-3 text-center">Day</th>
+                                                <th className="px-3 py-3 text-center">점수</th>
+                                                <th className="px-3 py-3 text-center">마지막읽은날</th>
+                                                <th className="px-3 py-3 text-center">관리</th>
                                             </tr>
-                                        )}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            {allUsers.map((u, idx) => {
+                                                const readToday = u.lastReadDate === new Date().toDateString();
+                                                return (
+                                                    <tr key={idx} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
+                                                        <td className="px-3 py-3 font-medium text-slate-900">{u.name}{readToday && <span className="ml-1 text-green-500">✓</span>}</td>
+                                                        <td className="px-3 py-3"><span className="font-bold">{u.communityName}</span><span className="text-xs text-slate-400 block">{u.subgroupId}</span></td>
+                                                        <td className="px-3 py-3 text-center font-bold text-blue-600">{u.currentDay}</td>
+                                                        <td className="px-3 py-3 text-center">{u.score}</td>
+                                                        <td className="px-3 py-3 text-center text-xs text-slate-400">{u.lastReadDate ? new Date(u.lastReadDate).toLocaleDateString('ko-KR') : '-'}</td>
+                                                        <td className="px-3 py-3 text-center">
+                                                            <div className="flex justify-center gap-1">
+                                                                <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded"><Icon name="edit" size={14} /></button>
+                                                                <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded"><Icon name="trash" size={14} /></button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -798,10 +572,8 @@
                 return (
                     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative">
                         <div className="absolute top-4 right-4">
-                            <button onClick={() => { setLoginName('admin'); setLoginPw(''); document.querySelector('input[type=password]').focus(); }} 
-                                className="text-xs text-slate-300 hover:text-slate-500">관리자</button>
+                            <button onClick={() => { setLoginName('admin'); setLoginPw(''); }} className="text-xs text-slate-300 hover:text-slate-500">관리자</button>
                         </div>
-
                         <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-slate-100">
                             <div className="text-center mb-8">
                                 <div className="text-4xl mb-2">🏃‍♂️💨</div>
@@ -811,31 +583,18 @@
                             <form onSubmit={handleLogin} className="space-y-4">
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">이름</label>
-                                    <input type="text" value={loginName} onChange={e => setLoginName(e.target.value)} 
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="홍길동" />
+                                    <input type="text" value={loginName} onChange={e => setLoginName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="홍길동" />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">암호</label>
-                                    <input type="password" value={loginPw} onChange={e => setLoginPw(e.target.value)} 
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="6자리 이상 입력하세요" />
+                                    <input type="password" value={loginPw} onChange={e => setLoginPw(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="6자리 이상 입력하세요" />
                                 </div>
-                                
                                 <div className="bg-red-50 p-3 rounded-lg border border-red-100">
-                                    <p className="text-xs text-red-600 font-bold break-keep text-center">
-                                        ⚠️ 처음 오셨나요? <br/>
-                                        반드시 <span className="underline">실명</span>으로 가입해주세요.<br/>
-                                        (예: 홍길동)
-                                    </p>
+                                    <p className="text-xs text-red-600 font-bold break-keep text-center">⚠️ 처음 오셨나요? <br/>반드시 <span className="underline">실명</span>으로 가입해주세요.<br/>(예: 홍길동)</p>
                                 </div>
-
                                 {errorMsg && <p className="text-red-500 text-xs text-center">{errorMsg}</p>}
-                                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-95 mt-4">
-                                    입장하기
-                                </button>
-
-                                <p className="text-xs text-slate-400 text-center mt-3">
-                                    암호를 잊어버린 경우 사무실에 문의해주세요.
-                                </p>
+                                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-95 mt-4">입장하기</button>
+                                <p className="text-xs text-slate-400 text-center mt-3">암호를 잊어버린 경우 사무실에 문의해주세요.</p>
                             </form>
                         </div>
                     </div>
@@ -846,22 +605,15 @@
                 return (
                     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
                         <div className="w-full max-w-md mb-6">
-                            {/* 설정 변경 중이라면 뒤로가기 = 대시보드 */}
                             {currentUser && !tempUser && (
-                                <button onClick={() => setView('dashboard')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4">
-                                    <Icon name="back" size={16} className="mr-1"/> 대시보드로 돌아가기
-                                </button>
+                                <button onClick={() => setView('dashboard')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4"><Icon name="back" size={16} className="mr-1"/> 대시보드로 돌아가기</button>
                             )}
-                            <h2 className="text-xl font-bold text-slate-800 text-center">
-                                {currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${tempUser?.name || ''}님!`}
-                            </h2>
+                            <h2 className="text-xl font-bold text-slate-800 text-center">{currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${tempUser?.name || ''}님!`}</h2>
                             <p className="text-slate-500 text-sm text-center mt-1">어떤 계획으로 읽으시겠습니까?</p>
                         </div>
-                        
                         <div className="w-full max-w-md space-y-3">
                             {PLAN_TYPES.map(type => (
-                                <button key={type.id} onClick={() => handlePlanTypeSelect(type.id)}
-                                    className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
+                                <button key={type.id} onClick={() => handlePlanTypeSelect(type.id)} className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
                                     <div className="font-bold text-slate-800 text-lg mb-1">{type.title}</div>
                                     <div className="text-xs text-slate-400">{type.desc}</div>
                                 </button>
@@ -874,25 +626,18 @@
             if (view === 'bible_version_select') {
                 const versions = BIBLE_VERSIONS[selectedPlanType];
                 const planTitle = PLAN_TYPES.find(t => t.id === selectedPlanType)?.title;
-
                 return (
                     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
                         <div className="w-full max-w-md">
-                            <button onClick={() => setView('plan_type_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4">
-                                <Icon name="back" size={16} className="mr-1"/> 뒤로가기
-                            </button>
+                            <button onClick={() => setView('plan_type_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4"><Icon name="back" size={16} className="mr-1"/> 뒤로가기</button>
                             <div className="text-center mb-6">
                                 <h2 className="text-xl font-bold text-slate-800">{planTitle} 버전 선택</h2>
-                                <div className="bg-yellow-50 text-yellow-800 text-xs font-bold p-2 rounded-lg mt-2 break-keep">
-                                    📢 오늘 설정하시면 기본적으로 1년간 이 버전으로 읽게 됩니다.
-                                </div>
+                                <div className="bg-yellow-50 text-yellow-800 text-xs font-bold p-2 rounded-lg mt-2 break-keep">📢 오늘 설정하시면 기본적으로 1년간 이 버전으로 읽게 됩니다.</div>
                             </div>
                         </div>
-                        
                         <div className="w-full max-w-md space-y-3">
                             {versions.map(ver => (
-                                <button key={ver.id} onClick={() => handleVersionSelect(ver.id)}
-                                    className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
+                                <button key={ver.id} onClick={() => handleVersionSelect(ver.id)} className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
                                     <div className="font-bold text-slate-800 text-lg mb-1">{ver.name}</div>
                                     <div className="text-xs text-slate-400">{ver.desc}</div>
                                 </button>
@@ -911,14 +656,9 @@
                         </div>
                         <div className="w-full max-w-md space-y-3">
                             {MOCK_COMMUNITIES.map(comm => (
-                                <button key={comm.id} onClick={() => handleCommunitySelect(comm.id, comm.name)}
-                                    className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-4 text-left">
-                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl ${comm.color.replace('bg-', 'bg-opacity-10 text-')}`}>
-                                        {comm.icon}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="font-bold text-slate-800 text-lg">{comm.name}</div>
-                                    </div>
+                                <button key={comm.id} onClick={() => handleCommunitySelect(comm.id, comm.name)} className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-4 text-left">
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl`}>{comm.icon}</div>
+                                    <div className="flex-1"><div className="font-bold text-slate-800 text-lg">{comm.name}</div></div>
                                     <Icon name="arrowRight" className="text-slate-300"/>
                                 </button>
                             ))}
@@ -932,9 +672,7 @@
                 return (
                     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
                         <div className="w-full max-w-md mb-4">
-                            <button onClick={() => setView('community_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600">
-                                <Icon name="back" size={16} className="mr-1"/> 뒤로가기
-                            </button>
+                            <button onClick={() => setView('community_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600"><Icon name="back" size={16} className="mr-1"/> 뒤로가기</button>
                         </div>
                         <div className="text-center mb-6">
                             <h2 className="text-xl font-bold text-slate-800">소그룹 선택</h2>
@@ -942,8 +680,7 @@
                         </div>
                         <div className="w-full max-w-md grid grid-cols-2 gap-3 h-[50vh] overflow-y-auto content-start">
                             {selectedComm?.subgroups.map((sub, idx) => (
-                                <button key={idx} onClick={() => handleSubgroupSelect(sub)}
-                                    className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-center flex flex-col items-center justify-center aspect-video">
+                                <button key={idx} onClick={() => handleSubgroupSelect(sub)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-center flex flex-col items-center justify-center aspect-video">
                                     <span className="text-2xl mb-2 opacity-80">🏕️</span>
                                     <span className="font-bold text-slate-700 text-sm">{sub}</span>
                                 </button>
@@ -958,26 +695,14 @@
                 const [planType, version] = (planId || '1year_revised').split('_');
                 const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
                 const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '';
-
                 const myLevel = getLevelInfo(score || 0);
-
-                const progressPercent = Math.min((currentDay / TOTAL_DAYS) * 100, 100);
-                const closestChaserDistance = GHOST_RUNNERS
-                    .filter(r => r.day < currentDay)
-                    .reduce((minDist, r) => Math.min(minDist, currentDay - r.day), Infinity);
-                const isPanic = closestChaserDistance <= PANIC_DISTANCE;
-                
+                const closestChaserDistance = communityMembers.filter(r => r.uid !== currentUser.uid && r.currentDay < currentDay).reduce((minDist, r) => Math.min(minDist, currentDay - r.currentDay), Infinity);
+                const isPanic = closestChaserDistance <= PANIC_DISTANCE && closestChaserDistance !== Infinity;
                 const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
-
-                const racers = [
-                    ...GHOST_RUNNERS.map(r => ({ ...r, isMe: false })), 
-                    { name: currentUser.name, day: currentDay, score: score, isMe: true, isPanic: isPanic }
-                ].sort((a, b) => a.day - b.day);
-                
+                const racers = communityMembers.map(m => ({ ...m, day: m.currentDay, isMe: m.uid === currentUser.uid, isPanic: m.uid === currentUser.uid && isPanic })).sort((a, b) => a.day - b.day);
                 const subgroupRanking = getSubgroupRanking();
-                
                 const topGroups = subgroupRanking.slice(0, 3);
-                const myGroupStats = subgroupRanking.find(r => r.name === subgroupId) || { name: subgroupId, rate: 0 };
+                const myGroupStats = subgroupRanking.find(r => r.name === subgroupId) || { name: subgroupId, rate: 0, readCount: 0, totalCount: 0 };
                 const isMyGroupInTop3 = topGroups.some(g => g.name === subgroupId);
 
                 return (
@@ -988,22 +713,15 @@
                             <div className="fixed top-20 left-4 right-4 z-50 animate-bounce">
                                 <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-3">
                                     <div className="text-3xl">{levelUpToast.emoji}</div>
-                                    <div>
-                                        <p className="text-xs text-yellow-400 font-bold">LEVEL UP!</p>
-                                        <p className="font-bold">{levelUpToast.title}(으)로 승급!</p>
-                                    </div>
+                                    <div><p className="text-xs text-yellow-400 font-bold">LEVEL UP!</p><p className="font-bold">{levelUpToast.title}(으)로 승급!</p></div>
                                 </div>
                             </div>
                         )}
 
                         {bonusToast && (
-                            <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 animate-fade-in-up">
+                            <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50">
                                 <div className="bg-blue-600 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 font-bold whitespace-nowrap">
-                                    <span>기본 10점</span>
-                                    <span>+</span>
-                                    <span>연속보너스 {bonusToast.streak}점</span>
-                                    <span>=</span>
-                                    <span className="text-yellow-300">총 {bonusToast.total}점 획득!</span>
+                                    <span>기본 10점</span><span>+</span><span>연속보너스 {bonusToast.streak}점</span><span>=</span><span className="text-yellow-300">총 {bonusToast.total}점!</span>
                                 </div>
                             </div>
                         )}
@@ -1016,41 +734,23 @@
                                         <button onClick={() => setShowScoreInfo(false)} className="text-slate-400"><Icon name="close"/></button>
                                     </div>
                                     <div className="space-y-4 overflow-y-auto max-h-[60vh]">
-                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 mb-2">
-                                            <h4 className="font-bold text-slate-800 mb-1">📖 천로역정 성경 레이스란?</h4>
-                                            <p className="text-xs text-slate-600 leading-relaxed">
-                                                순례자가 천국을 향해 걸어가듯, 우리도 매일 말씀을 읽으며 영적인 목적지를 향해 나아가는 레이스입니다.<br/>
-                                                나 혼자 걷는 길이 아니라, 우리 공동체(구역/목장)가 함께 격려하며 완주하는 기쁨을 누려보세요!
-                                            </p>
-                                        </div>
-
-                                        <div>
-                                            <h4 className="font-bold text-blue-600 mb-1">나의 등급</h4>
+                                        <div><h4 className="font-bold text-blue-600 mb-1">나의 등급</h4>
                                             <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-xl border border-blue-100">
                                                 <div className="text-3xl">{myLevel.emoji}</div>
-                                                <div>
-                                                    <div className="font-bold text-lg">{myLevel.title}</div>
-                                                    <div className="text-xs text-slate-500">현재 {score}점</div>
-                                                </div>
+                                                <div><div className="font-bold text-lg">{myLevel.title}</div><div className="text-xs text-slate-500">현재 {score}점</div></div>
                                             </div>
                                         </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-700 mb-1">점수 모으는 법</h4>
+                                        <div><h4 className="font-bold text-slate-700 mb-1">점수 모으는 법</h4>
                                             <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
                                                 <li>매일 읽기 완료: <strong>+10점</strong></li>
-                                                <li>연속 읽기 보너스: <strong>매일 +1점씩 증가 (최대 +5점 유지)</strong><br/>
-                                                    <span className="text-xs text-red-500">* 하루라도 빠지면 다시 +1점부터 시작해요!</span>
-                                                </li>
+                                                <li>연속 읽기 보너스: <strong>매일 +1점씩 증가 (최대 +5점)</strong></li>
                                             </ul>
                                         </div>
-                                        <div>
-                                            <h4 className="font-bold text-slate-700 mb-1">천로역정 계급표</h4>
+                                        <div><h4 className="font-bold text-slate-700 mb-1">천로역정 계급표</h4>
                                             <div className="grid gap-2 text-sm">
                                                 {LEVEL_SYSTEM.map((lvl, idx) => (
                                                     <div key={idx} className={`flex items-center gap-2 p-2 rounded ${lvl.title === myLevel.title ? 'bg-yellow-50 border border-yellow-200' : ''}`}>
-                                                        <span className="text-xl">{lvl.emoji}</span>
-                                                        <span className="flex-1">{lvl.title}</span>
-                                                        <span className="text-slate-400 text-xs">{lvl.min}pt~</span>
+                                                        <span className="text-xl">{lvl.emoji}</span><span className="flex-1">{lvl.title}</span><span className="text-slate-400 text-xs">{lvl.min}pt~</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1061,7 +761,6 @@
                             </div>
                         )}
 
-                        {/* 성경통독 114 안내 모달 */}
                         {showReadingGuide && (
                             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowReadingGuide(false)}>
                                 <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -1069,43 +768,9 @@
                                         <h3 className="text-xl font-bold text-slate-800">📖 성경통독 114 가이드</h3>
                                         <button onClick={() => setShowReadingGuide(false)} className="text-slate-400"><Icon name="close"/></button>
                                     </div>
-                                    <div className="space-y-6 text-sm text-slate-600 leading-relaxed overflow-y-auto max-h-[60vh] pr-2">
-                                        
-                                        {/* 섹션 1: 114의 의미 */}
-                                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                            <h4 className="font-bold text-blue-700 mb-1">💡 성경통독 114란?</h4>
-                                            <p className="text-xs mb-2">
-                                                <strong>1년 1독 4회 효과!</strong><br/>
-                                                성경 전체를 1년에 1번 통독하지만, 3개월(한 분기)마다 성경 전체 시대를 볼 수 있도록 되어 있으며, 중복된 시대를 나누어 읽어 지루하지 않게 읽을 수 있습니다.
-                                            </p>
-                                        </div>
-
-                                        {/* 섹션 2: 분기별 읽기 순서 */}
-                                        <div>
-                                            <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">📅 분기별 읽기</h4>
-                                            <div className="space-y-3 text-xs">
-                                                <div className="bg-green-50 p-2 rounded">
-                                                    <span className="font-bold text-green-700 block mb-1">1분기 (1-3월)</span>
-                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 1-11장, 출애굽기, 여호수아, 사사기, 룻기, 욥기, 다니엘, 에스라 1-6장, 학개, 스가랴, 에스라 7-10장, 느헤미야, 에스더</span>
-                                                    <span className="block text-slate-500"><strong>신약:</strong> 마태복음, 사도행전 1-5장, 로마서, 갈라디아서, 히브리서, 요한계시록 1-3장</span>
-                                                </div>
-                                                <div className="bg-green-50 p-2 rounded">
-                                                    <span className="font-bold text-green-700 block mb-1">2분기 (4-6월)</span>
-                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 12-26장, 레위기, 사무엘상, 사무엘하, 시편 1-72편, 이사야, 요엘, 오바댜, 나훔, 하박국</span>
-                                                    <span className="block text-slate-500"><strong>신약:</strong> 마가복음, 사도행전 6-12장, 고린도전서, 고린도후서, 데살로니가전서, 데살로니가후서, 야고보서, 유다서, 요한계시록 4-7장</span>
-                                                </div>
-                                                <div className="bg-green-50 p-2 rounded">
-                                                    <span className="font-bold text-green-700 block mb-1">3분기 (7-9월)</span>
-                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 27-36장, 민수기, 열왕기상 1-11장, 잠언, 전도서, 아가서, 열왕기상 12-22장, 열왕기하 1-14장, 요나, 열왕기하 15장, 아모스, 호세아, 열왕기하 16-23장, 스바냐, 열왕기하 24-25장, 에스겔</span>
-                                                    <span className="block text-slate-500"><strong>신약:</strong> 누가복음, 사도행전 13-20장, 에베소서, 빌립보서, 골로새서, 빌레몬서, 베드로전서, 베드로후서, 요한계시록 8-14장</span>
-                                                </div>
-                                                <div className="bg-green-50 p-2 rounded">
-                                                    <span className="font-bold text-green-700 block mb-1">4분기 (10-12월)</span>
-                                                    <span className="block text-slate-500 mb-1"><strong>구약:</strong> 창세기 37-50장, 신명기, 시편 90편, 역대상, 시편 73-150편, 역대하 1-28장, 미가, 역대하 29-36장, 예레미야, 예레미야애가, 말라기</span>
-                                                    <span className="block text-slate-500"><strong>신약:</strong> 요한복음, 사도행전 21-28장, 디모데전서, 디모데후서, 디도서, 요한일서, 요한이서, 요한삼서, 요한계시록 15-22장</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                        <h4 className="font-bold text-blue-700 mb-1">💡 성경통독 114란?</h4>
+                                        <p className="text-xs"><strong>1년 1독 4회 효과!</strong><br/>3개월마다 성경 전체 시대를 볼 수 있도록 구성되어 있습니다.</p>
                                     </div>
                                     <button onClick={() => setShowReadingGuide(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
                                 </div>
@@ -1114,76 +779,57 @@
 
                         <div className="bg-slate-900 text-slate-300 text-[10px] py-1 px-4 flex justify-between items-center">
                             <span>현재 버전: <strong>{planTypeName} - {versionName}</strong></span>
-                            <button onClick={handleChangeVersionStart} className="flex items-center gap-1 hover:text-white transition-colors">
-                                <Icon name="refresh" size={10} /> 읽는 버전 바꾸기
-                            </button>
+                            <button onClick={handleChangeVersionStart} className="flex items-center gap-1 hover:text-white"><Icon name="refresh" size={10} /> 읽는 버전 바꾸기</button>
                         </div>
 
                         <header className="bg-white shadow-sm border-b border-slate-100 pb-2 sticky top-0 z-30">
                             <div className="px-4 py-2 flex justify-between items-center border-b border-slate-50">
-                                <button onClick={handleLogout} className="text-xs font-bold text-slate-400 flex items-center hover:text-slate-600">
-                                    <Icon name="back" size={12} className="mr-1"/> 로그아웃
-                                </button>
+                                <button onClick={handleLogout} className="text-xs font-bold text-slate-400 flex items-center hover:text-slate-600"><Icon name="back" size={12} className="mr-1"/> 로그아웃</button>
                                 <div className="flex items-center gap-2">
                                     <div className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 ${streak > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-100 text-slate-400'}`}>
-                                        <Icon name="flame" size={12} className={streak > 0 ? "fill-orange-500 text-orange-600" : ""}/>
-                                        {streak}일
+                                        <Icon name="flame" size={12}/>{streak}일
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button onClick={() => setShowScoreInfo(true)} className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-blue-100 transition-colors">
-                                            {myLevel.emoji} {score || 0}pt <span className="bg-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border border-blue-200">?</span>
-                                        </button>
-                                        <button onClick={() => setShowReadingGuide(true)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-slate-200 transition-colors">
-                                            <Icon name="helpbook" size={14} className="text-slate-500"/>
-                                        </button>
-                                    </div>
+                                    <button onClick={() => setShowScoreInfo(true)} className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-blue-100">
+                                        {myLevel.emoji} {score || 0}pt <span className="bg-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border border-blue-200">?</span>
+                                    </button>
+                                    <button onClick={() => setShowReadingGuide(true)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg hover:bg-slate-200">
+                                        <Icon name="helpbook" size={14} className="text-slate-500"/>
+                                    </button>
                                 </div>
                             </div>
 
                             <div className="bg-slate-50 px-4 py-4 border-b border-slate-200">
                                 <div className="flex justify-between items-end mb-3">
-                                    <span className="text-sm font-bold text-slate-700 flex items-center gap-1">
-                                        🏆 {communityName} 실시간 랭킹
-                                    </span>
-                                    <span className="text-[10px] text-slate-400 shrink-0">매일 리셋</span>
+                                    <span className="text-sm font-bold text-slate-700 flex items-center gap-1">🏆 {communityName} 실시간 랭킹</span>
+                                    <span className="text-[10px] text-slate-400 shrink-0">오늘 읽은 비율</span>
                                 </div>
                                 <div className="space-y-3">
                                     {topGroups.map((group, idx) => {
                                         const isMyGroup = group.name === subgroupId;
-                                        const rankColor = idx === 0 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 
-                                                          idx === 1 ? 'bg-slate-200 text-slate-700 border-slate-300' :
-                                                          'bg-orange-100 text-orange-700 border-orange-200';
+                                        const rankColor = idx === 0 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : idx === 1 ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-orange-100 text-orange-700 border-orange-200';
                                         const barColor = idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : 'bg-orange-400';
-                                        
                                         return (
                                             <div key={idx} className="flex items-center gap-3">
-                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 ${rankColor}`}>
-                                                    {idx + 1}
-                                                </div>
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 ${rankColor}`}>{idx + 1}</div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between text-[10px] mb-1">
-                                                        <span className={`font-bold truncate pr-2 ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>
-                                                            {group.name} {isMyGroup && '(나)'}
-                                                        </span>
-                                                        <span className="font-bold text-slate-500 shrink-0">{group.rate}%</span>
+                                                        <span className={`font-bold truncate pr-2 ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>{group.name} {isMyGroup && '(나)'}</span>
+                                                        <span className="font-bold text-slate-500 shrink-0">{group.readCount}/{group.totalCount}명 ({group.rate}%)</span>
                                                     </div>
-                                                    <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100 relative">
+                                                    <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100">
                                                         <div className={`h-full rounded-full ${barColor}`} style={{ width: `${group.rate}%` }}></div>
                                                     </div>
                                                 </div>
                                             </div>
                                         );
                                     })}
-                                    
-                                    {!isMyGroupInTop3 && (
+                                    {!isMyGroupInTop3 && myGroupStats && (
                                         <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-200 border-dashed">
-                                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200 shrink-0">
-                                                ?
-                                            </div>
+                                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200 shrink-0">?</div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between text-[10px] mb-1">
                                                     <span className="font-bold text-blue-600 truncate pr-2">{myGroupStats.name} (나)</span>
-                                                    <span className="font-bold text-slate-500 shrink-0">{myGroupStats.rate}%</span>
+                                                    <span className="font-bold text-slate-500 shrink-0">{myGroupStats.readCount}/{myGroupStats.totalCount}명 ({myGroupStats.rate}%)</span>
                                                 </div>
                                                 <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100">
                                                     <div className="h-full rounded-full bg-blue-500" style={{ width: `${myGroupStats.rate}%` }}></div>
@@ -1194,46 +840,40 @@
                                 </div>
                             </div>
 
-                            {/* 개인 레이스 트랙 */}
                             <div className="relative w-full h-28 bg-map-texture overflow-hidden mt-0 border-t border-slate-200 bg-sky-texture">
                                 <div className="mountain-back"></div>
                                 <div className="mountain-front"></div>
-                                
                                 <div className="absolute top-2 left-10 text-2xl opacity-80 animate-float">☁️</div>
                                 <div className="absolute top-5 right-20 text-xl opacity-60 animate-float-slow">☁️</div>
                                 <div className="absolute top-8 left-1/2 text-lg opacity-50 animate-float" style={{animationDelay: '2s'}}>☁️</div>
-
                                 <div className="absolute bottom-2 left-5 text-sm z-10 opacity-90">🌸</div>
                                 <div className="absolute bottom-3 right-10 text-sm z-10 opacity-90">🌼</div>
                                 <div className="absolute bottom-4 left-1/3 text-xs z-10 opacity-80">🌱</div>
 
                                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col justify-center items-center z-20 group" style={{top: '60%'}}>
                                     <div className="relative">
-                                        <div className="absolute inset-0 bg-yellow-400 rounded-full blur-xl opacity-70 group-hover:opacity-100 transition-opacity animate-pulse"></div>
-                                        <div className="absolute inset-0 bg-white rounded-full blur-md opacity-50 animate-ping"></div>
-                                        <span className="text-5xl relative z-10 drop-shadow-2xl filter brightness-110">🏰</span>
+                                        <div className="absolute inset-0 bg-yellow-400 rounded-full blur-xl opacity-70 animate-pulse"></div>
+                                        <span className="text-5xl relative z-10 drop-shadow-2xl">🏰</span>
                                     </div>
                                     <span className="text-[9px] font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded-full mt-2 shadow-sm border border-slate-200 relative z-20">천국성</span>
                                 </div>
                                 
-                                {racers.map((racer, idx) => {
+                                {racers.slice(0, 10).map((racer, idx) => {
                                     const p = Math.min((racer.day / TOTAL_DAYS) * 100, 100);
                                     const isMe = racer.isMe;
                                     const racerLevel = getLevelInfo(racer.score || 0);
-                                    
                                     return (
-                                        <div key={idx} className="absolute transition-all duration-1000 ease-out flex flex-col items-center"
-                                            style={{ left: `calc(${p}% - 16px)`, top: isMe ? '50%' : `${40+(idx%3)*10}%`, zIndex: isMe ? 50 : idx + 20 }}>
-                                            <div className={`text-[9px] px-1.5 py-0.5 rounded-full mb-1 shadow-sm font-bold truncate max-w-[80px] ${isMe ? 'bg-blue-600 text-white' : 'bg-white/90 text-slate-500'}`}>
-                                                {racer.name}
-                                            </div>
-                                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xl shadow-md border-[3px] transition-transform bg-white ${isMe ? `border-blue-400 ${racer.isPanic ? 'animate-wiggle':''}` : 'border-white opacity-80 grayscale'}`}>
+                                        <div key={racer.uid || idx} className="absolute transition-all duration-1000 ease-out flex flex-col items-center"
+                                            style={{ left: `calc(${p}% - 16px)`, top: isMe ? '50%' : `${35+(idx%4)*12}%`, zIndex: isMe ? 50 : idx + 20 }}>
+                                            <div className={`text-[9px] px-1.5 py-0.5 rounded-full mb-1 shadow-sm font-bold truncate max-w-[60px] ${isMe ? 'bg-blue-600 text-white' : 'bg-white/90 text-slate-500'}`}>{racer.name}</div>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-md border-[3px] bg-white ${isMe ? `border-blue-400 ${racer.isPanic ? 'animate-wiggle':''}` : 'border-white opacity-70'}`}>
                                                 {racer.isPanic && isMe ? '😱' : racerLevel.emoji}
                                                 {racer.isPanic && isMe && <span className="absolute -top-1 -right-1 text-sm animate-ping">💦</span>}
                                             </div>
                                         </div>
                                     );
                                 })}
+                                {racers.length > 10 && <div className="absolute bottom-1 left-2 text-[10px] text-slate-500 bg-white/80 px-2 py-0.5 rounded z-30">+{racers.length - 10}명 더</div>}
                             </div>
                             
                             <div className="bg-white border-b border-slate-100 py-1 text-center">
@@ -1246,67 +886,44 @@
                         <main className="px-4 py-6 max-w-md mx-auto space-y-8">
                             <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
                                 <div className={`p-6 text-white relative ${isPanic ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-indigo-600 to-blue-700'}`}>
-                                    <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                                        🏁 완독 D-{daysRemaining}
-                                    </div>
-                                    
+                                    <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">🏁 완독 D-{daysRemaining}</div>
                                     <h2 className="text-xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
                                     <p className="opacity-90 text-sm font-bold text-white/90 mb-2">{verseData.subtitle}</p>
-                                    <p className="opacity-80 text-xs">
-                                        {isPanic ? '😱 쫓아오고 있어요! 어서 읽으세요!' 
-                                            : `${currentUser.name}님, 오늘도 힘내세요!`}
-                                    </p>
+                                    <p className="opacity-80 text-xs">{isPanic ? '😱 쫓아오고 있어요! 어서 읽으세요!' : `${currentUser.name}님, 오늘도 힘내세요!`}</p>
                                 </div>
                                 <div className="p-6">
                                     <div className={`mb-8 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
                                         {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
                                     </div>
-                                    
                                     <button onClick={handleRead} disabled={verseData.loading} className={`w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 ${isPanic ? 'bg-red-600 shadow-red-200' : 'bg-slate-900 shadow-blue-200'}`}>
-                                        <Icon name="book" size={18}/>
-                                        <span>
-                                            {hasReadToday 
-                                                ? '한 장 더 읽기 (미리 읽기)' 
-                                                : '오늘 말씀 읽기 완료'
-                                            }
-                                        </span>
+                                        <Icon name="book" size={18}/><span>{hasReadToday ? '한 장 더 읽기 (미리 읽기)' : '오늘 말씀 읽기 완료'}</span>
                                     </button>
-                                    
                                     <div className="mt-4 bg-yellow-50 p-3 rounded-xl border border-yellow-100 text-center">
-                                        <p className="text-xs text-yellow-700 font-bold">
-                                            💡 바빠서 못 읽으셨나요? <br/>
-                                            주일에 밀린 말씀을 몰아서 읽어도 괜찮습니다! 포기하지 마세요!
-                                        </p>
+                                        <p className="text-xs text-yellow-700 font-bold">💡 바빠서 못 읽으셨나요? <br/>주일에 밀린 말씀을 몰아서 읽어도 괜찮습니다!</p>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
                                 <div className="flex justify-between items-center mb-4">
-                                    <h3 className="font-bold text-slate-700 flex items-center">
-                                        <Icon name="users" size={18} className="mr-2 text-indigo-500"/>
-                                        {communityName} 전체 순위
-                                    </h3>
-                                    <span className="text-[10px] bg-red-50 text-red-500 px-2 py-1 rounded-full font-bold">매일 리셋!</span>
+                                    <h3 className="font-bold text-slate-700 flex items-center"><Icon name="users" size={18} className="mr-2 text-indigo-500"/>{communityName} 소그룹 순위</h3>
+                                    <span className="text-[10px] bg-green-50 text-green-600 px-2 py-1 rounded-full font-bold">오늘 기준</span>
                                 </div>
                                 <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
-                                    {subgroupRanking.map((group, idx) => {
+                                    {subgroupRanking.length > 0 ? subgroupRanking.map((group, idx) => {
                                         const isMyGroup = group.name === subgroupId;
-                                        const percentage = group.rate; 
                                         return (
                                             <div key={idx} className={`relative ${isMyGroup ? 'bg-blue-50 p-2 rounded-lg -mx-2' : ''}`}>
                                                 <div className="flex justify-between text-xs mb-1">
-                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>
-                                                        {idx+1}위. {group.name} {isMyGroup && '(우리팀)'}
-                                                    </span>
-                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-400'}`}>{group.rate}%</span>
+                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>{idx+1}위. {group.name} {isMyGroup && '(우리팀)'}</span>
+                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-400'}`}>{group.readCount}/{group.totalCount}명 ({group.rate}%)</span>
                                                 </div>
                                                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                                                    <div className={`h-full rounded-full transition-all duration-1000 ${isMyGroup ? 'bg-blue-500' : 'bg-slate-300'}`} style={{ width: `${percentage}%` }}></div>
+                                                    <div className={`h-full rounded-full transition-all duration-1000 ${isMyGroup ? 'bg-blue-500' : 'bg-slate-300'}`} style={{ width: `${group.rate}%` }}></div>
                                                 </div>
                                             </div>
                                         )
-                                    })}
+                                    }) : <div className="text-center text-slate-400 py-4">아직 데이터가 없습니다.</div>}
                                 </div>
                             </div>
                         </main>
