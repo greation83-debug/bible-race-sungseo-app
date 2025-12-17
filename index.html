@@ -339,9 +339,23 @@
                     try {
                         cred = await auth.signInWithEmailAndPassword(email, loginPw);
                     } catch (err) {
-                        // 없으면 회원가입 생성
-                        if (err?.code === 'auth/user-not-found') {
-                            cred = await auth.createUserWithEmailAndPassword(email, loginPw);
+                        // Firebase 새 에러 코드: auth/invalid-login-credentials (user-not-found + wrong-password 통합)
+                        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials') {
+                            // 먼저 회원가입 시도
+                            try {
+                                cred = await auth.createUserWithEmailAndPassword(email, loginPw);
+                            } catch (signupErr) {
+                                // 회원가입도 실패하면 암호가 틀린 것 또는 다른 문제
+                                if (signupErr?.code === 'auth/email-already-in-use') {
+                                    setErrorMsg("암호가 틀렸습니다.");
+                                } else if (signupErr?.code === 'auth/weak-password') {
+                                    setErrorMsg("암호는 6자리 이상이어야 합니다.");
+                                } else {
+                                    console.error(signupErr);
+                                    setErrorMsg("로그인 실패(잠시 후 다시 시도)");
+                                }
+                                return;
+                            }
                         } else if (err?.code === 'auth/wrong-password') {
                             setErrorMsg("암호가 틀렸습니다.");
                             return;
@@ -803,7 +817,7 @@
                                 <div>
                                     <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">암호</label>
                                     <input type="password" value={loginPw} onChange={e => setLoginPw(e.target.value)} 
-                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="1글자도 가능해요" />
+                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="6자리 이상 입력하세요" />
                                 </div>
                                 
                                 <div className="bg-red-50 p-3 rounded-lg border border-red-100">
