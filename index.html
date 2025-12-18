@@ -86,14 +86,17 @@
         };
 
         const LEVEL_SYSTEM = [
-            { min: 0, title: '응애 나 아기 성도', emoji: '🍼' },
-            { min: 30, title: '설교 때 꿀잠자는 유두고', emoji: '😴' },
-            { min: 100, title: '형들 도시락 배달하는 다윗', emoji: '🍱' },
-            { min: 200, title: '예수님 보려고 나무 탄 삭개오', emoji: '🌳' },
-            { min: 350, title: '돌맹이로 골리앗 잡은 용사', emoji: '🪨' },
-            { min: 550, title: '사자 밥 될 뻔한 다니엘', emoji: '🦁' },
-            { min: 800, title: '지팡이로 홍해 가른 모세', emoji: '🌊' },
-            { min: 1200, title: '불병거 타고 승천하는 엘리야', emoji: '🔥' }
+            { min: 0, title: '새싹 성도', emoji: '🌱' },
+            { min: 30, title: '묵상 입문자', emoji: '📖' },
+            { min: 70, title: '말씀 탐험가', emoji: '🔍' },
+            { min: 120, title: '진리 추구자', emoji: '💡' },
+            { min: 180, title: '믿음의 순례자', emoji: '🚶' },
+            { min: 250, title: '기도의 용사', emoji: '🙏' },
+            { min: 350, title: '은혜의 그릇', emoji: '🏺' },
+            { min: 500, title: '말씀의 파수꾼', emoji: '🛡️' },
+            { min: 700, title: '복음의 증인', emoji: '✝️' },
+            { min: 950, title: '신앙의 등대', emoji: '🗼' },
+            { min: 1200, title: '천국 시민', emoji: '👑' }
         ];
 
         const PLAN_TYPES = [
@@ -185,7 +188,7 @@
             const [showConfetti, setShowConfetti] = React.useState(false);
             const [levelUpToast, setLevelUpToast] = React.useState(null);
             const [subgroupStats, setSubgroupStats] = React.useState({});
-            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', loading: false });
+            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', audioUrl: null, loading: false });
             const [hasReadToday, setHasReadToday] = React.useState(false);
             const [showScoreInfo, setShowScoreInfo] = React.useState(false);
             const [showReadingGuide, setShowReadingGuide] = React.useState(false); 
@@ -201,6 +204,7 @@
             const [showAchievements, setShowAchievements] = React.useState(false);
             const [newAchievement, setNewAchievement] = React.useState(null);
             const [showCalendar, setShowCalendar] = React.useState(false);
+            const [calendarDate, setCalendarDate] = React.useState(new Date());
             const [readHistory, setReadHistory] = React.useState([]);
 
             const getLevelInfo = (score) => [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
@@ -448,11 +452,11 @@
                     const notionData = await fetchNotionData(planId, currentDay);
                     
                     if (notionData?.text && !notionData.text.startsWith('[오류]')) {
-                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, loading: false });
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, audioUrl: notionData.audioUrl || null, loading: false });
                     } else {
                         const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
                         const displayText = currentDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
-                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: `${versionName} 읽기`, text: displayText, loading: false });
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: `${versionName} 읽기`, text: displayText, audioUrl: null, loading: false });
                     }
 
                     if (communityId) {
@@ -558,6 +562,50 @@
                     }))
                     .filter(g => g.totalCount > 0)
                     .sort((a, b) => b.progressRate - a.progressRate);
+            };
+
+            // 주간 MVP 계산
+            const getWeeklyMVP = () => {
+                if (!communityMembers || communityMembers.length === 0) return null;
+                const now = new Date();
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - now.getDay()); // 이번 주 일요일
+                weekStart.setHours(0, 0, 0, 0);
+                
+                // 이번 주에 가장 높은 streak을 가진 사람
+                const mvpByStreak = [...communityMembers].sort((a, b) => (b.streak || 0) - (a.streak || 0))[0];
+                
+                // 이번 주 가장 높은 점수 획득자 (currentDay 증가량으로 대체)
+                const mvpByProgress = [...communityMembers].sort((a, b) => (b.currentDay || 0) - (a.currentDay || 0))[0];
+                
+                return {
+                    streakMVP: mvpByStreak,
+                    progressMVP: mvpByProgress
+                };
+            };
+
+            // 월간 소그룹 대항전 계산
+            const getMonthlyContest = () => {
+                if (!subgroupStats || Object.keys(subgroupStats).length === 0) return [];
+                const now = new Date();
+                const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                const daysPassed = now.getDate();
+                
+                return Object.entries(subgroupStats)
+                    .map(([name, data]) => {
+                        // 월간 참여율 = 오늘까지의 총 읽은 일수 / (인원수 × 경과일수) × 100
+                        // 여기서는 오늘 읽은 비율로 대체 (실제로는 월간 누적 필요)
+                        const monthlyRate = data.rate || 0;
+                        return {
+                            name,
+                            rate: monthlyRate,
+                            readCount: data.readCount || 0,
+                            totalCount: data.totalCount || 0,
+                            avgDay: data.avgDay || 0
+                        };
+                    })
+                    .filter(g => g.totalCount > 0)
+                    .sort((a, b) => b.rate - a.rate);
             };
 
             const getAdminStats = () => {
@@ -962,40 +1010,58 @@
                                         <h3 className="text-xl font-bold text-slate-800">📖 성경통독 114 가이드</h3>
                                         <button onClick={() => setShowReadingGuide(false)} className="text-slate-400"><Icon name="close"/></button>
                                     </div>
-                                    <div className="space-y-4 overflow-y-auto max-h-[60vh] text-sm">
+                                    <div className="space-y-3 overflow-y-auto max-h-[60vh] text-xs">
                                         <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                            <h4 className="font-bold text-blue-700 mb-1">💡 성경통독 114란?</h4>
-                                            <p className="text-xs text-slate-600 leading-relaxed">
-                                                <strong>1년 1독 4회 효과!</strong><br/>
-                                                3개월마다 성경 전체 시대를 볼 수 있도록 구성된 통독표입니다.
+                                            <h4 className="font-bold text-blue-700 mb-2">💡 성경통독 114란?</h4>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong>1년 1독 4회 효과!</strong> 성경 전체를 1년에 1번 통독하지만, 3개월(한 분기)마다 성경 전체 시대를 볼 수 있도록 되어 있으며, 중복된 시대를 나누어 읽어 지루하지 않게 읽을 수 있습니다.
                                             </p>
                                         </div>
                                         
                                         <div className="bg-green-50 p-3 rounded-lg border border-green-100">
-                                            <h4 className="font-bold text-green-700 mb-1">📅 읽는 방법</h4>
-                                            <ul className="text-xs text-slate-600 space-y-1 list-disc pl-4">
-                                                <li>매일 <strong>3~4장</strong>씩 읽습니다</li>
-                                                <li>구약과 신약을 <strong>번갈아</strong> 읽습니다</li>
-                                                <li>3개월마다 성경 전체 흐름을 한 번씩 봅니다</li>
-                                            </ul>
+                                            <h4 className="font-bold text-green-700 mb-2">📅 1분기 (1-3월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-green-800">구약:</strong> 창세기 1-11장, 출애굽기, 여호수아, 사사기, 룻기, 욥기, 다니엘, 에스라 1-6장, 학개, 스가랴, 에스라 7-10장, 느헤미야, 에스더
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-green-800">신약:</strong> 마태복음, 사도행전 1-5장, 로마서, 갈라디아서, 히브리서, 요한계시록 1-3장
+                                            </p>
                                         </div>
                                         
                                         <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
-                                            <h4 className="font-bold text-yellow-700 mb-1">🎯 114의 장점</h4>
-                                            <ul className="text-xs text-slate-600 space-y-1 list-disc pl-4">
-                                                <li>성경의 <strong>큰 그림</strong>을 먼저 파악</li>
-                                                <li>구약-신약 <strong>연결고리</strong> 발견</li>
-                                                <li>1년에 <strong>4번</strong> 전체 시대를 반복</li>
-                                                <li>지루하지 않게 <strong>다양한 장르</strong> 교차</li>
-                                            </ul>
+                                            <h4 className="font-bold text-yellow-700 mb-2">📅 2분기 (4-6월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-yellow-800">구약:</strong> 창세기 12-26장, 레위기, 사무엘상, 사무엘하, 시편 1-72편, 이사야, 요엘, 오바댜, 나훔, 하박국
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-yellow-800">신약:</strong> 마가복음, 사도행전 6-12장, 고린도전서, 고린도후서, 데살로니가전서, 데살로니가후서, 야고보서, 유다서, 요한계시록 4-7장
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                                            <h4 className="font-bold text-orange-700 mb-2">📅 3분기 (7-9월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-orange-800">구약:</strong> 창세기 27-36장, 민수기, 열왕기상 1-11장, 잠언, 전도서, 아가서, 열왕기상 12-22장, 열왕기하 1-14장, 요나, 열왕기하 15장, 아모스, 호세아, 열왕기하 16-23장, 스바냐, 열왕기하 24-25장, 에스겔
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-orange-800">신약:</strong> 누가복음, 사도행전 13-20장, 에베소서, 빌립보서, 골로새서, 빌레몬서, 베드로전서, 베드로후서, 요한계시록 8-14장
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+                                            <h4 className="font-bold text-red-700 mb-2">📅 4분기 (10-12월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-red-800">구약:</strong> 창세기 37-50장, 신명기, 시편 90편, 역대상, 시편 73-150편, 역대하 1-28장, 미가, 역대하 29-36장, 예레미야, 예레미야애가, 말라기
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-red-800">신약:</strong> 요한복음, 사도행전 21-28장, 디모데전서, 디모데후서, 디도서, 요한일서, 요한이서, 요한삼서, 요한계시록 15-22장
+                                            </p>
                                         </div>
                                         
                                         <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
                                             <h4 className="font-bold text-purple-700 mb-1">💪 포기하지 마세요!</h4>
-                                            <p className="text-xs text-slate-600 leading-relaxed">
-                                                밀렸다고 포기하지 마세요!<br/>
-                                                주일에 몰아서 읽어도 괜찮습니다.<br/>
-                                                <strong>완주가 목표</strong>입니다. 함께 달려요! 🏃‍♂️
+                                            <p className="text-slate-600 leading-relaxed">
+                                                밀렸다고 포기하지 마세요! 주일에 몰아서 읽어도 괜찮습니다. <strong>완주가 목표</strong>입니다. 함께 달려요! 🏃‍♂️
                                             </p>
                                         </div>
                                     </div>
@@ -1088,8 +1154,8 @@
                                     </div>
                                     {(() => {
                                         const today = new Date();
-                                        const year = today.getFullYear();
-                                        const month = today.getMonth();
+                                        const year = calendarDate.getFullYear();
+                                        const month = calendarDate.getMonth();
                                         const firstDay = new Date(year, month, 1).getDay();
                                         const daysInMonth = new Date(year, month + 1, 0).getDate();
                                         const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
@@ -1103,24 +1169,41 @@
                                             const date = new Date(d);
                                             return date.getFullYear() === year && date.getMonth() === month;
                                         }).map(d => new Date(d).getDate());
+
+                                        const prevMonth = () => setCalendarDate(new Date(year, month - 1, 1));
+                                        const nextMonth = () => setCalendarDate(new Date(year, month + 1, 1));
+                                        const goToday = () => setCalendarDate(new Date());
+                                        
+                                        const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+                                        
+                                        // 연간 통계
+                                        const yearReadDays = readHistory.filter(d => new Date(d).getFullYear() === year).length;
                                         
                                         return (
                                             <div>
-                                                <div className="text-center mb-4">
-                                                    <span className="font-bold text-lg text-slate-700">{year}년 {monthNames[month]}</span>
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">◀</button>
+                                                    <div className="text-center">
+                                                        <span className="font-bold text-lg text-slate-700">{year}년 {monthNames[month]}</span>
+                                                        {!isCurrentMonth && (
+                                                            <button onClick={goToday} className="ml-2 text-xs text-blue-500 underline">오늘로</button>
+                                                        )}
+                                                    </div>
+                                                    <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">▶</button>
                                                 </div>
                                                 <div className="grid grid-cols-7 gap-1 mb-2">
-                                                    {dayNames.map(d => <div key={d} className="text-center text-[10px] font-bold text-slate-400 py-1">{d}</div>)}
+                                                    {dayNames.map(d => <div key={d} className={`text-center text-[10px] font-bold py-1 ${d === '일' ? 'text-red-400' : d === '토' ? 'text-blue-400' : 'text-slate-400'}`}>{d}</div>)}
                                                 </div>
                                                 <div className="grid grid-cols-7 gap-1">
                                                     {days.map((day, idx) => {
                                                         if (!day) return <div key={idx}></div>;
-                                                        const isToday = day === today.getDate();
+                                                        const isToday = isCurrentMonth && day === today.getDate();
                                                         const didRead = readDaysThisMonth.includes(day);
+                                                        const dayOfWeek = new Date(year, month, day).getDay();
                                                         return (
                                                             <div key={idx} className={`aspect-square flex items-center justify-center rounded-lg text-xs font-bold relative
                                                                 ${isToday ? 'ring-2 ring-blue-400' : ''}
-                                                                ${didRead ? 'bg-green-100 text-green-700' : 'bg-slate-50 text-slate-400'}`}>
+                                                                ${didRead ? 'bg-green-100 text-green-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-300' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-300' : 'bg-slate-50 text-slate-400'}`}>
                                                                 {day}
                                                                 {didRead && <span className="absolute -top-1 -right-1 text-[8px]">✅</span>}
                                                             </div>
@@ -1131,8 +1214,15 @@
                                                     <div className="flex items-center gap-1"><div className="w-4 h-4 bg-green-100 rounded"></div><span className="text-slate-500">읽은 날</span></div>
                                                     <div className="flex items-center gap-1"><div className="w-4 h-4 bg-slate-50 rounded border"></div><span className="text-slate-500">안 읽은 날</span></div>
                                                 </div>
-                                                <div className="mt-3 bg-green-50 p-3 rounded-xl border border-green-100 text-center">
-                                                    <p className="text-sm text-green-700">이번 달 <strong>{readDaysThisMonth.length}</strong>일 읽었습니다! 🎉</p>
+                                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                                    <div className="bg-green-50 p-3 rounded-xl border border-green-100 text-center">
+                                                        <p className="text-xs text-slate-500">이번 달</p>
+                                                        <p className="text-lg font-bold text-green-700">{readDaysThisMonth.length}일</p>
+                                                    </div>
+                                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+                                                        <p className="text-xs text-slate-500">{year}년 총</p>
+                                                        <p className="text-lg font-bold text-blue-700">{yearReadDays}일</p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -1271,9 +1361,24 @@
                                     <p className="opacity-80 text-xs">{isPanic ? '😱 쫓아오고 있어요! 어서 읽으세요!' : `${currentUser.name}님, 오늘도 힘내세요!`}</p>
                                 </div>
                                 <div className="p-6">
-                                    <div className={`mb-8 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
+                                    <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
                                         {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
                                     </div>
+                                    
+                                    {/* 오디오 플레이어 (TTS) */}
+                                    {verseData.audioUrl && (
+                                        <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-lg">🎧</span>
+                                                <span className="text-sm font-bold text-slate-700">오디오로 듣기</span>
+                                            </div>
+                                            <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
+                                                <source src={verseData.audioUrl} type="audio/mpeg" />
+                                                브라우저가 오디오를 지원하지 않습니다.
+                                            </audio>
+                                        </div>
+                                    )}
+                                    
                                     <button onClick={handleRead} disabled={verseData.loading} className={`w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 ${isPanic ? 'bg-red-600 shadow-red-200' : 'bg-slate-900 shadow-blue-200'}`}>
                                         <Icon name="book" size={18}/><span>{hasReadToday ? '한 장 더 읽기 (미리 읽기)' : '오늘 말씀 읽기 완료'}</span>
                                     </button>
@@ -1353,6 +1458,75 @@
                                     </div>
                                 </div>
                             )}
+
+                            {/* 주간 MVP */}
+                            {(() => {
+                                const mvp = getWeeklyMVP();
+                                if (!mvp || !mvp.streakMVP) return null;
+                                return (
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-5 shadow-sm">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-blue-700 flex items-center">⭐ 이번 주 MVP</h3>
+                                            <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-bold">주간</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-white p-3 rounded-xl border border-blue-100 text-center">
+                                                <div className="text-2xl mb-1">🔥</div>
+                                                <p className="text-[10px] text-slate-500 mb-1">연속 읽기왕</p>
+                                                <p className="font-bold text-slate-800">{mvp.streakMVP.name}</p>
+                                                <p className="text-xs text-orange-500">{mvp.streakMVP.streak || 0}일 연속</p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-xl border border-blue-100 text-center">
+                                                <div className="text-2xl mb-1">🏃</div>
+                                                <p className="text-[10px] text-slate-500 mb-1">진행왕</p>
+                                                <p className="font-bold text-slate-800">{mvp.progressMVP.name}</p>
+                                                <p className="text-xs text-blue-500">DAY {mvp.progressMVP.currentDay || 1}</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                            <p className="text-[10px] text-slate-400">🏆 연속 읽기: 매일 꾸준히 읽은 사람 | 진행왕: 가장 앞서가는 사람</p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* 월간 소그룹 대항전 */}
+                            {(() => {
+                                const contest = getMonthlyContest();
+                                if (!contest || contest.length === 0) return null;
+                                const monthName = new Date().toLocaleDateString('ko-KR', { month: 'long' });
+                                return (
+                                    <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl border border-red-200 p-5 shadow-sm">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-red-700 flex items-center">🏆 {monthName} 소그룹 대항전</h3>
+                                            <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">월간</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {contest.slice(0, 3).map((group, idx) => {
+                                                const isMyGroup = group.name === subgroupId;
+                                                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+                                                return (
+                                                    <div key={group.name} className={`flex items-center gap-3 p-2 rounded-lg ${isMyGroup ? 'bg-red-100 border border-red-200' : 'bg-white'}`}>
+                                                        <span className="text-xl">{medal}</span>
+                                                        <div className="flex-1">
+                                                            <div className="flex justify-between">
+                                                                <span className={`text-sm font-bold ${isMyGroup ? 'text-red-700' : 'text-slate-700'}`}>{group.name} {isMyGroup && '(우리팀)'}</span>
+                                                                <span className="text-sm font-bold text-slate-500">{group.rate}%</span>
+                                                            </div>
+                                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
+                                                                <div className={`h-full rounded-full ${idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : 'bg-orange-400'}`} style={{ width: `${group.rate}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                            <p className="text-[10px] text-slate-400">📊 기준: 오늘 읽은 비율 (읽은 인원 / 전체 인원)</p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </main>
                     </div>
                 );
