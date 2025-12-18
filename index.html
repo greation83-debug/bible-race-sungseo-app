@@ -63,6 +63,8 @@
                 subgroupId: d.subgroupId ?? null, planId: d.planId ?? "1year_revised",
                 achievements: d.achievements ?? [],
                 memos: d.memos ?? {},
+                dayOffset: d.dayOffset ?? 0, // 시작 날짜 오프셋 (4월 시작 = 90)
+                readCount: d.readCount ?? 1, // 몇 독 중인지 (1독, 2독, 3독...)
             };
         };
 
@@ -211,8 +213,129 @@
             const [readHistory, setReadHistory] = React.useState([]);
             const [adminFilter, setAdminFilter] = React.useState('all'); // 관리자 부서 필터
             const [adminViewMode, setAdminViewMode] = React.useState('today'); // 'today' or 'inactive'
+            const [announcement, setAnnouncement] = React.useState(null); // 광고/공지
+            const [showRestartConfirm, setShowRestartConfirm] = React.useState(false); // 재시작 확인 모달
+            const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false });
+            const [showDateSettings, setShowDateSettings] = React.useState(false); // 날짜 설정 모달
 
             const getLevelInfo = (score) => [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
+
+            // 날짜 → Day 오프셋 계산 (1월 1일 = 0, 4월 1일 = 90)
+            const dateToOffset = (month, day) => {
+                const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+                let offset = 0;
+                for (let i = 0; i < month - 1; i++) {
+                    offset += daysInMonth[i];
+                }
+                offset += day - 1;
+                return offset;
+            };
+
+            // Day 오프셋 → 날짜 문자열 (0 → "1월 1일", 90 → "4월 1일")
+            const offsetToDateStr = (offset) => {
+                const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+                let remaining = offset;
+                let month = 0;
+                while (remaining >= daysInMonth[month]) {
+                    remaining -= daysInMonth[month];
+                    month++;
+                }
+                return `${month + 1}월 ${remaining + 1}일`;
+            };
+
+            // 실제 본문 Day 계산 (currentDay + dayOffset, 365 넘으면 순환)
+            const getActualDay = (currentDay, dayOffset) => {
+                let actualDay = currentDay + dayOffset;
+                while (actualDay > 365) actualDay -= 365;
+                return actualDay;
+            };
+
+            // 시작 날짜 변경
+            const changeStartDate = async (newOffset) => {
+                const uid = auth.currentUser?.uid;
+                if (!uid) return;
+                
+                try {
+                    await db.collection('users').doc(uid).set({
+                        dayOffset: newOffset,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    
+                    setCurrentUser(prev => ({ ...prev, dayOffset: newOffset }));
+                    setShowDateSettings(false);
+                    alert(`시작 날짜가 ${offsetToDateStr(newOffset)}로 변경되었습니다!`);
+                } catch (e) {
+                    console.error("날짜 변경 실패:", e);
+                    alert('변경 실패');
+                }
+            };
+
+            // 광고/공지 로드
+            const loadAnnouncement = async () => {
+                if (!db) return;
+                try {
+                    const doc = await db.collection('settings').doc('announcement').get();
+                    if (doc.exists && doc.data().enabled) {
+                        setAnnouncement(doc.data());
+                    }
+                } catch (e) { console.error("광고 로딩 실패:", e); }
+            };
+
+            // 광고/공지 저장 (관리자용)
+            const saveAnnouncement = async () => {
+                if (!db) return;
+                try {
+                    await db.collection('settings').doc('announcement').set({
+                        ...announcementInput,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    setAnnouncement(announcementInput.enabled ? announcementInput : null);
+                    alert('광고가 저장되었습니다!');
+                } catch (e) { 
+                    console.error("광고 저장 실패:", e); 
+                    alert('저장 실패');
+                }
+            };
+
+            // 재시작 함수 (뒤쳐진 사람용)
+            const handleRestart = async () => {
+                const uid = auth.currentUser?.uid;
+                if (!uid) return;
+                
+                try {
+                    const today = new Date().toDateString();
+                    await db.collection('users').doc(uid).set({
+                        currentDay: 1,
+                        score: 0,
+                        streak: 0,
+                        startDate: today,
+                        lastReadDate: null,
+                        memos: {},
+                        readHistory: [],
+                        achievements: [],
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    
+                    setCurrentUser(prev => ({
+                        ...prev,
+                        currentDay: 1,
+                        score: 0,
+                        streak: 0,
+                        startDate: today,
+                        lastReadDate: null,
+                        achievements: [],
+                        readCount: 1
+                    }));
+                    setMemos({});
+                    setReadHistory([]);
+                    setShowRestartConfirm(false);
+                    alert('재시작되었습니다! 오늘부터 Day 1입니다. 화이팅! 🔥');
+                    // useEffect가 currentDay 변경을 감지하여 자동으로 본문을 다시 로드합니다
+                } catch (e) {
+                    console.error("재시작 실패:", e);
+                    alert('재시작 실패');
+                }
+            };
 
             // 묵상 메모 불러오기
             const loadMemos = async (uid) => {
@@ -530,6 +653,13 @@
                         if (auth && !auth.currentUser) await auth.signInAnonymously();
                         const snap = await db.collection('users').get();
                         setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+                        
+                        // 광고 데이터 로드
+                        const announcementDoc = await db.collection('settings').doc('announcement').get();
+                        if (announcementDoc.exists) {
+                            setAnnouncementInput(announcementDoc.data());
+                        }
+                        
                         setIsAdmin(true);
                         return;
                     } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
@@ -634,17 +764,23 @@
                 if (view !== 'dashboard' || !currentUser) return;
                 const loadData = async () => {
                     setVerseData(prev => ({ ...prev, loading: true }));
-                    const { currentDay, planId, communityId } = currentUser;
+                    const { currentDay, planId, communityId, dayOffset = 0, readCount = 1 } = currentUser;
                     const [planType, version] = (planId || '1year_revised').split('_');
                     const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
-                    const notionData = await fetchNotionData(planId, currentDay);
+                    
+                    // 실제 본문 Day 계산 (오프셋 적용)
+                    const actualDay = getActualDay(currentDay, dayOffset);
+                    const notionData = await fetchNotionData(planId, actualDay);
+                    
+                    // 타이틀에 2독/3독 표시
+                    const readCountBadge = readCount > 1 ? ` (${readCount}독)` : '';
                     
                     if (notionData?.text && !notionData.text.startsWith('[오류]')) {
-                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, audioUrl: notionData.audioUrl || null, loading: false });
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, audioUrl: notionData.audioUrl || null, loading: false });
                     } else {
                         const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
-                        const displayText = currentDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
-                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: `${versionName} 읽기`, text: displayText, audioUrl: null, loading: false });
+                        const displayText = actualDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, subtitle: `${versionName} 읽기`, text: displayText, audioUrl: null, loading: false });
                     }
 
                     if (communityId) {
@@ -655,9 +791,12 @@
                     // 메모 불러오기
                     const uid = auth.currentUser?.uid;
                     if (uid) await loadMemos(uid);
+                    
+                    // 광고 불러오기
+                    await loadAnnouncement();
                 };
                 loadData();
-            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId]);
+            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId, currentUser?.dayOffset]);
 
             const handleRead = async () => {
                 const todayStr = new Date().toDateString();
@@ -679,8 +818,25 @@
                 setBonusToast({ basic: 10, streak: streakBonus, total: pointsEarned });
                 setTimeout(() => setBonusToast(null), 4000);
 
-                const newDay = currentUser.currentDay + 1;
-                const updatedUser = { ...currentUser, currentDay: newDay, streak: newStreak, score: newScore, lastReadDate: todayStr };
+                // 365일 완료 체크 → 자동 순환 (2독, 3독...)
+                let newDay = currentUser.currentDay + 1;
+                let newReadCount = currentUser.readCount || 1;
+                let completedRound = false;
+                
+                if (newDay > 365) {
+                    newDay = 1; // Day 1로 리셋
+                    newReadCount += 1; // 2독, 3독...
+                    completedRound = true;
+                }
+                
+                const updatedUser = { 
+                    ...currentUser, 
+                    currentDay: newDay, 
+                    streak: newStreak, 
+                    score: newScore, 
+                    lastReadDate: todayStr,
+                    readCount: newReadCount
+                };
                 
                 setCurrentUser(updatedUser);
                 setHasReadToday(true);
@@ -696,6 +852,7 @@
                         await db.collection('users').doc(uid).set({
                             currentDay: newDay, streak: newStreak, score: newScore, lastReadDate: todayStr,
                             readHistory: newHistory,
+                            readCount: newReadCount,
                             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                         }, { merge: true });
                     }
@@ -706,6 +863,11 @@
                     const updatedMembers = members.map(m => m.uid === updatedUser.uid ? updatedUser : m);
                     setCommunityMembers(updatedMembers);
                     setSubgroupStats(calculateSubgroupStats(updatedMembers, currentUser.communityId));
+                }
+                
+                // 1독 완료 시 특별 축하
+                if (completedRound) {
+                    alert(`🎉 축하합니다! ${newReadCount - 1}독을 완료하셨습니다!\n\n이제 ${newReadCount}독을 시작합니다! 🏃‍♂️`);
                 }
                 
                 setShowConfetti(true); setTimeout(() => setShowConfetti(false), 3000);
@@ -1044,6 +1206,88 @@
                                         </div>
                                     );
                                 })()}
+                            </div>
+
+                            {/* 광고/공지 관리 */}
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    📢 광고/공지 관리
+                                </h2>
+                                
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-600 mb-1">공지 내용</label>
+                                        <textarea
+                                            value={announcementInput.text}
+                                            onChange={(e) => setAnnouncementInput(prev => ({ ...prev, text: e.target.value }))}
+                                            placeholder="예: 이번 주일 성탄절 예배가 있습니다!"
+                                            className="w-full p-3 border rounded-lg text-sm resize-none"
+                                            rows={3}
+                                        />
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-600 mb-1">링크 URL (선택)</label>
+                                            <input
+                                                type="url"
+                                                value={announcementInput.linkUrl}
+                                                onChange={(e) => setAnnouncementInput(prev => ({ ...prev, linkUrl: e.target.value }))}
+                                                placeholder="https://forms.google.com/..."
+                                                className="w-full p-2 border rounded-lg text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-600 mb-1">버튼 텍스트</label>
+                                            <input
+                                                type="text"
+                                                value={announcementInput.linkText}
+                                                onChange={(e) => setAnnouncementInput(prev => ({ ...prev, linkText: e.target.value }))}
+                                                placeholder="신청하기"
+                                                className="w-full p-2 border rounded-lg text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center justify-between">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={announcementInput.enabled}
+                                                onChange={(e) => setAnnouncementInput(prev => ({ ...prev, enabled: e.target.checked }))}
+                                                className="w-5 h-5 rounded"
+                                            />
+                                            <span className="text-sm font-bold text-slate-600">광고 활성화</span>
+                                        </label>
+                                        
+                                        <button
+                                            onClick={saveAnnouncement}
+                                            className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700"
+                                        >
+                                            저장하기
+                                        </button>
+                                    </div>
+                                    
+                                    {/* 미리보기 */}
+                                    {announcementInput.text && (
+                                        <div className="mt-4 p-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300">
+                                            <p className="text-xs text-slate-400 mb-2">미리보기:</p>
+                                            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-4">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="text-2xl">📢</span>
+                                                    <div className="flex-1">
+                                                        <p className="text-sm text-slate-700 whitespace-pre-wrap">{announcementInput.text}</p>
+                                                        {announcementInput.linkUrl && announcementInput.linkText && (
+                                                            <button className="mt-2 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                                                                {announcementInput.linkText} →
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* 묵상 관리 */}
@@ -1567,6 +1811,130 @@
                             </div>
                         )}
 
+                        {/* 재시작 확인 모달 */}
+                        {showRestartConfirm && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowRestartConfirm(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="text-center mb-6">
+                                        <div className="text-5xl mb-4">🔄</div>
+                                        <h3 className="text-xl font-bold text-slate-800 mb-2">처음부터 다시 시작할까요?</h3>
+                                        <p className="text-sm text-slate-500 leading-relaxed">
+                                            지금까지의 기록(점수, 묵상, 업적)이<br/>
+                                            <strong className="text-red-500">모두 초기화</strong>됩니다.<br/>
+                                            오늘부터 Day 1로 새롭게 시작해요!
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 mb-4">
+                                        <p className="text-xs text-amber-700 text-center">
+                                            ⚠️ 이 작업은 되돌릴 수 없습니다!
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="space-y-2">
+                                        <button 
+                                            onClick={handleRestart}
+                                            className="w-full bg-red-500 text-white font-bold py-3 rounded-xl hover:bg-red-600 transition-colors"
+                                        >
+                                            네, 처음부터 다시 시작합니다
+                                        </button>
+                                        <button 
+                                            onClick={() => setShowRestartConfirm(false)}
+                                            className="w-full bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200"
+                                        >
+                                            취소
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 날짜 설정 모달 */}
+                        {showDateSettings && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowDateSettings(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold text-slate-800">📅 읽기 시작 날짜 설정</h3>
+                                        <button onClick={() => setShowDateSettings(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    
+                                    <div className="mb-4 bg-blue-50 p-3 rounded-xl border border-blue-200">
+                                        <p className="text-sm text-blue-700">
+                                            현재: <strong>{offsetToDateStr(currentUser?.dayOffset || 0)}</strong>부터 시작
+                                            {(currentUser?.readCount || 1) > 1 && (
+                                                <span className="ml-2 bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">{currentUser.readCount}독 중</span>
+                                            )}
+                                        </p>
+                                    </div>
+                                    
+                                    <p className="text-sm text-slate-500 mb-4">
+                                        시작 날짜를 변경하면 해당 날짜의 본문부터 읽게 됩니다.<br/>
+                                        (진행 상황은 유지됩니다)
+                                    </p>
+                                    
+                                    {/* 분기별 빠른 선택 */}
+                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                        {[
+                                            { label: '1월 1일', offset: 0 },
+                                            { label: '4월 1일', offset: 90 },
+                                            { label: '7월 1일', offset: 181 },
+                                            { label: '10월 1일', offset: 273 },
+                                        ].map(item => (
+                                            <button
+                                                key={item.offset}
+                                                onClick={() => changeStartDate(item.offset)}
+                                                className={`p-3 rounded-xl border-2 font-bold text-sm transition-all ${
+                                                    (currentUser?.dayOffset || 0) === item.offset 
+                                                        ? 'border-blue-500 bg-blue-50 text-blue-600' 
+                                                        : 'border-slate-200 text-slate-600 hover:border-blue-300'
+                                                }`}
+                                            >
+                                                {item.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    
+                                    {/* 월별 선택 */}
+                                    <div className="mb-4">
+                                        <p className="text-xs text-slate-500 mb-2">또는 월 선택:</p>
+                                        <div className="grid grid-cols-4 gap-1">
+                                            {[1,2,3,4,5,6,7,8,9,10,11,12].map(month => {
+                                                const offset = dateToOffset(month, 1);
+                                                const isSelected = (currentUser?.dayOffset || 0) === offset;
+                                                return (
+                                                    <button
+                                                        key={month}
+                                                        onClick={() => changeStartDate(offset)}
+                                                        className={`p-2 rounded-lg text-xs font-bold transition-all ${
+                                                            isSelected 
+                                                                ? 'bg-blue-500 text-white' 
+                                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                        }`}
+                                                    >
+                                                        {month}월
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-amber-50 p-3 rounded-xl border border-amber-200">
+                                        <p className="text-xs text-amber-700">
+                                            💡 <strong>TIP:</strong> 중간에 합류하셨다면 현재 월을 선택하세요!<br/>
+                                            다른 성도들과 같은 본문을 읽을 수 있어요.
+                                        </p>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => setShowDateSettings(false)}
+                                        className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600"
+                                    >
+                                        닫기
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {newAchievement && (
                             <div className="fixed top-20 left-4 right-4 z-50 animate-bounce">
                                 <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-3">
@@ -1815,9 +2183,38 @@
                         </header>
 
                         <main className="px-4 py-6 max-w-md mx-auto space-y-8">
+                            {/* 광고/공지 배너 */}
+                            {announcement && announcement.enabled && announcement.text && (
+                                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+                                    <div className="flex items-start gap-3">
+                                        <span className="text-2xl flex-shrink-0">📢</span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{announcement.text}</p>
+                                            {announcement.linkUrl && announcement.linkText && (
+                                                <a 
+                                                    href={announcement.linkUrl} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="inline-block mt-3 bg-amber-500 text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors shadow-sm"
+                                                >
+                                                    {announcement.linkText} →
+                                                </a>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
                                 <div className="p-6 text-white relative bg-gradient-to-br from-indigo-600 to-blue-700">
-                                    <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">🏁 완독 D-{daysRemaining}</div>
+                                    <div className="absolute top-4 right-4 flex items-center gap-2">
+                                        {(currentUser.readCount || 1) > 1 && (
+                                            <div className="bg-purple-500/90 backdrop-blur-md text-white border border-purple-300/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                🏆 {currentUser.readCount}독 중
+                                            </div>
+                                        )}
+                                        <div className="bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">🏁 완독 D-{daysRemaining}</div>
+                                    </div>
                                     <h2 className="text-xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
                                     <p className="opacity-90 text-sm font-bold text-white/90 mb-2">{verseData.subtitle}</p>
                                     <p className="opacity-80 text-xs">{getEncouragementMessage()}</p>
@@ -1884,6 +2281,35 @@
                                     
                                     <div className="mt-4 bg-yellow-50 p-3 rounded-xl border border-yellow-100 text-center">
                                         <p className="text-xs text-yellow-700 font-bold">💡 바빠서 못 읽으셨나요? <br/>주일에 밀린 말씀을 몰아서 읽어도 괜찮습니다!</p>
+                                    </div>
+                                    
+                                    {/* 설정 영역 */}
+                                    <div className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                        <div className="flex items-center justify-between gap-2">
+                                            {/* 날짜 설정 버튼 */}
+                                            <button 
+                                                onClick={() => setShowDateSettings(true)}
+                                                className="flex-1 text-xs bg-blue-100 text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-200 flex items-center justify-center gap-1"
+                                            >
+                                                📅 시작 날짜 설정
+                                                {(currentUser.readCount || 1) > 1 && (
+                                                    <span className="bg-purple-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">{currentUser.readCount}독</span>
+                                                )}
+                                            </button>
+                                            
+                                            {/* 재시작 버튼 (뒤쳐진 경우만) */}
+                                            {isBehind && currentDay > 10 && (
+                                                <button 
+                                                    onClick={() => setShowRestartConfirm(true)}
+                                                    className="flex-1 text-xs bg-slate-200 text-slate-600 px-3 py-2 rounded-lg font-bold hover:bg-slate-300"
+                                                >
+                                                    🔄 처음부터 다시
+                                                </button>
+                                            )}
+                                        </div>
+                                        <p className="text-[10px] text-slate-400 mt-2 text-center">
+                                            현재: {offsetToDateStr(currentUser.dayOffset || 0)}부터 시작
+                                        </p>
                                     </div>
                                 </div>
                             </div>
