@@ -219,6 +219,7 @@
             const [showDateSettings, setShowDateSettings] = React.useState(false); // 날짜 설정 모달
             const [syncProgress, setSyncProgress] = React.useState(null); // 동기화 진행 상황
             const [lastSyncInfo, setLastSyncInfo] = React.useState(null); // 마지막 동기화 정보
+            const [selectedSyncVersions, setSelectedSyncVersions] = React.useState(['1year_revised']); // 동기화할 버전들
 
             const getLevelInfo = (score) => [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
 
@@ -800,74 +801,125 @@
                 return await fetchFromNotion(planId, currentDay);
             };
 
-            // 관리자용: 노션 → Firestore 동기화 함수
-            const syncNotionToFirestore = async (startDay = 1, endDay = 365, planId = '1year_revised') => {
+            // 관리자용: 노션 → Firestore 동기화 함수 (재시도 로직 포함)
+            const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                 if (!db || !SUPABASE_FUNCTION_URL) {
                     alert('설정 오류');
-                    return;
+                    return { success: 0, error: 0, failedItems: [] };
                 }
                 
-                const [planType, version] = planId.split('_');
-                const targetTag = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.tagName || '개역개정 일년일독';
+                let totalSuccess = 0;
+                let totalError = 0;
+                const totalDays = planIds.length * 365;
+                let processedDays = 0;
+                const failedItems = []; // 실패 목록
                 
-                let successCount = 0;
-                let errorCount = 0;
-                
-                for (let day = startDay; day <= endDay; day++) {
-                    try {
+                for (const planId of planIds) {
+                    const [planType, version] = planId.split('_');
+                    const versionInfo = BIBLE_VERSIONS[planType]?.find(v => v.id === version);
+                    const targetTag = versionInfo?.tagName || '개역개정 일년일독';
+                    const versionName = versionInfo?.name || planId;
+                    
+                    for (let day = 1; day <= 365; day++) {
                         const targetDate = new Date(2025, 0, day);
                         const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
                         const dd = String(targetDate.getDate()).padStart(2, '0');
                         
-                        // 노션에서 가져오기
-                        const response = await fetch(SUPABASE_FUNCTION_URL, {
-                            method: 'POST', 
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ tag: targetTag, date: `${mm}-${dd}` })
-                        });
+                        let success = false;
+                        let lastError = null;
                         
-                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                        const data = await response.json();
+                        // 최대 3번 재시도
+                        for (let attempt = 1; attempt <= 3; attempt++) {
+                            try {
+                                // 노션에서 가져오기
+                                const response = await fetch(SUPABASE_FUNCTION_URL, {
+                                    method: 'POST', 
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ tag: targetTag, date: `${mm}-${dd}` })
+                                });
+                                
+                                // 429 (Too Many Requests) 에러 시 더 오래 대기
+                                if (response.status === 429) {
+                                    console.log(`⏳ API 제한 - ${attempt}번째 재시도 대기 (Day ${day})`);
+                                    await new Promise(r => setTimeout(r, 2000 * attempt)); // 2초, 4초, 6초
+                                    continue;
+                                }
+                                
+                                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                                const data = await response.json();
+                                
+                                if (data.title && data.text) {
+                                    // Firestore에 저장
+                                    const cacheKey = `${planType}_${version}_${day}`;
+                                    await db.collection('verses').doc(cacheKey).set({
+                                        title: data.title,
+                                        text: data.text,
+                                        audioUrl: data.audioUrl || null,
+                                        day: day,
+                                        planId: planId,
+                                        syncedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                    });
+                                    totalSuccess++;
+                                    success = true;
+                                    break; // 성공하면 재시도 루프 종료
+                                } else {
+                                    // 노션에 데이터 없음 (재시도 불필요)
+                                    lastError = '노션에 데이터 없음';
+                                    break;
+                                }
+                                
+                            } catch (e) {
+                                lastError = e.message;
+                                console.error(`${planId} Day ${day} 시도 ${attempt}/3 실패:`, e);
+                                
+                                if (attempt < 3) {
+                                    // 재시도 전 대기 (1초, 2초)
+                                    await new Promise(r => setTimeout(r, 1000 * attempt));
+                                }
+                            }
+                        }
                         
-                        if (data.title && data.text) {
-                            // Firestore에 저장
-                            const cacheKey = `${planType}_${version}_${day}`;
-                            await db.collection('verses').doc(cacheKey).set({
-                                title: data.title,
-                                text: data.text,
-                                audioUrl: data.audioUrl || null,
-                                day: day,
-                                planId: planId,
-                                syncedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        if (!success) {
+                            totalError++;
+                            failedItems.push({
+                                planId,
+                                versionName,
+                                day,
+                                date: `${mm}-${dd}`,
+                                error: lastError
                             });
-                            successCount++;
-                        } else {
-                            errorCount++;
                         }
                         
-                        // 진행 상황 업데이트 (10일마다)
-                        if (day % 10 === 0) {
-                            setSyncProgress({ current: day, total: endDay, success: successCount, error: errorCount });
+                        processedDays++;
+                        
+                        // 진행 상황 업데이트 (5일마다)
+                        if (day % 5 === 0) {
+                            setSyncProgress({ 
+                                current: processedDays, 
+                                total: totalDays, 
+                                success: totalSuccess, 
+                                error: totalError,
+                                currentVersion: versionName,
+                                currentDay: day
+                            });
                         }
                         
-                        // API 부하 방지 딜레이
-                        await new Promise(r => setTimeout(r, 300));
-                        
-                    } catch (e) {
-                        console.error(`Day ${day} 동기화 실패:`, e);
-                        errorCount++;
+                        // API 부하 방지 딜레이 (500ms)
+                        await new Promise(r => setTimeout(r, 500));
                     }
                 }
                 
                 // 마지막 동기화 시간 저장
                 await db.collection('settings').doc('sync').set({
                     lastSyncAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    successCount,
-                    errorCount
+                    successCount: totalSuccess,
+                    errorCount: totalError,
+                    syncedVersions: planIds,
+                    failedItems: failedItems.slice(0, 50) // 최대 50개만 저장 (Firestore 용량 제한)
                 });
                 
                 setSyncProgress(null);
-                return { success: successCount, error: errorCount };
+                return { success: totalSuccess, error: totalError, failedItems };
             };
 
             React.useEffect(() => {
@@ -1339,6 +1391,26 @@
                                         <p className="text-slate-500 text-xs">
                                             성공: {lastSyncInfo.successCount || 0}개 / 실패: {lastSyncInfo.errorCount || 0}개
                                         </p>
+                                        {lastSyncInfo.syncedVersions && (
+                                            <p className="text-slate-400 text-xs mt-1">
+                                                동기화된 버전: {lastSyncInfo.syncedVersions.join(', ')}
+                                            </p>
+                                        )}
+                                        {/* 실패 목록 표시 */}
+                                        {lastSyncInfo.failedItems && lastSyncInfo.failedItems.length > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-slate-200">
+                                                <p className="text-red-600 text-xs font-bold mb-2">
+                                                    ❌ 실패 목록 ({lastSyncInfo.failedItems.length}개):
+                                                </p>
+                                                <div className="max-h-32 overflow-y-auto bg-white rounded p-2 text-xs">
+                                                    {lastSyncInfo.failedItems.map((item, idx) => (
+                                                        <div key={idx} className="text-red-500 py-0.5">
+                                                            • {item.versionName} Day {item.day} ({item.date}) - {item.error}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                                 
@@ -1348,6 +1420,11 @@
                                             <p className="text-sm font-bold text-amber-700 mb-2">
                                                 ⏳ 동기화 진행 중... ({syncProgress.current}/{syncProgress.total})
                                             </p>
+                                            {syncProgress.currentVersion && (
+                                                <p className="text-xs text-amber-600 mb-2">
+                                                    현재: {syncProgress.currentVersion} - Day {syncProgress.currentDay}
+                                                </p>
+                                            )}
                                             <div className="w-full bg-amber-200 rounded-full h-3">
                                                 <div 
                                                     className="bg-amber-500 h-3 rounded-full transition-all"
@@ -1359,24 +1436,110 @@
                                             </p>
                                         </div>
                                         <p className="text-xs text-slate-500 text-center">
-                                            ⚠️ 창을 닫지 마세요. 약 2-3분 소요됩니다.
+                                            ⚠️ 창을 닫지 마세요. 선택한 버전 × 365일 동기화 중...
                                         </p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <div className="space-y-4">
+                                        {/* 버전 선택 */}
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-700 mb-2">동기화할 버전 선택:</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {/* 일년일독 */}
+                                                <div className="bg-slate-50 p-3 rounded-lg">
+                                                    <p className="text-xs font-bold text-slate-500 mb-2">📖 일년일독</p>
+                                                    {BIBLE_VERSIONS['1year'].map(v => {
+                                                        const planId = `1year_${v.id}`;
+                                                        const isChecked = selectedSyncVersions.includes(planId);
+                                                        return (
+                                                            <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    checked={isChecked}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) {
+                                                                            setSelectedSyncVersions([...selectedSyncVersions, planId]);
+                                                                        } else {
+                                                                            setSelectedSyncVersions(selectedSyncVersions.filter(id => id !== planId));
+                                                                        }
+                                                                    }}
+                                                                    className="w-4 h-4 rounded"
+                                                                />
+                                                                <span className="text-sm text-slate-700">{v.name}</span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {/* 신약일독 */}
+                                                <div className="bg-slate-50 p-3 rounded-lg">
+                                                    <p className="text-xs font-bold text-slate-500 mb-2">📗 신약일독</p>
+                                                    {BIBLE_VERSIONS['nt'].map(v => {
+                                                        const planId = `nt_${v.id}`;
+                                                        const isChecked = selectedSyncVersions.includes(planId);
+                                                        return (
+                                                            <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
+                                                                <input 
+                                                                    type="checkbox" 
+                                                                    checked={isChecked}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) {
+                                                                            setSelectedSyncVersions([...selectedSyncVersions, planId]);
+                                                                        } else {
+                                                                            setSelectedSyncVersions(selectedSyncVersions.filter(id => id !== planId));
+                                                                        }
+                                                                    }}
+                                                                    className="w-4 h-4 rounded"
+                                                                />
+                                                                <span className="text-sm text-slate-700">{v.name}</span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* 선택 요약 */}
+                                        <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                                            <p className="text-sm text-green-700">
+                                                선택됨: <strong>{selectedSyncVersions.length}개</strong> 버전 
+                                                ({selectedSyncVersions.length * 365}개 문서, 약 {Math.ceil(selectedSyncVersions.length * 2)}분 소요)
+                                            </p>
+                                        </div>
+                                        
                                         <button
                                             onClick={async () => {
-                                                if (!confirm('365일 전체를 동기화합니다. 약 2-3분 소요됩니다. 진행할까요?')) return;
-                                                setSyncProgress({ current: 0, total: 365, success: 0, error: 0 });
-                                                const result = await syncNotionToFirestore(1, 365);
-                                                alert(`동기화 완료!\n성공: ${result.success}개\n실패: ${result.error}개`);
+                                                if (selectedSyncVersions.length === 0) {
+                                                    alert('동기화할 버전을 선택해주세요.');
+                                                    return;
+                                                }
+                                                const versionNames = selectedSyncVersions.join(', ');
+                                                if (!confirm(`${selectedSyncVersions.length}개 버전을 동기화합니다.\n\n${versionNames}\n\n약 ${Math.ceil(selectedSyncVersions.length * 3)}분 소요됩니다. 진행할까요?`)) return;
+                                                
+                                                const totalDays = selectedSyncVersions.length * 365;
+                                                setSyncProgress({ current: 0, total: totalDays, success: 0, error: 0, currentVersion: '', currentDay: 0 });
+                                                const result = await syncNotionToFirestore(selectedSyncVersions);
+                                                
+                                                // 실패 목록 상세 표시
+                                                let message = `동기화 완료!\n성공: ${result.success}개\n실패: ${result.error}개`;
+                                                if (result.failedItems && result.failedItems.length > 0) {
+                                                    message += `\n\n❌ 실패 목록 (최대 10개 표시):`;
+                                                    result.failedItems.slice(0, 10).forEach(item => {
+                                                        message += `\n• ${item.versionName} Day ${item.day} (${item.date})`;
+                                                    });
+                                                    if (result.failedItems.length > 10) {
+                                                        message += `\n... 외 ${result.failedItems.length - 10}개`;
+                                                    }
+                                                }
+                                                alert(message);
+                                                
                                                 // 동기화 정보 새로고침
                                                 const syncDoc = await db.collection('settings').doc('sync').get();
                                                 if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
                                             }}
-                                            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors text-lg"
+                                            disabled={selectedSyncVersions.length === 0}
+                                            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
-                                            📥 전체 동기화 (365일)
+                                            📥 선택한 버전 동기화 ({selectedSyncVersions.length * 365}개)
                                         </button>
                                         <p className="text-xs text-slate-500 text-center">
                                             💡 노션 본문을 수정했을 때만 동기화하세요.
