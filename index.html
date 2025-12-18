@@ -1,172 +1,1925 @@
-// ====================================================================
-// Supabase Edge Function for Notion API (페이지네이션 수정 버전)
-// 이 코드를 Supabase Edge Function (예: notion-proxy)에 배포하세요.
-// ====================================================================
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>천로역정 성경 레이스</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-// CORS 설정을 위한 헤더 (브라우저에서 직접 호출 허용)
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .bg-sky-texture { background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%); }
+        .bg-map-texture { background-color: #f0fdf4; background-image: radial-gradient(#86efac 1px, transparent 1px); background-size: 20px 20px; }
+        @keyframes wiggle { 0%, 100% { transform: rotate(-3deg) scale(1.1); } 50% { transform: rotate(3deg) scale(1.1); } }
+        .animate-wiggle { animation: wiggle 0.3s ease-in-out infinite; }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+        .animate-float-slow { animation: float 10s ease-in-out infinite; }
+        @keyframes float { 0% { transform: translateX(0px); } 50% { transform: translateX(10px); } 100% { transform: translateX(0px); } }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .mountain-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: #86efac; clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%); z-index: 1; opacity: 0.8; }
+        .mountain-front { position: absolute; bottom: 0; left: 0; width: 100%; height: 45%; background: #4ade80; clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%); z-index: 2; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div id="root"></div>
 
-serve(async (req) => {
-  // 1. CORS Preflight 요청 처리 (옵션 요청)
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+    <script type="text/babel">
+        const SUPABASE_FUNCTION_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy";
 
-  try {
-    // 2. 환경 변수에서 Notion 키 가져오기 (Supabase Secrets에 저장해야 함)
-    const NOTION_KEY = Deno.env.get("NOTION_KEY");
-    const NOTION_DB_ID = Deno.env.get("NOTION_DB_ID");
-
-    if (!NOTION_KEY || !NOTION_DB_ID) {
-      throw new Error("서버 환경 변수(Notion Key)가 설정되지 않았습니다.");
-    }
-
-    // 3. 클라이언트(HTML)에서 보낸 데이터 받기
-    const { tag, date } = await req.json();
-    
-    if (!tag || !date) {
-      return new Response(JSON.stringify({ error: "태그와 날짜 정보가 필요합니다." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 400,
-      });
-    }
-
-    // 4. Notion API 호출: 데이터베이스 쿼리
-    console.log(`Querying Notion: Tag=${tag}, Date=${date}`);
-    
-    const queryResp = await fetch(`https://api.notion.com/v1/databases/${NOTION_DB_ID}/query`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${NOTION_KEY}`,
-        "Notion-Version": "2022-06-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        filter: {
-          property: "태그",
-          multi_select: { contains: tag }
-        },
-        sorts: [{ property: "날짜", direction: "ascending" }]
-      }),
-    });
-
-    if (!queryResp.ok) {
-      throw new Error(`Notion DB Query Error: ${queryResp.status}`);
-    }
-
-    const queryData = await queryResp.json();
-
-    // 5. 날짜 매칭 로직 (서버에서 처리하여 로직 숨김)
-    const matchedPage = queryData.results.find((page: any) => {
-      let dateVal = null;
-      // '게시날짜' 수식 속성 또는 '날짜' 속성 확인
-      if (page.properties['게시날짜']?.formula?.type === 'date') {
-        dateVal = page.properties['게시날짜'].formula.date?.start;
-      } 
-      if (!dateVal && page.properties['날짜']?.date) {
-        dateVal = page.properties['날짜'].date.start;
-      }
-      if (!dateVal) return false;
-      // "YYYY-MM-DD" 에서 "MM-DD"만 비교
-      return dateVal.slice(5) === date;
-    });
-
-    if (!matchedPage) {
-      return new Response(JSON.stringify({ 
-        title: null, 
-        text: `[알림] 날짜(${date})에 해당하는 말씀이 없습니다.` 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-
-    // 6. 페이지 블록(본문) 가져오기 - ★ 페이지네이션 추가 ★
-    const pageTitle = matchedPage.properties['이름']?.title[0]?.plain_text || "무제";
-    
-    // ★ 오디오 URL 가져오기 (노션 DB에 '오디오URL' URL 속성이 있는 경우)
-    let audioUrl = matchedPage.properties['오디오URL']?.url || null;
-    
-    // ★ Google Drive URL 자동 변환
-    if (audioUrl && audioUrl.includes('drive.google.com/file/d/')) {
-      const match = audioUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-      if (match && match[1]) {
-        audioUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
-      }
-    }
-    
-    // 모든 블록을 담을 배열
-    let allBlocks: any[] = [];
-    let hasMore = true;
-    let nextCursor: string | null = null;
-
-    // has_more가 false가 될 때까지 반복 요청
-    while (hasMore) {
-      const url = nextCursor 
-        ? `https://api.notion.com/v1/blocks/${matchedPage.id}/children?start_cursor=${nextCursor}`
-        : `https://api.notion.com/v1/blocks/${matchedPage.id}/children`;
-
-      const blocksResp = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Authorization": `Bearer ${NOTION_KEY}`,
-          "Notion-Version": "2022-06-28",
-        },
-      });
-
-      if (!blocksResp.ok) {
-        throw new Error("본문을 불러올 수 없습니다.");
-      }
-      
-      const blocksData = await blocksResp.json();
-      
-      // 결과 블록들을 배열에 추가
-      allBlocks = allBlocks.concat(blocksData.results);
-      
-      // 다음 페이지 여부 확인
-      hasMore = blocksData.has_more;
-      nextCursor = blocksData.next_cursor;
-      
-      console.log(`Fetched ${blocksData.results.length} blocks, total: ${allBlocks.length}, has_more: ${hasMore}`);
-    }
-
-    // 7. 블록을 Markdown 텍스트로 변환
-    let fullText = "";
-    allBlocks.forEach((block: any) => {
-      const type = block.type;
-      if (block[type].rich_text) {
-        const textContent = block[type].rich_text.map((t: any) => t.plain_text).join('');
+        const firebaseConfig = {
+            apiKey: "AIzaSyAOMubppe1JZbBh0VBv7UIbZyY2S1RI9fw",
+            authDomain: "bible-sungseo.firebaseapp.com",
+            projectId: "bible-sungseo",
+            storageBucket: "bible-sungseo.firebasestorage.app",
+            messagingSenderId: "1061949588108",
+            appId: "1:1061949588108:web:e8e3bbd6c3f73afa5131a9"
+        };
         
-        if (type === 'heading_1') fullText += `# ${textContent}\n\n`;
-        else if (type === 'heading_2') fullText += `## ${textContent}\n\n`;
-        else if (type === 'heading_3') fullText += `### ${textContent}\n\n`;
-        else if (type === 'bulleted_list_item') fullText += `• ${textContent}\n`;
-        else if (type === 'numbered_list_item') fullText += `1. ${textContent}\n`;
-        else if (type === 'quote') fullText += `> ${textContent}\n\n`;
-        else fullText += `${textContent}\n\n`;
-      }
-    });
+        let db, auth;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.firestore();
+        } catch (e) { console.error("Firebase init failed:", e); }
 
-    if (!fullText.trim()) {
-       const aiSummary = matchedPage.properties['AI 요약']?.rich_text?.[0]?.plain_text;
-       if (aiSummary) fullText = `[AI 요약]\n${aiSummary}`;
-       else fullText = "본문 내용이 없습니다.";
-    }
+        const makePseudoEmail = (name) => `${encodeURIComponent(String(name || "").trim())}@bible.local`;
 
-    // 8. 결과 반환 (오디오URL 포함)
-    return new Response(JSON.stringify({ title: pageTitle, text: fullText, audioUrl }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+        const userDocToState = (doc) => {
+            const d = doc.data();
+            return {
+                uid: doc.id, name: d.name, password: d.password, startDate: d.startDate,
+                currentDay: d.currentDay ?? 1, streak: d.streak ?? 0, score: d.score ?? 0,
+                lastReadDate: d.lastReadDate ?? null, gender: d.gender ?? "male",
+                communityId: d.communityId ?? null, communityName: d.communityName ?? null,
+                subgroupId: d.subgroupId ?? null, planId: d.planId ?? "1year_revised",
+                achievements: d.achievements ?? [],
+                memos: d.memos ?? {},
+            };
+        };
 
-  } catch (error) {
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
-  }
-});
+        const Icon = ({ name, size = 20, className = "" }) => {
+            const icons = {
+                crown: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m2 4 3 12h14l3-12-6 7-4-3-4 3-6-7zm5 16h10"/></svg>,
+                trophy: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+                users: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+                book: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
+                arrowRight: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
+                back: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>,
+                flame: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+                close: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+                trash: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+                download: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+                refresh: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>,
+                edit: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+                helpbook: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+                chart: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+                medal: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15"/><path d="M11 12 5.12 2.2"/><path d="m13 12 5.88-9.8"/><path d="M8 7h8"/><circle cx="12" cy="17" r="5"/><path d="M12 18v-2h-.5"/></svg>,
+                calendar: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+            };
+            return icons[name] || null;
+        };
+
+        const LEVEL_SYSTEM = [
+            { min: 0, title: '새싹 성도', emoji: '🌱' },
+            { min: 30, title: '묵상 입문자', emoji: '📖' },
+            { min: 70, title: '말씀 탐험가', emoji: '🔍' },
+            { min: 120, title: '진리 추구자', emoji: '💡' },
+            { min: 180, title: '믿음의 순례자', emoji: '🚶' },
+            { min: 250, title: '기도의 용사', emoji: '🙏' },
+            { min: 350, title: '은혜의 그릇', emoji: '🏺' },
+            { min: 500, title: '말씀의 파수꾼', emoji: '🛡️' },
+            { min: 700, title: '복음의 증인', emoji: '✝️' },
+            { min: 950, title: '신앙의 등대', emoji: '🗼' },
+            { min: 1200, title: '천국 시민', emoji: '👑' }
+        ];
+
+        const PLAN_TYPES = [
+            { id: '1year', title: '일년 일독', desc: '1년에 성경 1독을 합니다.' },
+            { id: 'nt', title: '신약 일독', desc: '1년 동안 신약 1독을 합니다.' }
+        ];
+
+        const BIBLE_VERSIONS = {
+            '1year': [
+                { id: 'revised', name: '개역개정', desc: '교회에서 평소에 사용하는 성경', tagName: '개역개정 일년일독' },
+                { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 일년일독' },
+                { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 일년일독' }
+            ],
+            'nt': [
+                { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 신약일독' },
+                { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 신약일독' },
+                { id: 'message', name: '메시지 성경', desc: '현대 문화와 일상 언어로 생생하게 재해석한 의역 성경', tagName: '메시지 신약일독' }
+            ]
+        };
+
+        const seniorSubgroups = Array.from({length: 14}, (_, i) => `${i + 1}구역`).concat(['여성실버1', '여성실버2', '남자실버', '젊은부부']);
+        const youthSubgroups = ['유리 목장', '아영 목장', '화목 목장', '민혁 목장'];
+        const middleHighSubgroups = ['1목장', '2목장', '3목장', '4목장'];
+        const elementarySubgroups = ['1학년', '2학년', '3학년', '4학년', '5학년', '6학년'];
+        const kindergartenSubgroups = ['소망반', '빌립반', '믿음반'];
+
+        const MOCK_COMMUNITIES = [
+          { id: 'senior', name: '장년부', color: 'bg-orange-500', icon: '🏔️', subgroups: seniorSubgroups },
+          { id: 'youth', name: '청년부', color: 'bg-blue-500', icon: '🏃', subgroups: youthSubgroups },
+          { id: 'middlehigh', name: '중고등부', color: 'bg-purple-500', icon: '🏫', subgroups: middleHighSubgroups },
+          { id: 'elementary', name: '유초등부', color: 'bg-yellow-500', icon: '🐥', subgroups: elementarySubgroups },
+          { id: 'kinder', name: '유아유치부', color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
+        ];
+
+        const TOTAL_DAYS = 365;
+        const PANIC_DISTANCE = 5;
+
+        // 업적 시스템
+        const ACHIEVEMENTS = [
+            { id: 'first_read', title: '첫 발걸음', desc: '처음으로 말씀을 읽었습니다', emoji: '👣', condition: (u) => u.currentDay > 1 },
+            { id: 'streak_7', title: '일주일 연속', desc: '7일 연속으로 읽었습니다', emoji: '🔥', condition: (u) => u.streak >= 7 },
+            { id: 'streak_30', title: '한 달 연속', desc: '30일 연속으로 읽었습니다', emoji: '💪', condition: (u) => u.streak >= 30 },
+            { id: 'streak_100', title: '백일의 기적', desc: '100일 연속으로 읽었습니다', emoji: '🌟', condition: (u) => u.streak >= 100 },
+            { id: 'day_30', title: '30일 완주', desc: '30일차를 달성했습니다', emoji: '🏃', condition: (u) => u.currentDay >= 30 },
+            { id: 'day_100', title: '100일 완주', desc: '100일차를 달성했습니다', emoji: '🎯', condition: (u) => u.currentDay >= 100 },
+            { id: 'day_200', title: '200일 완주', desc: '200일차를 달성했습니다', emoji: '🚀', condition: (u) => u.currentDay >= 200 },
+            { id: 'day_365', title: '완독 성공', desc: '365일 완독을 달성했습니다!', emoji: '👑', condition: (u) => u.currentDay >= 365 },
+            { id: 'first_memo', title: '첫 묵상', desc: '처음으로 묵상을 기록했습니다', emoji: '📝', condition: (u, m) => Object.keys(m || {}).length >= 1 },
+            { id: 'memo_10', title: '묵상 10개', desc: '묵상을 10개 작성했습니다', emoji: '📚', condition: (u, m) => Object.keys(m || {}).length >= 10 },
+            { id: 'memo_50', title: '묵상 50개', desc: '묵상을 50개 작성했습니다', emoji: '🎓', condition: (u, m) => Object.keys(m || {}).length >= 50 },
+            { id: 'score_100', title: '100점 달성', desc: '총 100점을 달성했습니다', emoji: '💯', condition: (u) => u.score >= 100 },
+            { id: 'score_500', title: '500점 달성', desc: '총 500점을 달성했습니다', emoji: '⭐', condition: (u) => u.score >= 500 },
+            { id: 'score_1000', title: '1000점 달성', desc: '총 1000점을 달성했습니다', emoji: '🏆', condition: (u) => u.score >= 1000 },
+        ];
+
+        const GENESIS_1 = `### 1. 태초에 하나님이 천지를 창조하시니라
+2. 땅이 혼돈하고 공허하며 흑암이 깊음 위에 있고 하나님의 영은 수면 위에 운행하시니라
+3. 하나님이 이르시되 빛이 있으라 하시니 빛이 있었고
+4. 빛이 하나님이 보시기에 좋았더라 하나님이 빛과 어둠을 나누사
+(중략)`;
+
+        const MarkdownRenderer = ({ content }) => {
+            if (!content) return null;
+            const lines = content.split('\n');
+            return (
+                <div className="space-y-1">
+                    {lines.map((line, i) => {
+                        const trimmed = line.trim();
+                        if (trimmed.startsWith('### ')) return <h3 key={i} className="text-base font-bold text-slate-800 mt-3 mb-1 border-b border-slate-200 pb-1">{trimmed.slice(4)}</h3>;
+                        if (trimmed.startsWith('## ')) return <h2 key={i} className="text-lg font-bold text-slate-800 mt-4 mb-1">{trimmed.slice(3)}</h2>;
+                        if (trimmed.startsWith('# ')) return <h1 key={i} className="text-xl font-bold text-slate-800 mt-4 mb-2">{trimmed.slice(2)}</h1>;
+                        if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={i} className="list-disc list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.slice(2)}</li>;
+                        if (/^\d+\.\s/.test(trimmed)) return <li key={i} className="list-decimal list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.replace(/^\d+\.\s/, '')}</li>;
+                        if (trimmed.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded text-base">{trimmed.slice(2)}</blockquote>;
+                        if (trimmed === '') return <div key={i} className="h-1"></div>;
+                        return <p key={i} className="text-slate-700 leading-normal text-base">{line}</p>;
+                    })}
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = React.useState('login'); 
+            const [loginName, setLoginName] = React.useState('');
+            const [loginPw, setLoginPw] = React.useState('');
+            const [tempUser, setTempUser] = React.useState(null); 
+            const [currentUser, setCurrentUser] = React.useState(null); 
+            const [errorMsg, setErrorMsg] = React.useState('');
+            const [showConfetti, setShowConfetti] = React.useState(false);
+            const [levelUpToast, setLevelUpToast] = React.useState(null);
+            const [subgroupStats, setSubgroupStats] = React.useState({});
+            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', audioUrl: null, loading: false });
+            const [hasReadToday, setHasReadToday] = React.useState(false);
+            const [showScoreInfo, setShowScoreInfo] = React.useState(false);
+            const [showReadingGuide, setShowReadingGuide] = React.useState(false); 
+            const [bonusToast, setBonusToast] = React.useState(null);
+            const [selectedPlanType, setSelectedPlanType] = React.useState(null);
+            const [isAdmin, setIsAdmin] = React.useState(false);
+            const [allUsers, setAllUsers] = React.useState([]);
+            const [editingUser, setEditingUser] = React.useState(null);
+            const [communityMembers, setCommunityMembers] = React.useState([]);
+            const [memos, setMemos] = React.useState({});
+            const [currentMemo, setCurrentMemo] = React.useState('');
+            const [showMemoList, setShowMemoList] = React.useState(false);
+            const [showAchievements, setShowAchievements] = React.useState(false);
+            const [newAchievement, setNewAchievement] = React.useState(null);
+            const [showCalendar, setShowCalendar] = React.useState(false);
+            const [calendarDate, setCalendarDate] = React.useState(new Date());
+            const [readHistory, setReadHistory] = React.useState([]);
+            const [adminFilter, setAdminFilter] = React.useState('all'); // 관리자 부서 필터
+            const [adminViewMode, setAdminViewMode] = React.useState('today'); // 'today' or 'inactive'
+
+            const getLevelInfo = (score) => [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
+
+            // 묵상 메모 불러오기
+            const loadMemos = async (uid) => {
+                if (!db || !uid) return {};
+                try {
+                    const doc = await db.collection('users').doc(uid).get();
+                    if (doc.exists) {
+                        if (doc.data().memos) setMemos(doc.data().memos);
+                        if (doc.data().readHistory) setReadHistory(doc.data().readHistory);
+                        return doc.data().memos || {};
+                    }
+                    return {};
+                } catch (e) { console.error("메모 로딩 실패:", e); return {}; }
+            };
+
+            // 묵상 메모 저장
+            const saveMemo = async (day, memoText) => {
+                const uid = auth.currentUser?.uid;
+                if (!uid || !memoText.trim()) return;
+                
+                const newMemos = { ...memos, [day]: { text: memoText, date: new Date().toISOString(), title: verseData.subtitle } };
+                setMemos(newMemos);
+                setCurrentMemo('');
+                
+                try {
+                    await db.collection('users').doc(uid).set({ memos: newMemos, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    alert('묵상이 저장되었습니다! ✨');
+                    // 메모 관련 업적 체크
+                    checkAchievements(currentUser, newMemos);
+                } catch (e) { console.error("메모 저장 실패:", e); alert("저장 실패"); }
+            };
+
+            // 업적 체크 및 알림
+            const checkAchievements = (user, userMemos) => {
+                if (!user) return;
+                const earned = ACHIEVEMENTS.filter(a => a.condition(user, userMemos));
+                const savedAchievements = user.achievements || [];
+                const newOnes = earned.filter(a => !savedAchievements.includes(a.id));
+                
+                if (newOnes.length > 0) {
+                    // 새 업적 토스트 표시
+                    setNewAchievement(newOnes[0]);
+                    setTimeout(() => setNewAchievement(null), 4000);
+                    
+                    // Firestore에 저장
+                    const uid = auth.currentUser?.uid;
+                    if (uid) {
+                        const allEarned = earned.map(a => a.id);
+                        db.collection('users').doc(uid).set({ achievements: allEarned }, { merge: true });
+                        setCurrentUser(prev => ({ ...prev, achievements: allEarned }));
+                    }
+                }
+            };
+
+            // PDF 생성 함수 (개인용) - html2canvas 사용
+            const generateMemosPDF = async (userName, userMemos, userStats = {}) => {
+                const { jsPDF } = window.jspdf;
+                
+                // 임시 컨테이너 생성
+                const container = document.createElement('div');
+                container.style.cssText = 'position: absolute; left: -9999px; top: 0; width: 595px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
+                document.body.appendChild(container);
+                
+                const memoCount = Object.keys(userMemos).length;
+                const sortedMemos = Object.entries(userMemos).sort(([a], [b]) => Number(a) - Number(b));
+                
+                // 표지 페이지
+                const coverHTML = `
+                    <div style="width: 595px; height: 842px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;">
+                        <div style="font-size: 80px; margin-bottom: 20px;">📖</div>
+                        <div style="font-size: 36px; font-weight: bold; margin-bottom: 10px;">${userName}</div>
+                        <div style="font-size: 24px; opacity: 0.9;">2025 신앙일지</div>
+                        <div style="font-size: 16px; opacity: 0.7; margin-top: 10px;">성경통독 365</div>
+                        <div style="margin-top: 60px; font-size: 14px; opacity: 0.6;">천로역정 성경 레이스</div>
+                    </div>
+                `;
+                
+                // 통계 페이지
+                const statsHTML = `
+                    <div style="width: 595px; height: 842px; background: #f8fafc; padding: 60px 50px;">
+                        <div style="text-align: center; margin-bottom: 50px;">
+                            <div style="font-size: 28px; font-weight: bold; color: #1e293b;">📊 나의 기록</div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <div style="background: white; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <div style="font-size: 48px; font-weight: bold; color: #4f46e5;">${memoCount}</div>
+                                <div style="color: #64748b; margin-top: 8px;">작성한 묵상</div>
+                            </div>
+                            <div style="background: white; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <div style="font-size: 48px; font-weight: bold; color: #059669;">${userStats.currentDay || 1}</div>
+                                <div style="color: #64748b; margin-top: 8px;">현재 Day</div>
+                            </div>
+                            <div style="background: white; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <div style="font-size: 48px; font-weight: bold; color: #dc2626;">${userStats.score || 0}</div>
+                                <div style="color: #64748b; margin-top: 8px;">총 점수</div>
+                            </div>
+                            <div style="background: white; padding: 30px; border-radius: 16px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                                <div style="font-size: 48px; font-weight: bold; color: #f59e0b;">${userStats.streak || 0}</div>
+                                <div style="color: #64748b; margin-top: 8px;">연속 일수</div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 50px; text-align: center; color: #94a3b8; font-size: 14px;">
+                            생성일: ${new Date().toLocaleDateString('ko-KR')}
+                        </div>
+                    </div>
+                `;
+                
+                // 묵상 페이지들 생성 (페이지당 3개)
+                const memoPages = [];
+                for (let i = 0; i < sortedMemos.length; i += 3) {
+                    const pageMemos = sortedMemos.slice(i, i + 3);
+                    const memosHTML = pageMemos.map(([day, memo]) => `
+                        <div style="background: white; padding: 25px; border-radius: 16px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                                <div style="background: #4f46e5; color: white; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 14px;">DAY ${day}</div>
+                                <div style="color: #94a3b8; font-size: 12px;">${memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : ''}</div>
+                            </div>
+                            <div style="color: #64748b; font-size: 13px; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px;">${memo.title || ''}</div>
+                            <div style="color: #1e293b; font-size: 15px; line-height: 1.7; white-space: pre-wrap;">${(memo.text || '').substring(0, 300)}${(memo.text || '').length > 300 ? '...' : ''}</div>
+                        </div>
+                    `).join('');
+                    
+                    memoPages.push(`
+                        <div style="width: 595px; height: 842px; background: #f1f5f9; padding: 40px 40px;">
+                            <div style="text-align: center; margin-bottom: 30px; color: #64748b; font-size: 14px;">✍️ 나의 묵상</div>
+                            ${memosHTML}
+                        </div>
+                    `);
+                }
+                
+                // 마지막 페이지
+                const endHTML = `
+                    <div style="width: 595px; height: 842px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center;">
+                        <div style="font-size: 60px; margin-bottom: 30px;">🎉</div>
+                        <div style="font-size: 28px; font-weight: bold; margin-bottom: 15px;">축하합니다!</div>
+                        <div style="font-size: 18px; opacity: 0.9; margin-bottom: 30px;">믿음의 경주를 달려가는 당신을 응원합니다</div>
+                        <div style="font-size: 14px; opacity: 0.7; padding: 0 50px; line-height: 1.8;">
+                            "그러므로 우리에게 구름 같이 둘러싼 허다한 증인들이 있으니<br/>
+                            모든 무거운 것과 얽매이기 쉬운 죄를 벗어버리고<br/>
+                            인내로써 우리 앞에 당한 경주를 하며"
+                        </div>
+                        <div style="margin-top: 20px; font-size: 16px; opacity: 0.8;">- 히브리서 12:1 -</div>
+                    </div>
+                `;
+                
+                // PDF 생성
+                const doc = new jsPDF('p', 'pt', 'a4');
+                const allPages = [coverHTML, statsHTML, ...memoPages, endHTML];
+                
+                for (let i = 0; i < allPages.length; i++) {
+                    container.innerHTML = allPages[i];
+                    
+                    try {
+                        const canvas = await html2canvas(container.firstChild, {
+                            scale: 2,
+                            useCORS: true,
+                            backgroundColor: null
+                        });
+                        
+                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                        
+                        if (i > 0) doc.addPage();
+                        doc.addImage(imgData, 'JPEG', 0, 0, 595, 842);
+                    } catch (e) {
+                        console.error('Page render error:', e);
+                    }
+                }
+                
+                // 정리 및 다운로드
+                document.body.removeChild(container);
+                doc.save(`${userName}_신앙일지_2025.pdf`);
+            };
+
+            // CSV 생성 함수 (관리자용)
+            const generateMemosCSV = async () => {
+                if (!db) return;
+                
+                try {
+                    const snap = await db.collection('users').get();
+                    let csvContent = 'Name,Subgroup,Day,Date,Title,Memo\n';
+                    
+                    snap.docs.forEach(doc => {
+                        const data = doc.data();
+                        const userName = data.name || 'Unknown';
+                        const subgroup = data.subgroupId || '-';
+                        const memos = data.memos || {};
+                        
+                        Object.entries(memos).forEach(([day, memo]) => {
+                            const dateStr = memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : '';
+                            const title = (memo.title || '').replace(/,/g, ';').replace(/\n/g, ' ');
+                            const text = (memo.text || '').replace(/,/g, ';').replace(/\n/g, ' ');
+                            csvContent += `"${userName}","${subgroup}","${day}","${dateStr}","${title}","${text}"\n`;
+                        });
+                    });
+                    
+                    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `all_memos_${new Date().toISOString().split('T')[0]}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    console.error('CSV 생성 오류:', e);
+                    alert('CSV 생성 중 오류가 발생했습니다.');
+                }
+            };
+
+            const loadCommunityMembers = async (communityId) => {
+                if (!db || !communityId) return [];
+                try {
+                    const snap = await db.collection('users').where('communityId', '==', communityId).get();
+                    const members = snap.docs.map(doc => userDocToState(doc));
+                    setCommunityMembers(members);
+                    return members;
+                } catch (e) { console.error(e); return []; }
+            };
+
+            const calculateSubgroupStats = (members, communityId) => {
+                const todayStr = new Date().toDateString();
+                const comm = MOCK_COMMUNITIES.find(c => c.id === communityId);
+                if (!comm) return {};
+                const stats = {};
+                comm.subgroups.forEach(sub => {
+                    const subMembers = members.filter(m => m.subgroupId === sub);
+                    const totalCount = subMembers.length;
+                    const readTodayCount = subMembers.filter(m => m.lastReadDate === todayStr).length;
+                    const rate = totalCount > 0 ? Math.round((readTodayCount / totalCount) * 100) : 0;
+                    
+                    // 누적 진행률 계산 (평균 Day / 365 * 100)
+                    const avgDay = totalCount > 0 ? subMembers.reduce((sum, m) => sum + (m.currentDay || 1), 0) / totalCount : 0;
+                    const progressRate = Math.round((avgDay / TOTAL_DAYS) * 100);
+                    const totalScore = subMembers.reduce((sum, m) => sum + (m.score || 0), 0);
+                    
+                    stats[sub] = { rate, readCount: readTodayCount, totalCount, progressRate, avgDay: Math.round(avgDay), totalScore };
+                });
+                return stats;
+            };
+
+            const downloadCSV = () => {
+                if (allUsers.length === 0) { alert("데이터가 없습니다."); return; }
+                let csvContent = "data:text/csv;charset=utf-8,\uFEFF이름,부서,소그룹,현재Day,총점수,연속일수,마지막읽은날,플랜ID\n";
+                allUsers.forEach(u => {
+                    csvContent += `${u.name},${u.communityName},${u.subgroupId},${u.currentDay},${u.score},${u.streak},${u.lastReadDate || '없음'},${u.planId || '1year_revised'}\r\n`;
+                });
+                const link = document.createElement("a");
+                link.setAttribute("href", encodeURI(csvContent));
+                link.setAttribute("download", `성경통독_전체기록_${new Date().toISOString().slice(0,10)}.csv`);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            };
+
+            const deleteUser = async (uid, userName) => {
+                if (confirm(`${userName}님의 데이터를 정말 삭제하시겠습니까?`)) {
+                    try {
+                        await db.collection('users').doc(uid).delete();
+                        setAllUsers(prev => prev.filter(u => u.uid !== uid));
+                        alert("삭제되었습니다.");
+                    } catch (e) { console.error(e); alert("삭제 실패"); }
+                }
+            };
+
+            const startEditUser = (user) => setEditingUser({ ...user });
+
+            const saveEditUser = async () => {
+                if (!editingUser) return;
+                try {
+                    await db.collection('users').doc(editingUser.uid).set({
+                        communityId: editingUser.communityId, communityName: editingUser.communityName,
+                        subgroupId: editingUser.subgroupId, planId: editingUser.planId,
+                        currentDay: editingUser.currentDay, score: editingUser.score,
+                        streak: editingUser.streak, lastReadDate: editingUser.lastReadDate || null,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                    setAllUsers(prev => prev.map(u => u.uid === editingUser.uid ? editingUser : u));
+                    setEditingUser(null); alert("수정되었습니다.");
+                } catch (e) { console.error(e); alert("수정 실패"); }
+            };
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setErrorMsg('');
+                if(!loginName.trim() || !loginPw.trim()) { setErrorMsg("이름과 암호를 모두 입력해주세요."); return; }
+
+                if (loginName === 'admin' && loginPw === '08283') {
+                    try {
+                        if (auth && !auth.currentUser) await auth.signInAnonymously();
+                        const snap = await db.collection('users').get();
+                        setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+                        setIsAdmin(true);
+                        return;
+                    } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
+                }
+
+                try {
+                    const email = makePseudoEmail(loginName);
+                    let cred = null;
+                    try {
+                        cred = await auth.signInWithEmailAndPassword(email, loginPw);
+                    } catch (err) {
+                        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials') {
+                            try {
+                                cred = await auth.createUserWithEmailAndPassword(email, loginPw);
+                            } catch (signupErr) {
+                                if (signupErr?.code === 'auth/email-already-in-use') { setErrorMsg("암호가 틀렸습니다."); }
+                                else if (signupErr?.code === 'auth/weak-password') { setErrorMsg("암호는 6자리 이상이어야 합니다."); }
+                                else { console.error(signupErr); setErrorMsg("로그인 실패(잠시 후 다시 시도)"); }
+                                return;
+                            }
+                        } else if (err?.code === 'auth/wrong-password') { setErrorMsg("암호가 틀렸습니다."); return; }
+                        else { console.error(err); setErrorMsg("로그인 실패(잠시 후 다시 시도)"); return; }
+                    }
+
+                    const uid = cred.user.uid;
+                    const ref = db.collection('users').doc(uid);
+                    const doc = await ref.get();
+
+                    if (!doc.exists) {
+                        const newUserBase = {
+                            name: loginName.trim(), password: loginPw, startDate: new Date().toDateString(),
+                            currentDay: 1, streak: 0, score: 0, lastReadDate: null, gender: 'male',
+                            planId: "1year_revised", communityId: null, communityName: null, subgroupId: null,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        };
+                        await ref.set(newUserBase);
+                        setTempUser({ ...newUserBase, uid });
+                        setView('plan_type_select');
+                        return;
+                    }
+
+                    const user = userDocToState(doc);
+                    setCurrentUser(user);
+                    setHasReadToday(user.lastReadDate === new Date().toDateString());
+
+                    if (!user.communityId || !user.subgroupId) {
+                        setTempUser(user);
+                        setView('plan_type_select');
+                    } else { setView('dashboard'); }
+                } catch (err) { console.error(err); setErrorMsg("로그인 처리 중 오류"); }
+            };
+
+            const handlePlanTypeSelect = (typeId) => { setSelectedPlanType(typeId); setView('bible_version_select'); };
+
+            const handleVersionSelect = async (versionId) => {
+                const fullPlanId = `${selectedPlanType}_${versionId}`;
+                if (tempUser) { setTempUser(prev => ({ ...prev, planId: fullPlanId })); setView('community_select'); } 
+                else if (currentUser) {
+                    const updatedUser = { ...currentUser, planId: fullPlanId };
+                    setCurrentUser(updatedUser);
+                    try {
+                        const uid = auth.currentUser?.uid;
+                        if (uid) await db.collection('users').doc(uid).set({ planId: fullPlanId, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                    } catch (e) { console.error(e); }
+                    setView('dashboard');
+                    setShowConfetti(true); setTimeout(() => setShowConfetti(false), 2000);
+                }
+            };
+
+            const handleCommunitySelect = (commId, commName) => { setTempUser(prev => ({ ...prev, communityId: commId, communityName: commName })); setView('subgroup_select'); };
+
+            const handleSubgroupSelect = async (subgroup) => {
+                const finalUser = { ...tempUser, subgroupId: subgroup };
+                setCurrentUser(finalUser); setTempUser(null); setView('dashboard');
+                try {
+                    const uid = auth.currentUser?.uid || finalUser.uid;
+                    if (uid) await db.collection('users').doc(uid).set({ ...finalUser, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                } catch (e) { console.error(e); alert("서버 저장 실패"); }
+            };
+
+            const fetchNotionData = async (planId, currentDay) => {
+                if (!SUPABASE_FUNCTION_URL) return { title: null, text: "서버 연결 설정이 필요합니다." };
+                const [planType, version] = (planId || '1year_revised').split('_');
+                const targetTag = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.tagName || '개역개정 일년일독';
+                const targetDate = new Date(2025, 0, currentDay); 
+                const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(targetDate.getDate()).padStart(2, '0');
+                try {
+                    const response = await fetch(SUPABASE_FUNCTION_URL, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ tag: targetTag, date: `${mm}-${dd}` })
+                    });
+                    if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+                    const data = await response.json();
+                    if (data.error) return { title: null, text: `[오류] ${data.error}` };
+                    return { title: data.title, text: data.text };
+                } catch (e) { console.error(e); return { title: null, text: "서버와 통신 중 오류가 발생했습니다." }; }
+            };
+
+            React.useEffect(() => {
+                if (view !== 'dashboard' || !currentUser) return;
+                const loadData = async () => {
+                    setVerseData(prev => ({ ...prev, loading: true }));
+                    const { currentDay, planId, communityId } = currentUser;
+                    const [planType, version] = (planId || '1year_revised').split('_');
+                    const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
+                    const notionData = await fetchNotionData(planId, currentDay);
+                    
+                    if (notionData?.text && !notionData.text.startsWith('[오류]')) {
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, audioUrl: notionData.audioUrl || null, loading: false });
+                    } else {
+                        const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
+                        const displayText = currentDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일`, subtitle: `${versionName} 읽기`, text: displayText, audioUrl: null, loading: false });
+                    }
+
+                    if (communityId) {
+                        const members = await loadCommunityMembers(communityId);
+                        if (members?.length > 0) setSubgroupStats(calculateSubgroupStats(members, communityId));
+                    }
+                    
+                    // 메모 불러오기
+                    const uid = auth.currentUser?.uid;
+                    if (uid) await loadMemos(uid);
+                };
+                loadData();
+            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId]);
+
+            const handleRead = async () => {
+                const todayStr = new Date().toDateString();
+                const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toDateString();
+
+                let newStreak = currentUser.streak || 0;
+                if (currentUser.lastReadDate === yesterdayStr) newStreak += 1;
+                else if (currentUser.lastReadDate !== todayStr) newStreak = 1;
+                
+                const streakBonus = Math.min(newStreak, 5);
+                const pointsEarned = 10 + streakBonus;
+                const newScore = (currentUser.score || 0) + pointsEarned;
+                
+                const oldLevel = getLevelInfo(currentUser.score || 0);
+                const newLevel = getLevelInfo(newScore);
+                if (newLevel.min > oldLevel.min) { setLevelUpToast(newLevel); setTimeout(() => setLevelUpToast(null), 4000); }
+
+                setBonusToast({ basic: 10, streak: streakBonus, total: pointsEarned });
+                setTimeout(() => setBonusToast(null), 4000);
+
+                const newDay = currentUser.currentDay + 1;
+                const updatedUser = { ...currentUser, currentDay: newDay, streak: newStreak, score: newScore, lastReadDate: todayStr };
+                
+                setCurrentUser(updatedUser);
+                setHasReadToday(true);
+                
+                try {
+                    const uid = auth.currentUser?.uid;
+                    if (uid) {
+                        // 읽기 기록에 오늘 추가
+                        const todayISO = new Date().toISOString().split('T')[0];
+                        const newHistory = readHistory.includes(todayISO) ? readHistory : [...readHistory, todayISO];
+                        setReadHistory(newHistory);
+                        
+                        await db.collection('users').doc(uid).set({
+                            currentDay: newDay, streak: newStreak, score: newScore, lastReadDate: todayStr,
+                            readHistory: newHistory,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        }, { merge: true });
+                    }
+                } catch (e) { console.error(e); alert("서버 저장 실패"); }
+
+                if (currentUser.communityId) {
+                    const members = await loadCommunityMembers(currentUser.communityId);
+                    const updatedMembers = members.map(m => m.uid === updatedUser.uid ? updatedUser : m);
+                    setCommunityMembers(updatedMembers);
+                    setSubgroupStats(calculateSubgroupStats(updatedMembers, currentUser.communityId));
+                }
+                
+                setShowConfetti(true); setTimeout(() => setShowConfetti(false), 3000);
+                
+                // 업적 체크
+                checkAchievements(updatedUser, memos);
+            };
+
+            const handleLogout = () => {
+                if (auth) auth.signOut();
+                setCurrentUser(null); setIsAdmin(false); setTempUser(null); setLoginName(''); setLoginPw('');
+                setErrorMsg(''); setView('login'); setHasReadToday(false); setEditingUser(null); setCommunityMembers([]);
+            };
+
+            const handleChangeVersionStart = () => { setSelectedPlanType(null); setTempUser(null); setView('plan_type_select'); };
+
+            const getSubgroupRanking = () => {
+                if (!currentUser || !subgroupStats || Object.keys(subgroupStats).length === 0) return [];
+                return Object.entries(subgroupStats)
+                    .map(([name, data]) => ({ 
+                        name, 
+                        rate: data.rate || 0, 
+                        readCount: data.readCount || 0, 
+                        totalCount: data.totalCount || 0,
+                        progressRate: data.progressRate || 0,
+                        avgDay: data.avgDay || 0,
+                        totalScore: data.totalScore || 0
+                    }))
+                    .sort((a, b) => b.rate - a.rate);
+            };
+            
+            // 누적 진행률 기준 랭킹
+            const getProgressRanking = () => {
+                if (!currentUser || !subgroupStats || Object.keys(subgroupStats).length === 0) return [];
+                return Object.entries(subgroupStats)
+                    .map(([name, data]) => ({ 
+                        name, 
+                        progressRate: data.progressRate || 0,
+                        avgDay: data.avgDay || 0,
+                        totalScore: data.totalScore || 0,
+                        totalCount: data.totalCount || 0
+                    }))
+                    .filter(g => g.totalCount > 0)
+                    .sort((a, b) => b.progressRate - a.progressRate);
+            };
+
+            // 주간 MVP 계산
+            const getWeeklyMVP = () => {
+                if (!communityMembers || communityMembers.length === 0) return null;
+                const now = new Date();
+                const weekStart = new Date(now);
+                weekStart.setDate(now.getDate() - now.getDay()); // 이번 주 일요일
+                weekStart.setHours(0, 0, 0, 0);
+                
+                // 이번 주에 가장 높은 streak을 가진 사람
+                const mvpByStreak = [...communityMembers].sort((a, b) => (b.streak || 0) - (a.streak || 0))[0];
+                
+                // 이번 주 가장 높은 점수 획득자 (currentDay 증가량으로 대체)
+                const mvpByProgress = [...communityMembers].sort((a, b) => (b.currentDay || 0) - (a.currentDay || 0))[0];
+                
+                return {
+                    streakMVP: mvpByStreak,
+                    progressMVP: mvpByProgress
+                };
+            };
+
+            // 월간 소그룹 대항전 계산
+            const getMonthlyContest = () => {
+                if (!subgroupStats || Object.keys(subgroupStats).length === 0) return [];
+                const now = new Date();
+                const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                const daysPassed = now.getDate();
+                
+                return Object.entries(subgroupStats)
+                    .map(([name, data]) => {
+                        // 월간 참여율 = 오늘까지의 총 읽은 일수 / (인원수 × 경과일수) × 100
+                        // 여기서는 오늘 읽은 비율로 대체 (실제로는 월간 누적 필요)
+                        const monthlyRate = data.rate || 0;
+                        return {
+                            name,
+                            rate: monthlyRate,
+                            readCount: data.readCount || 0,
+                            totalCount: data.totalCount || 0,
+                            avgDay: data.avgDay || 0
+                        };
+                    })
+                    .filter(g => g.totalCount > 0)
+                    .sort((a, b) => b.rate - a.rate);
+            };
+
+            const getAdminStats = () => {
+                const todayStr = new Date().toDateString();
+                const totalUsers = allUsers.length;
+                const readToday = allUsers.filter(u => u.lastReadDate === todayStr).length;
+                const readRate = totalUsers > 0 ? Math.round((readToday / totalUsers) * 100) : 0;
+                const communityStats = {};
+                MOCK_COMMUNITIES.forEach(comm => {
+                    const commUsers = allUsers.filter(u => u.communityId === comm.id);
+                    const commTotal = commUsers.length;
+                    const commRead = commUsers.filter(u => u.lastReadDate === todayStr).length;
+                    communityStats[comm.id] = { name: comm.name, total: commTotal, readToday: commRead, rate: commTotal > 0 ? Math.round((commRead / commTotal) * 100) : 0 };
+                });
+                return { totalUsers, readToday, readRate, communityStats };
+            };
+
+            // ========== VIEWS ==========
+
+            if (isAdmin) {
+                const adminStats = getAdminStats();
+                return (
+                    <div className="min-h-screen bg-slate-100 p-4">
+                        <div className="max-w-5xl mx-auto space-y-6">
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h1 className="text-2xl font-bold text-slate-800">🛠️ 관리자 모드</h1>
+                                    <button onClick={handleLogout} className="text-sm bg-slate-200 px-3 py-2 rounded hover:bg-slate-300">나가기</button>
+                                </div>
+                                <button onClick={downloadCSV} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold">
+                                    <Icon name="download" size={18}/> CSV 다운로드
+                                </button>
+                            </div>
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    <Icon name="chart" size={20} className="text-blue-500"/> 📊 오늘 통계 ({new Date().toLocaleDateString('ko-KR')})
+                                </h2>
+                                <div className="grid grid-cols-3 gap-4 mb-6">
+                                    <div className="bg-blue-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-blue-600">{adminStats.totalUsers}</div>
+                                        <div className="text-xs text-slate-500">전체 회원</div>
+                                    </div>
+                                    <div className="bg-green-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-green-600">{adminStats.readToday}</div>
+                                        <div className="text-xs text-slate-500">오늘 읽은 사람</div>
+                                    </div>
+                                    <div className="bg-orange-50 p-4 rounded-xl text-center">
+                                        <div className="text-3xl font-bold text-orange-600">{adminStats.readRate}%</div>
+                                        <div className="text-xs text-slate-500">오늘 참여율</div>
+                                    </div>
+                                </div>
+                                <h3 className="font-bold text-slate-700 mb-2">📌 공동체별 오늘 현황</h3>
+                                <div className="space-y-2">
+                                    {Object.entries(adminStats.communityStats).map(([id, stat]) => (
+                                        <div key={id} className="flex items-center gap-3">
+                                            <div className="w-20 text-sm font-bold text-slate-600">{stat.name}</div>
+                                            <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${stat.rate}%` }}></div>
+                                            </div>
+                                            <div className="text-sm text-slate-500 w-28 text-right">{stat.readToday}/{stat.total}명 ({stat.rate}%)</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        😴 미참여자 관리
+                                    </h2>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => setAdminViewMode('today')} 
+                                            className={`text-xs px-3 py-1 rounded-full font-bold ${adminViewMode === 'today' ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-500'}`}
+                                        >
+                                            오늘 미참여
+                                        </button>
+                                        <button 
+                                            onClick={() => setAdminViewMode('inactive')} 
+                                            className={`text-xs px-3 py-1 rounded-full font-bold ${adminViewMode === 'inactive' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-500'}`}
+                                        >
+                                            장기 미참여
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* 부서 필터 */}
+                                <div className="flex gap-2 mb-4 flex-wrap">
+                                    <button 
+                                        onClick={() => setAdminFilter('all')} 
+                                        className={`text-xs px-3 py-1.5 rounded-lg font-bold border ${adminFilter === 'all' ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}
+                                    >
+                                        전체
+                                    </button>
+                                    {MOCK_COMMUNITIES.map(c => (
+                                        <button 
+                                            key={c.id}
+                                            onClick={() => setAdminFilter(c.id)} 
+                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold border ${adminFilter === c.id ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'}`}
+                                        >
+                                            {c.name}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="max-h-[400px] overflow-y-auto">
+                                    {(() => {
+                                        const todayStr = new Date().toDateString();
+                                        const today = new Date();
+                                        
+                                        // 필터링
+                                        let filteredUsers = adminFilter === 'all' 
+                                            ? allUsers 
+                                            : allUsers.filter(u => u.communityId === adminFilter);
+                                        
+                                        if (adminViewMode === 'today') {
+                                            // 오늘 안 읽은 사람
+                                            const notReadUsers = filteredUsers.filter(u => u.lastReadDate !== todayStr);
+                                            const grouped = {};
+                                            notReadUsers.forEach(u => {
+                                                const key = u.subgroupId || '미배정';
+                                                if (!grouped[key]) grouped[key] = [];
+                                                grouped[key].push(u);
+                                            });
+                                            
+                                            const totalNotRead = notReadUsers.length;
+                                            
+                                            return (
+                                                <div>
+                                                    <div className="mb-3 text-sm text-slate-500">
+                                                        총 <strong className="text-red-600">{totalNotRead}명</strong>이 오늘 아직 안 읽었습니다.
+                                                    </div>
+                                                    {Object.entries(grouped).length > 0 ? (
+                                                        Object.entries(grouped).map(([group, users]) => (
+                                                            <div key={group} className="mb-4 bg-slate-50 p-3 rounded-lg">
+                                                                <div className="text-sm font-bold text-slate-700 mb-2 flex justify-between">
+                                                                    <span>📁 {group}</span>
+                                                                    <span className="text-red-500">{users.length}명</span>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1">
+                                                                    {users.map(u => {
+                                                                        const lastRead = u.lastReadDate ? new Date(u.lastReadDate) : null;
+                                                                        const daysSince = lastRead ? Math.floor((today - lastRead) / (1000 * 60 * 60 * 24)) : 999;
+                                                                        return (
+                                                                            <span key={u.uid} className={`text-xs px-2 py-1 rounded-full border ${daysSince >= 7 ? 'bg-red-100 text-red-700 border-red-200' : daysSince >= 3 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                                                                                {u.name} {daysSince > 0 && <span className="opacity-70">({daysSince}일)</span>}
+                                                                            </span>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="text-center py-8 text-green-600">
+                                                            <div className="text-4xl mb-2">🎉</div>
+                                                            <p className="font-bold">모두 읽었습니다!</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        } else {
+                                            // 장기 미참여자 (안 읽은 날 순 정렬)
+                                            const usersWithDays = filteredUsers.map(u => {
+                                                const lastRead = u.lastReadDate ? new Date(u.lastReadDate) : null;
+                                                const daysSince = lastRead ? Math.floor((today - lastRead) / (1000 * 60 * 60 * 24)) : 999;
+                                                return { ...u, daysSince };
+                                            }).filter(u => u.daysSince >= 1) // 최소 1일 이상 안 읽은 사람
+                                              .sort((a, b) => b.daysSince - a.daysSince); // 오래된 순
+                                            
+                                            return (
+                                                <div>
+                                                    <div className="mb-3 text-sm text-slate-500">
+                                                        안 읽은 날 기준 정렬 (오래된 순)
+                                                    </div>
+                                                    {usersWithDays.length > 0 ? (
+                                                        <table className="w-full text-sm">
+                                                            <thead className="bg-slate-100">
+                                                                <tr>
+                                                                    <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">이름</th>
+                                                                    <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">소그룹</th>
+                                                                    <th className="px-3 py-2 text-center text-xs font-bold text-slate-600">안 읽은 날</th>
+                                                                    <th className="px-3 py-2 text-center text-xs font-bold text-slate-600">진행률</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {usersWithDays.slice(0, 50).map((u, idx) => (
+                                                                    <tr key={u.uid} className={`border-b ${u.daysSince >= 14 ? 'bg-red-50' : u.daysSince >= 7 ? 'bg-orange-50' : ''}`}>
+                                                                        <td className="px-3 py-2 font-bold text-slate-800">{u.name}</td>
+                                                                        <td className="px-3 py-2 text-slate-500 text-xs">{u.subgroupId || '-'}</td>
+                                                                        <td className="px-3 py-2 text-center">
+                                                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${u.daysSince >= 14 ? 'bg-red-500 text-white' : u.daysSince >= 7 ? 'bg-orange-500 text-white' : 'bg-yellow-400 text-yellow-900'}`}>
+                                                                                {u.daysSince === 999 ? '기록없음' : `${u.daysSince}일`}
+                                                                            </span>
+                                                                        </td>
+                                                                        <td className="px-3 py-2 text-center text-xs text-slate-500">DAY {u.currentDay || 1}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    ) : (
+                                                        <div className="text-center py-8 text-green-600">
+                                                            <div className="text-4xl mb-2">🎉</div>
+                                                            <p className="font-bold">장기 미참여자가 없습니다!</p>
+                                                        </div>
+                                                    )}
+                                                    {usersWithDays.length > 50 && (
+                                                        <div className="mt-2 text-center text-xs text-slate-400">
+                                                            상위 50명만 표시 (전체 {usersWithDays.length}명)
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                    })()}
+                                </div>
+                                
+                                {/* 범례 */}
+                                <div className="mt-4 pt-3 border-t border-slate-100 flex gap-4 text-xs text-slate-500">
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-400 rounded"></span> 1-2일</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-500 rounded"></span> 3-6일</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-3 bg-red-500 rounded"></span> 7일+</span>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    👑 완주자 명예의 전당 ({allUsers.filter(u => u.currentDay >= 365).length}명)
+                                </h2>
+                                {(() => {
+                                    const finishers = allUsers.filter(u => u.currentDay >= 365).sort((a, b) => (b.score || 0) - (a.score || 0));
+                                    return finishers.length > 0 ? (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            {finishers.map((u, idx) => (
+                                                <div key={u.uid} className={`p-4 rounded-xl text-center border-2 ${idx === 0 ? 'bg-yellow-50 border-yellow-300' : idx === 1 ? 'bg-slate-50 border-slate-300' : idx === 2 ? 'bg-orange-50 border-orange-300' : 'bg-white border-slate-100'}`}>
+                                                    <div className="text-2xl mb-1">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅'}</div>
+                                                    <div className="font-bold text-slate-800">{u.name}</div>
+                                                    <div className="text-xs text-slate-500">{u.score || 0}점</div>
+                                                    <div className="text-[10px] text-slate-400">{u.communityName} {u.subgroupId}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 text-slate-400">
+                                            <div className="text-4xl mb-2">🏰</div>
+                                            <p>아직 완주자가 없습니다.</p>
+                                            <p className="text-xs mt-1">365일을 완주하면 명예의 전당에 등재됩니다!</p>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {/* 묵상 관리 */}
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        📝 묵상 관리
+                                    </h2>
+                                    <button 
+                                        onClick={generateMemosCSV}
+                                        className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold text-sm"
+                                    >
+                                        <Icon name="download" size={16}/> 전체 CSV 다운로드
+                                    </button>
+                                </div>
+                                
+                                {/* 묵상 통계 */}
+                                {(() => {
+                                    const usersWithMemos = allUsers.filter(u => u.memos && Object.keys(u.memos || {}).length > 0);
+                                    const totalMemos = allUsers.reduce((sum, u) => sum + Object.keys(u.memos || {}).length, 0);
+                                    
+                                    return (
+                                        <div>
+                                            <div className="grid grid-cols-3 gap-4 mb-4">
+                                                <div className="bg-purple-50 p-4 rounded-xl text-center">
+                                                    <div className="text-2xl font-bold text-purple-600">{totalMemos}</div>
+                                                    <div className="text-xs text-slate-500">총 묵상 수</div>
+                                                </div>
+                                                <div className="bg-blue-50 p-4 rounded-xl text-center">
+                                                    <div className="text-2xl font-bold text-blue-600">{usersWithMemos.length}</div>
+                                                    <div className="text-xs text-slate-500">묵상 작성자</div>
+                                                </div>
+                                                <div className="bg-green-50 p-4 rounded-xl text-center">
+                                                    <div className="text-2xl font-bold text-green-600">
+                                                        {allUsers.length > 0 ? Math.round((usersWithMemos.length / allUsers.length) * 100) : 0}%
+                                                    </div>
+                                                    <div className="text-xs text-slate-500">참여율</div>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* 묵상 많이 쓴 순 */}
+                                            <h3 className="font-bold text-slate-700 mb-2">✍️ 묵상왕 TOP 10</h3>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                {allUsers
+                                                    .map(u => ({ ...u, memoCount: Object.keys(u.memos || {}).length }))
+                                                    .filter(u => u.memoCount > 0)
+                                                    .sort((a, b) => b.memoCount - a.memoCount)
+                                                    .slice(0, 10)
+                                                    .map((u, idx) => (
+                                                        <div key={u.uid} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-yellow-400 text-white' : idx === 1 ? 'bg-slate-400 text-white' : idx === 2 ? 'bg-orange-400 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                                                    {idx + 1}
+                                                                </span>
+                                                                <div>
+                                                                    <span className="font-bold text-slate-800">{u.name}</span>
+                                                                    <span className="text-xs text-slate-400 ml-2">{u.subgroupId}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-bold text-purple-600">{u.memoCount}개</span>
+                                                                <button 
+                                                                    onClick={() => generateMemosPDF(u.name, u.memos || {}, { currentDay: u.currentDay, score: u.score, streak: u.streak })}
+                                                                    className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-200"
+                                                                >
+                                                                    PDF
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            {editingUser && (
+                                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                                        <h3 className="font-bold text-lg border-b pb-2">회원 정보 수정 ({editingUser.name})</h3>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">소속 공동체</label>
+                                            <select value={editingUser.communityId} onChange={e => {
+                                                const comm = MOCK_COMMUNITIES.find(c => c.id === e.target.value);
+                                                setEditingUser({ ...editingUser, communityId: comm.id, communityName: comm.name, subgroupId: comm.subgroups[0] });
+                                            }} className="w-full border rounded p-2 text-sm">
+                                                {MOCK_COMMUNITIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-500 mb-1">소그룹</label>
+                                            <select value={editingUser.subgroupId} onChange={e => setEditingUser({...editingUser, subgroupId: e.target.value})} className="w-full border rounded p-2 text-sm">
+                                                {MOCK_COMMUNITIES.find(c => c.id === editingUser.communityId)?.subgroups.map(s => <option key={s} value={s}>{s}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2 pt-4">
+                                            <button onClick={saveEditUser} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">저장</button>
+                                            <button onClick={() => setEditingUser(null)} className="flex-1 bg-slate-200 text-slate-600 py-2 rounded hover:bg-slate-300">취소</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">👥 전체 회원 목록</h2>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left text-slate-600">
+                                        <thead className="text-xs text-slate-700 uppercase bg-slate-50">
+                                            <tr>
+                                                <th className="px-3 py-3">이름</th>
+                                                <th className="px-3 py-3">부서/소그룹</th>
+                                                <th className="px-3 py-3 text-center">Day</th>
+                                                <th className="px-3 py-3 text-center">점수</th>
+                                                <th className="px-3 py-3 text-center">마지막읽은날</th>
+                                                <th className="px-3 py-3 text-center">관리</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {allUsers.map((u, idx) => {
+                                                const readToday = u.lastReadDate === new Date().toDateString();
+                                                return (
+                                                    <tr key={idx} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
+                                                        <td className="px-3 py-3 font-medium text-slate-900">{u.name}{readToday && <span className="ml-1 text-green-500">✓</span>}</td>
+                                                        <td className="px-3 py-3"><span className="font-bold">{u.communityName}</span><span className="text-xs text-slate-400 block">{u.subgroupId}</span></td>
+                                                        <td className="px-3 py-3 text-center font-bold text-blue-600">{u.currentDay}</td>
+                                                        <td className="px-3 py-3 text-center">{u.score}</td>
+                                                        <td className="px-3 py-3 text-center text-xs text-slate-400">{u.lastReadDate ? new Date(u.lastReadDate).toLocaleDateString('ko-KR') : '-'}</td>
+                                                        <td className="px-3 py-3 text-center">
+                                                            <div className="flex justify-center gap-1">
+                                                                <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded"><Icon name="edit" size={14} /></button>
+                                                                <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded"><Icon name="trash" size={14} /></button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'login') {
+                return (
+                    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative">
+                        <div className="absolute top-4 right-4">
+                            <button onClick={() => { setLoginName('admin'); setLoginPw(''); }} className="text-xs text-slate-300 hover:text-slate-500">관리자</button>
+                        </div>
+                        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm border border-slate-100">
+                            <div className="text-center mb-8">
+                                <div className="text-4xl mb-2">🏃‍♂️💨</div>
+                                <h1 className="text-2xl font-extrabold text-slate-800">천로역정 성경 레이스</h1>
+                                <p className="text-slate-400 text-sm mt-2">유쾌한 신앙생활의 시작!</p>
+                            </div>
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">이름</label>
+                                    <input type="text" value={loginName} onChange={e => setLoginName(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="홍길동" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">암호</label>
+                                    <input type="password" value={loginPw} onChange={e => setLoginPw(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="6자리 이상 입력하세요" />
+                                </div>
+                                <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+                                    <p className="text-xs text-red-600 font-bold break-keep text-center">⚠️ 처음 오셨나요? <br/>반드시 <span className="underline">실명</span>으로 가입해주세요.<br/>(예: 홍길동)</p>
+                                </div>
+                                {errorMsg && <p className="text-red-500 text-xs text-center">{errorMsg}</p>}
+                                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-95 mt-4">입장하기</button>
+                                <p className="text-xs text-slate-400 text-center mt-3">암호를 잊어버린 경우 사무실에 문의해주세요.</p>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'plan_type_select') {
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="w-full max-w-md mb-6">
+                            {currentUser && !tempUser && (
+                                <button onClick={() => setView('dashboard')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4"><Icon name="back" size={16} className="mr-1"/> 대시보드로 돌아가기</button>
+                            )}
+                            <h2 className="text-xl font-bold text-slate-800 text-center">{currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${tempUser?.name || ''}님!`}</h2>
+                            <p className="text-slate-500 text-sm text-center mt-1">어떤 계획으로 읽으시겠습니까?</p>
+                        </div>
+                        <div className="w-full max-w-md space-y-3">
+                            {PLAN_TYPES.map(type => (
+                                <button key={type.id} onClick={() => handlePlanTypeSelect(type.id)} className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
+                                    <div className="font-bold text-slate-800 text-lg mb-1">{type.title}</div>
+                                    <div className="text-xs text-slate-400">{type.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'bible_version_select') {
+                const versions = BIBLE_VERSIONS[selectedPlanType];
+                const planTitle = PLAN_TYPES.find(t => t.id === selectedPlanType)?.title;
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="w-full max-w-md">
+                            <button onClick={() => setView('plan_type_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4"><Icon name="back" size={16} className="mr-1"/> 뒤로가기</button>
+                            <div className="text-center mb-6">
+                                <h2 className="text-xl font-bold text-slate-800">{planTitle} 버전 선택</h2>
+                                <div className="bg-yellow-50 text-yellow-800 text-xs font-bold p-2 rounded-lg mt-2 break-keep">📢 오늘 설정하시면 기본적으로 1년간 이 버전으로 읽게 됩니다.</div>
+                            </div>
+                        </div>
+                        <div className="w-full max-w-md space-y-3">
+                            {versions.map(ver => (
+                                <button key={ver.id} onClick={() => handleVersionSelect(ver.id)} className="w-full bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-500 hover:bg-blue-50 transition-all text-left">
+                                    <div className="font-bold text-slate-800 text-lg mb-1">{ver.name}</div>
+                                    <div className="text-xs text-slate-400">{ver.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'community_select') {
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-800">소속 공동체 선택</h2>
+                            <p className="text-slate-500 text-sm">어느 부서에 소속되어 계신가요?</p>
+                        </div>
+                        <div className="w-full max-w-md space-y-3">
+                            {MOCK_COMMUNITIES.map(comm => (
+                                <button key={comm.id} onClick={() => handleCommunitySelect(comm.id, comm.name)} className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center gap-4 text-left">
+                                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl`}>{comm.icon}</div>
+                                    <div className="flex-1"><div className="font-bold text-slate-800 text-lg">{comm.name}</div></div>
+                                    <Icon name="arrowRight" className="text-slate-300"/>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'subgroup_select') {
+                const selectedComm = MOCK_COMMUNITIES.find(c => c.id === tempUser?.communityId);
+                return (
+                    <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
+                        <div className="w-full max-w-md mb-4">
+                            <button onClick={() => setView('community_select')} className="text-sm text-slate-400 flex items-center hover:text-slate-600"><Icon name="back" size={16} className="mr-1"/> 뒤로가기</button>
+                        </div>
+                        <div className="text-center mb-6">
+                            <h2 className="text-xl font-bold text-slate-800">소그룹 선택</h2>
+                            <p className="text-slate-500 text-sm">{tempUser?.communityName} 내의 소그룹을 선택해주세요.</p>
+                        </div>
+                        <div className="w-full max-w-md grid grid-cols-2 gap-3 h-[50vh] overflow-y-auto content-start">
+                            {selectedComm?.subgroups.map((sub, idx) => (
+                                <button key={idx} onClick={() => handleSubgroupSelect(sub)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-center flex flex-col items-center justify-center aspect-video">
+                                    <span className="text-2xl mb-2 opacity-80">🏕️</span>
+                                    <span className="font-bold text-slate-700 text-sm">{sub}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (view === 'dashboard' && currentUser) {
+                const { currentDay, score, subgroupId, communityName, planId, streak } = currentUser;
+                const [planType, version] = (planId || '1year_revised').split('_');
+                const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
+                const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '';
+                const myLevel = getLevelInfo(score || 0);
+                const closestChaserDistance = communityMembers.filter(r => r.uid !== currentUser.uid && r.currentDay < currentDay).reduce((minDist, r) => Math.min(minDist, currentDay - r.currentDay), Infinity);
+                const isPanic = closestChaserDistance <= PANIC_DISTANCE && closestChaserDistance !== Infinity;
+                const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
+                const racers = communityMembers.map(m => ({ ...m, day: m.currentDay, isMe: m.uid === currentUser.uid, isPanic: m.uid === currentUser.uid && isPanic })).sort((a, b) => a.day - b.day);
+                const subgroupRanking = getSubgroupRanking();
+                const progressRanking = getProgressRanking();
+                const topProgressGroups = progressRanking.slice(0, 3);
+                const topGroups = subgroupRanking.slice(0, 3);
+                const myGroupStats = subgroupRanking.find(r => r.name === subgroupId) || { name: subgroupId, rate: 0, readCount: 0, totalCount: 0, progressRate: 0, avgDay: 0 };
+                const myProgressStats = progressRanking.find(r => r.name === subgroupId) || { name: subgroupId, progressRate: 0, avgDay: 0, totalCount: 0 };
+                const isMyGroupInTop3 = topGroups.some(g => g.name === subgroupId);
+                const isMyGroupInProgressTop3 = topProgressGroups.some(g => g.name === subgroupId);
+
+                return (
+                    <div className="min-h-screen bg-slate-50 pb-20 overflow-hidden relative font-sans">
+                        {showConfetti && <div className="fixed inset-0 z-50 flex justify-center pt-40 pointer-events-none"><div className="text-6xl animate-bounce">🎊</div></div>}
+                        
+                        {levelUpToast && (
+                            <div className="fixed top-20 left-4 right-4 z-50 animate-bounce">
+                                <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-3">
+                                    <div className="text-3xl">{levelUpToast.emoji}</div>
+                                    <div><p className="text-xs text-yellow-400 font-bold">LEVEL UP!</p><p className="font-bold">{levelUpToast.title}(으)로 승급!</p></div>
+                                </div>
+                            </div>
+                        )}
+
+                        {bonusToast && (
+                            <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50">
+                                <div className="bg-blue-600 text-white px-6 py-3 rounded-full shadow-xl flex items-center gap-2 font-bold whitespace-nowrap">
+                                    <span>기본 10점</span><span>+</span><span>연속보너스 {bonusToast.streak}점</span><span>=</span><span className="text-yellow-300">총 {bonusToast.total}점!</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {showScoreInfo && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowScoreInfo(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold">💡 점수 & 계급 안내</h3>
+                                        <button onClick={() => setShowScoreInfo(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    <div className="space-y-4 overflow-y-auto max-h-[60vh]">
+                                        <div><h4 className="font-bold text-blue-600 mb-1">나의 등급</h4>
+                                            <div className="flex items-center gap-3 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                                <div className="text-3xl">{myLevel.emoji}</div>
+                                                <div><div className="font-bold text-lg">{myLevel.title}</div><div className="text-xs text-slate-500">현재 {score}점</div></div>
+                                            </div>
+                                        </div>
+                                        <div><h4 className="font-bold text-slate-700 mb-1">점수 모으는 법</h4>
+                                            <ul className="text-sm text-slate-600 space-y-1 list-disc pl-4">
+                                                <li>매일 읽기 완료: <strong>+10점</strong></li>
+                                                <li>연속 읽기 보너스: <strong>매일 +1점씩 증가 (최대 +5점)</strong></li>
+                                            </ul>
+                                        </div>
+                                        <div><h4 className="font-bold text-slate-700 mb-1">천로역정 계급표</h4>
+                                            <div className="grid gap-2 text-sm">
+                                                {LEVEL_SYSTEM.map((lvl, idx) => (
+                                                    <div key={idx} className={`flex items-center gap-2 p-2 rounded ${lvl.title === myLevel.title ? 'bg-yellow-50 border border-yellow-200' : ''}`}>
+                                                        <span className="text-xl">{lvl.emoji}</span><span className="flex-1">{lvl.title}</span><span className="text-slate-400 text-xs">{lvl.min}pt~</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowScoreInfo(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {showReadingGuide && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowReadingGuide(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold text-slate-800">📖 성경통독 114 가이드</h3>
+                                        <button onClick={() => setShowReadingGuide(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    <div className="space-y-3 overflow-y-auto max-h-[60vh] text-xs">
+                                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                            <h4 className="font-bold text-blue-700 mb-2">💡 성경통독 114란?</h4>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong>1년 1독 4회 효과!</strong> 성경 전체를 1년에 1번 통독하지만, 3개월(한 분기)마다 성경 전체 시대를 볼 수 있도록 되어 있으며, 중복된 시대를 나누어 읽어 지루하지 않게 읽을 수 있습니다.
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="bg-green-50 p-3 rounded-lg border border-green-100">
+                                            <h4 className="font-bold text-green-700 mb-2">📅 1분기 (1-3월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-green-800">구약:</strong> 창세기 1-11장, 출애굽기, 여호수아, 사사기, 룻기, 욥기, 다니엘, 에스라 1-6장, 학개, 스가랴, 에스라 7-10장, 느헤미야, 에스더
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-green-800">신약:</strong> 마태복음, 사도행전 1-5장, 로마서, 갈라디아서, 히브리서, 요한계시록 1-3장
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100">
+                                            <h4 className="font-bold text-yellow-700 mb-2">📅 2분기 (4-6월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-yellow-800">구약:</strong> 창세기 12-26장, 레위기, 사무엘상, 사무엘하, 시편 1-72편, 이사야, 요엘, 오바댜, 나훔, 하박국
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-yellow-800">신약:</strong> 마가복음, 사도행전 6-12장, 고린도전서, 고린도후서, 데살로니가전서, 데살로니가후서, 야고보서, 유다서, 요한계시록 4-7장
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="bg-orange-50 p-3 rounded-lg border border-orange-100">
+                                            <h4 className="font-bold text-orange-700 mb-2">📅 3분기 (7-9월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-orange-800">구약:</strong> 창세기 27-36장, 민수기, 열왕기상 1-11장, 잠언, 전도서, 아가서, 열왕기상 12-22장, 열왕기하 1-14장, 요나, 열왕기하 15장, 아모스, 호세아, 열왕기하 16-23장, 스바냐, 열왕기하 24-25장, 에스겔
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-orange-800">신약:</strong> 누가복음, 사도행전 13-20장, 에베소서, 빌립보서, 골로새서, 빌레몬서, 베드로전서, 베드로후서, 요한계시록 8-14장
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="bg-red-50 p-3 rounded-lg border border-red-100">
+                                            <h4 className="font-bold text-red-700 mb-2">📅 4분기 (10-12월)</h4>
+                                            <p className="text-slate-600 leading-relaxed mb-1">
+                                                <strong className="text-red-800">구약:</strong> 창세기 37-50장, 신명기, 시편 90편, 역대상, 시편 73-150편, 역대하 1-28장, 미가, 역대하 29-36장, 예레미야, 예레미야애가, 말라기
+                                            </p>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                <strong className="text-red-800">신약:</strong> 요한복음, 사도행전 21-28장, 디모데전서, 디모데후서, 디도서, 요한일서, 요한이서, 요한삼서, 요한계시록 15-22장
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="bg-purple-50 p-3 rounded-lg border border-purple-100">
+                                            <h4 className="font-bold text-purple-700 mb-1">💪 포기하지 마세요!</h4>
+                                            <p className="text-slate-600 leading-relaxed">
+                                                밀렸다고 포기하지 마세요! 주일에 몰아서 읽어도 괜찮습니다. <strong>완주가 목표</strong>입니다. 함께 달려요! 🏃‍♂️
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowReadingGuide(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {showMemoList && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowMemoList(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold text-slate-800">📝 나의 묵상 기록</h3>
+                                        <button onClick={() => setShowMemoList(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    
+                                    {/* 통계 요약 */}
+                                    <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 mb-4">
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-center flex-1">
+                                                <p className="text-2xl font-bold text-indigo-600">{Object.keys(memos).length}</p>
+                                                <p className="text-[10px] text-slate-500">작성한 묵상</p>
+                                            </div>
+                                            <div className="text-center flex-1 border-l border-indigo-200">
+                                                <p className="text-2xl font-bold text-indigo-600">{currentDay || 1}</p>
+                                                <p className="text-[10px] text-slate-500">현재 Day</p>
+                                            </div>
+                                            <div className="text-center flex-1 border-l border-indigo-200">
+                                                <p className="text-2xl font-bold text-indigo-600">{score || 0}</p>
+                                                <p className="text-[10px] text-slate-500">총 점수</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-3 overflow-y-auto max-h-[45vh]">
+                                        {Object.keys(memos).length > 0 ? (
+                                            Object.entries(memos)
+                                                .sort(([a], [b]) => Number(b) - Number(a))
+                                                .map(([day, memo]) => (
+                                                    <div key={day} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <span className="text-xs font-bold text-blue-600">DAY {day}</span>
+                                                            <span className="text-[10px] text-slate-400">{new Date(memo.date).toLocaleDateString('ko-KR')}</span>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 mb-1">{memo.title}</p>
+                                                        <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{memo.text}</p>
+                                                    </div>
+                                                ))
+                                        ) : (
+                                            <div className="text-center py-8 text-slate-400">
+                                                <div className="text-4xl mb-2">📖</div>
+                                                <p className="text-sm">아직 작성한 묵상이 없습니다.</p>
+                                                <p className="text-xs mt-1">말씀을 읽고 느낀 점을 기록해보세요!</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* PDF 다운로드 버튼 */}
+                                    {Object.keys(memos).length > 0 && (
+                                        <button 
+                                            onClick={() => generateMemosPDF(currentUser.name, memos, { currentDay, score, streak })}
+                                            className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors"
+                                        >
+                                            📥 PDF로 다운로드
+                                        </button>
+                                    )}
+                                    <button onClick={() => setShowMemoList(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-2 text-slate-600">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {newAchievement && (
+                            <div className="fixed top-20 left-4 right-4 z-50 animate-bounce">
+                                <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-4 rounded-2xl shadow-2xl flex items-center gap-3">
+                                    <div className="text-4xl">{newAchievement.emoji}</div>
+                                    <div>
+                                        <p className="text-xs font-bold opacity-90">🎉 새 업적 달성!</p>
+                                        <p className="font-bold text-lg">{newAchievement.title}</p>
+                                        <p className="text-xs opacity-80">{newAchievement.desc}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {showAchievements && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowAchievements(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold text-slate-800">🏅 나의 업적</h3>
+                                        <button onClick={() => setShowAchievements(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[60vh]">
+                                        {ACHIEVEMENTS.map((achievement) => {
+                                            const earned = currentUser?.achievements?.includes(achievement.id);
+                                            return (
+                                                <div key={achievement.id} className={`p-3 rounded-xl text-center border ${earned ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
+                                                    <div className={`text-2xl mb-1 ${earned ? '' : 'grayscale'}`}>{achievement.emoji}</div>
+                                                    <p className="text-[10px] font-bold text-slate-700 leading-tight">{achievement.title}</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="mt-4 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                                        <p className="text-xs text-blue-700 text-center">
+                                            획득한 업적: <strong>{currentUser?.achievements?.length || 0}</strong> / {ACHIEVEMENTS.length}
+                                        </p>
+                                    </div>
+                                    <button onClick={() => setShowAchievements(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {showCalendar && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowCalendar(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold text-slate-800">📅 읽기 캘린더</h3>
+                                        <button onClick={() => setShowCalendar(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    {(() => {
+                                        const today = new Date();
+                                        const year = calendarDate.getFullYear();
+                                        const month = calendarDate.getMonth();
+                                        const firstDay = new Date(year, month, 1).getDay();
+                                        const daysInMonth = new Date(year, month + 1, 0).getDate();
+                                        const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+                                        const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+                                        
+                                        const days = [];
+                                        for (let i = 0; i < firstDay; i++) days.push(null);
+                                        for (let i = 1; i <= daysInMonth; i++) days.push(i);
+                                        
+                                        const readDaysThisMonth = readHistory.filter(d => {
+                                            const date = new Date(d);
+                                            return date.getFullYear() === year && date.getMonth() === month;
+                                        }).map(d => new Date(d).getDate());
+
+                                        const prevMonth = () => setCalendarDate(new Date(year, month - 1, 1));
+                                        const nextMonth = () => setCalendarDate(new Date(year, month + 1, 1));
+                                        const goToday = () => setCalendarDate(new Date());
+                                        
+                                        const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+                                        
+                                        // 연간 통계
+                                        const yearReadDays = readHistory.filter(d => new Date(d).getFullYear() === year).length;
+                                        
+                                        return (
+                                            <div>
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">◀</button>
+                                                    <div className="text-center">
+                                                        <span className="font-bold text-lg text-slate-700">{year}년 {monthNames[month]}</span>
+                                                        {!isCurrentMonth && (
+                                                            <button onClick={goToday} className="ml-2 text-xs text-blue-500 underline">오늘로</button>
+                                                        )}
+                                                    </div>
+                                                    <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold">▶</button>
+                                                </div>
+                                                <div className="grid grid-cols-7 gap-1 mb-2">
+                                                    {dayNames.map(d => <div key={d} className={`text-center text-[10px] font-bold py-1 ${d === '일' ? 'text-red-400' : d === '토' ? 'text-blue-400' : 'text-slate-400'}`}>{d}</div>)}
+                                                </div>
+                                                <div className="grid grid-cols-7 gap-1">
+                                                    {days.map((day, idx) => {
+                                                        if (!day) return <div key={idx}></div>;
+                                                        const isToday = isCurrentMonth && day === today.getDate();
+                                                        const didRead = readDaysThisMonth.includes(day);
+                                                        const dayOfWeek = new Date(year, month, day).getDay();
+                                                        return (
+                                                            <div key={idx} className={`aspect-square flex items-center justify-center rounded-lg text-xs font-bold relative
+                                                                ${isToday ? 'ring-2 ring-blue-400' : ''}
+                                                                ${didRead ? 'bg-green-100 text-green-700' : dayOfWeek === 0 ? 'bg-red-50 text-red-300' : dayOfWeek === 6 ? 'bg-blue-50 text-blue-300' : 'bg-slate-50 text-slate-400'}`}>
+                                                                {day}
+                                                                {didRead && <span className="absolute -top-1 -right-1 text-[8px]">✅</span>}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                <div className="mt-4 flex justify-center gap-4 text-xs">
+                                                    <div className="flex items-center gap-1"><div className="w-4 h-4 bg-green-100 rounded"></div><span className="text-slate-500">읽은 날</span></div>
+                                                    <div className="flex items-center gap-1"><div className="w-4 h-4 bg-slate-50 rounded border"></div><span className="text-slate-500">안 읽은 날</span></div>
+                                                </div>
+                                                <div className="mt-3 grid grid-cols-2 gap-2">
+                                                    <div className="bg-green-50 p-3 rounded-xl border border-green-100 text-center">
+                                                        <p className="text-xs text-slate-500">이번 달</p>
+                                                        <p className="text-lg font-bold text-green-700">{readDaysThisMonth.length}일</p>
+                                                    </div>
+                                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-center">
+                                                        <p className="text-xs text-slate-500">{year}년 총</p>
+                                                        <p className="text-lg font-bold text-blue-700">{yearReadDays}일</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                    <button onClick={() => setShowCalendar(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-900 text-slate-300 text-[10px] py-1 px-4 flex justify-between items-center">
+                            <span>현재 버전: <strong>{planTypeName} - {versionName}</strong></span>
+                            <button onClick={handleChangeVersionStart} className="flex items-center gap-1 hover:text-white"><Icon name="refresh" size={10} /> 읽는 버전 바꾸기</button>
+                        </div>
+
+                        <header className="bg-white shadow-sm border-b border-slate-100 pb-2 sticky top-0 z-30">
+                            <div className="px-4 py-2 flex justify-between items-center border-b border-slate-50">
+                                <button onClick={handleLogout} className="text-xs font-bold text-slate-400 flex items-center hover:text-slate-600"><Icon name="back" size={12} className="mr-1"/> 로그아웃</button>
+                                <div className="flex items-center gap-2">
+                                    <div className={`text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1 ${streak > 0 ? 'bg-orange-50 text-orange-600' : 'bg-slate-100 text-slate-400'}`}>
+                                        <Icon name="flame" size={12}/>{streak}일
+                                    </div>
+                                    <button onClick={() => setShowScoreInfo(true)} className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-blue-100">
+                                        {myLevel.emoji} {score || 0}pt <span className="bg-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] border border-blue-200">?</span>
+                                    </button>
+                                    <button onClick={() => setShowAchievements(true)} className="text-xs font-bold text-yellow-600 bg-yellow-50 px-2 py-1 rounded-lg hover:bg-yellow-100">
+                                        🏅
+                                    </button>
+                                    <button onClick={() => setShowCalendar(true)} className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg hover:bg-green-100">
+                                        📅
+                                    </button>
+                                    <button onClick={() => setShowReadingGuide(true)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg hover:bg-slate-200">
+                                        <Icon name="helpbook" size={14} className="text-slate-500"/>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-50 px-4 py-4 border-b border-slate-200">
+                                <div className="flex justify-between items-end mb-3">
+                                    <span className="text-sm font-bold text-slate-700 flex items-center gap-1">🏆 {communityName} 누적 랭킹</span>
+                                    <span className="text-[10px] text-slate-400 shrink-0">평균 진행률</span>
+                                </div>
+                                <div className="space-y-3">
+                                    {topProgressGroups.map((group, idx) => {
+                                        const isMyGroup = group.name === subgroupId;
+                                        const rankColor = idx === 0 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : idx === 1 ? 'bg-slate-200 text-slate-700 border-slate-300' : 'bg-orange-100 text-orange-700 border-orange-200';
+                                        const barColor = idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : 'bg-orange-400';
+                                        return (
+                                            <div key={idx} className="flex items-center gap-3">
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border shrink-0 ${rankColor}`}>{idx + 1}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between text-[10px] mb-1">
+                                                        <span className={`font-bold truncate pr-2 ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>{group.name} {isMyGroup && '(나)'}</span>
+                                                        <span className="font-bold text-slate-500 shrink-0">평균 {group.avgDay}일 ({group.progressRate}%)</span>
+                                                    </div>
+                                                    <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100">
+                                                        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${group.progressRate}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {!isMyGroupInProgressTop3 && myProgressStats && myProgressStats.totalCount > 0 && (
+                                        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-slate-200 border-dashed">
+                                            <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200 shrink-0">?</div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between text-[10px] mb-1">
+                                                    <span className="font-bold text-blue-600 truncate pr-2">{myProgressStats.name} (나)</span>
+                                                    <span className="font-bold text-slate-500 shrink-0">평균 {myProgressStats.avgDay}일 ({myProgressStats.progressRate}%)</span>
+                                                </div>
+                                                <div className="h-3 w-full bg-white rounded-full overflow-hidden border border-slate-100">
+                                                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${myProgressStats.progressRate}%` }}></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="relative w-full h-28 bg-map-texture overflow-hidden mt-0 border-t border-slate-200 bg-sky-texture">
+                                <div className="mountain-back"></div>
+                                <div className="mountain-front"></div>
+                                <div className="absolute top-2 left-10 text-2xl opacity-80 animate-float">☁️</div>
+                                <div className="absolute top-5 right-20 text-xl opacity-60 animate-float-slow">☁️</div>
+                                <div className="absolute top-8 left-1/2 text-lg opacity-50 animate-float" style={{animationDelay: '2s'}}>☁️</div>
+                                <div className="absolute bottom-2 left-5 text-sm z-10 opacity-90">🌸</div>
+                                <div className="absolute bottom-3 right-10 text-sm z-10 opacity-90">🌼</div>
+                                <div className="absolute bottom-4 left-1/3 text-xs z-10 opacity-80">🌱</div>
+
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col justify-center items-center z-20 group" style={{top: '60%'}}>
+                                    <div className="relative">
+                                        <div className="absolute inset-0 bg-yellow-400 rounded-full blur-xl opacity-70 animate-pulse"></div>
+                                        <span className="text-5xl relative z-10 drop-shadow-2xl">🏰</span>
+                                    </div>
+                                    <span className="text-[9px] font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded-full mt-2 shadow-sm border border-slate-200 relative z-20">천국성</span>
+                                </div>
+                                
+                                {(() => {
+                                    // 나 주변 사람들만 표시 (앞 5명 + 나 + 뒤 5명)
+                                    const myIndex = racers.findIndex(r => r.isMe);
+                                    const startIdx = Math.max(0, myIndex - 5);
+                                    const endIdx = Math.min(racers.length, myIndex + 6);
+                                    const visibleRacers = racers.slice(startIdx, endIdx);
+                                    
+                                    return visibleRacers.map((racer, idx) => {
+                                        const p = Math.min((racer.day / TOTAL_DAYS) * 100, 100);
+                                        const isMe = racer.isMe;
+                                        const racerLevel = getLevelInfo(racer.score || 0);
+                                        return (
+                                            <div key={racer.uid || idx} className="absolute transition-all duration-1000 ease-out flex flex-col items-center"
+                                                style={{ left: `calc(${p}% - 16px)`, top: isMe ? '50%' : `${35+(idx%4)*12}%`, zIndex: isMe ? 50 : idx + 20 }}>
+                                                <div className={`text-[9px] px-1.5 py-0.5 rounded-full mb-1 shadow-sm font-bold truncate max-w-[60px] ${isMe ? 'bg-blue-600 text-white' : 'bg-white/90 text-slate-500'}`}>{racer.name}</div>
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-md border-[3px] bg-white ${isMe ? `border-blue-400 ${racer.isPanic ? 'animate-wiggle':''}` : 'border-white opacity-70'}`}>
+                                                    {racer.isPanic && isMe ? '😱' : racerLevel.emoji}
+                                                    {racer.isPanic && isMe && <span className="absolute -top-1 -right-1 text-sm animate-ping">💦</span>}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                                <div className="absolute bottom-1 left-2 text-[10px] text-slate-500 bg-white/80 px-2 py-0.5 rounded z-30">전체 {racers.length}명 참가중</div>
+                            </div>
+                            
+                            <div className="bg-white border-b border-slate-100 py-1 text-center">
+                                <button onClick={() => setShowScoreInfo(true)} className="text-xs text-slate-500 flex items-center justify-center gap-1 mx-auto hover:text-blue-600">
+                                    현재 나의 등급: <span className="font-bold text-slate-800">{myLevel.emoji} {myLevel.title}</span> (클릭하여 확인)
+                                </button>
+                            </div>
+                        </header>
+
+                        <main className="px-4 py-6 max-w-md mx-auto space-y-8">
+                            <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+                                <div className={`p-6 text-white relative ${isPanic ? 'bg-gradient-to-br from-red-500 to-orange-600' : 'bg-gradient-to-br from-indigo-600 to-blue-700'}`}>
+                                    <div className="absolute top-4 right-4 bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">🏁 완독 D-{daysRemaining}</div>
+                                    <h2 className="text-xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
+                                    <p className="opacity-90 text-sm font-bold text-white/90 mb-2">{verseData.subtitle}</p>
+                                    <p className="opacity-80 text-xs">{isPanic ? '😱 쫓아오고 있어요! 어서 읽으세요!' : `${currentUser.name}님, 오늘도 힘내세요!`}</p>
+                                </div>
+                                <div className="p-6">
+                                    <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
+                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
+                                    </div>
+                                    
+                                    {/* 오디오 플레이어 (TTS) */}
+                                    {verseData.audioUrl && (
+                                        <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-lg">🎧</span>
+                                                <span className="text-sm font-bold text-slate-700">오디오로 듣기</span>
+                                            </div>
+                                            <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
+                                                <source src={verseData.audioUrl} type="audio/mpeg" />
+                                                브라우저가 오디오를 지원하지 않습니다.
+                                            </audio>
+                                        </div>
+                                    )}
+                                    
+                                    <button onClick={handleRead} disabled={verseData.loading} className={`w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 ${isPanic ? 'bg-red-600 shadow-red-200' : 'bg-slate-900 shadow-blue-200'}`}>
+                                        <Icon name="book" size={18}/><span>{hasReadToday ? '한 장 더 읽기 (미리 읽기)' : '오늘 말씀 읽기 완료'}</span>
+                                    </button>
+                                    
+                                    {/* 묵상 메모 입력 */}
+                                    <div className="mt-4 bg-purple-50 p-4 rounded-xl border border-purple-100">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h4 className="text-sm font-bold text-purple-700">✍️ 오늘의 묵상</h4>
+                                            <button onClick={() => setShowMemoList(true)} className="text-xs text-purple-500 underline hover:text-purple-700">내 기록 보기</button>
+                                        </div>
+                                        <textarea 
+                                            value={currentMemo}
+                                            onChange={(e) => setCurrentMemo(e.target.value)}
+                                            placeholder="오늘 말씀에서 느낀 점을 한 줄로 적어보세요..."
+                                            className="w-full p-3 text-sm border border-purple-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none bg-white"
+                                            rows={2}
+                                        />
+                                        <button 
+                                            onClick={() => saveMemo(currentDay - 1, currentMemo)}
+                                            disabled={!currentMemo.trim()}
+                                            className="w-full mt-2 bg-purple-600 text-white font-bold py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-700 transition-colors"
+                                        >
+                                            💾 묵상 저장하기
+                                        </button>
+                                        {memos[currentDay - 1] && (
+                                            <div className="mt-2 p-2 bg-white rounded-lg border border-purple-100">
+                                                <p className="text-[10px] text-purple-500 mb-1">이전에 저장한 묵상:</p>
+                                                <p className="text-xs text-slate-600">{memos[currentDay - 1].text}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="mt-4 bg-yellow-50 p-3 rounded-xl border border-yellow-100 text-center">
+                                        <p className="text-xs text-yellow-700 font-bold">💡 바빠서 못 읽으셨나요? <br/>주일에 밀린 말씀을 몰아서 읽어도 괜찮습니다!</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-slate-700 flex items-center"><Icon name="users" size={18} className="mr-2 text-indigo-500"/>{communityName} 소그룹 순위</h3>
+                                    <span className="text-[10px] bg-green-50 text-green-600 px-2 py-1 rounded-full font-bold">오늘 기준</span>
+                                </div>
+                                <div className="space-y-4 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                                    {subgroupRanking.length > 0 ? subgroupRanking.map((group, idx) => {
+                                        const isMyGroup = group.name === subgroupId;
+                                        return (
+                                            <div key={idx} className={`relative ${isMyGroup ? 'bg-blue-50 p-2 rounded-lg -mx-2' : ''}`}>
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-600'}`}>{idx+1}위. {group.name} {isMyGroup && '(우리팀)'}</span>
+                                                    <span className={`font-bold ${isMyGroup ? 'text-blue-600' : 'text-slate-400'}`}>{group.readCount}/{group.totalCount}명 ({group.rate}%)</span>
+                                                </div>
+                                                <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className={`h-full rounded-full transition-all duration-1000 ${isMyGroup ? 'bg-blue-500' : 'bg-slate-300'}`} style={{ width: `${group.rate}%` }}></div>
+                                                </div>
+                                            </div>
+                                        )
+                                    }) : <div className="text-center text-slate-400 py-4">아직 데이터가 없습니다.</div>}
+                                </div>
+                            </div>
+
+                            {/* 완주자 명예의 전당 */}
+                            {communityMembers.filter(u => u.currentDay >= 365).length > 0 && (
+                                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-2xl border border-yellow-200 p-5 shadow-sm">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-bold text-yellow-700 flex items-center">👑 완주자 명예의 전당</h3>
+                                        <span className="text-[10px] bg-yellow-100 text-yellow-600 px-2 py-1 rounded-full font-bold">365일 완독</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {communityMembers.filter(u => u.currentDay >= 365).sort((a, b) => (b.score || 0) - (a.score || 0)).map((u, idx) => (
+                                            <div key={u.uid} className={`flex items-center gap-2 px-3 py-2 rounded-full border ${idx === 0 ? 'bg-yellow-100 border-yellow-300' : idx === 1 ? 'bg-slate-100 border-slate-300' : idx === 2 ? 'bg-orange-100 border-orange-300' : 'bg-white border-slate-200'}`}>
+                                                <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅'}</span>
+                                                <span className="text-sm font-bold text-slate-700">{u.name}</span>
+                                                <span className="text-xs text-slate-400">{u.score}점</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 주간 MVP */}
+                            {(() => {
+                                const mvp = getWeeklyMVP();
+                                if (!mvp || !mvp.streakMVP) return null;
+                                return (
+                                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-5 shadow-sm">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-blue-700 flex items-center">⭐ 이번 주 MVP</h3>
+                                            <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-bold">주간</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-white p-3 rounded-xl border border-blue-100 text-center">
+                                                <div className="text-2xl mb-1">🔥</div>
+                                                <p className="text-[10px] text-slate-500 mb-1">연속 읽기왕</p>
+                                                <p className="font-bold text-slate-800">{mvp.streakMVP.name}</p>
+                                                <p className="text-xs text-orange-500">{mvp.streakMVP.streak || 0}일 연속</p>
+                                            </div>
+                                            <div className="bg-white p-3 rounded-xl border border-blue-100 text-center">
+                                                <div className="text-2xl mb-1">🏃</div>
+                                                <p className="text-[10px] text-slate-500 mb-1">진행왕</p>
+                                                <p className="font-bold text-slate-800">{mvp.progressMVP.name}</p>
+                                                <p className="text-xs text-blue-500">DAY {mvp.progressMVP.currentDay || 1}</p>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                            <p className="text-[10px] text-slate-400">🏆 연속 읽기: 매일 꾸준히 읽은 사람 | 진행왕: 가장 앞서가는 사람</p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* 월간 소그룹 대항전 */}
+                            {(() => {
+                                const contest = getMonthlyContest();
+                                if (!contest || contest.length === 0) return null;
+                                const monthName = new Date().toLocaleDateString('ko-KR', { month: 'long' });
+                                return (
+                                    <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl border border-red-200 p-5 shadow-sm">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-red-700 flex items-center">🏆 {monthName} 소그룹 대항전</h3>
+                                            <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">월간</span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {contest.slice(0, 3).map((group, idx) => {
+                                                const isMyGroup = group.name === subgroupId;
+                                                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+                                                return (
+                                                    <div key={group.name} className={`flex items-center gap-3 p-2 rounded-lg ${isMyGroup ? 'bg-red-100 border border-red-200' : 'bg-white'}`}>
+                                                        <span className="text-xl">{medal}</span>
+                                                        <div className="flex-1">
+                                                            <div className="flex justify-between">
+                                                                <span className={`text-sm font-bold ${isMyGroup ? 'text-red-700' : 'text-slate-700'}`}>{group.name} {isMyGroup && '(우리팀)'}</span>
+                                                                <span className="text-sm font-bold text-slate-500">{group.rate}%</span>
+                                                            </div>
+                                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
+                                                                <div className={`h-full rounded-full ${idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : 'bg-orange-400'}`} style={{ width: `${group.rate}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <div className="mt-3 text-center">
+                                            <p className="text-[10px] text-slate-400">📊 기준: 오늘 읽은 비율 (읽은 인원 / 전체 인원)</p>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </main>
+                    </div>
+                );
+            }
+
+            return null;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
