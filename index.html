@@ -11,6 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
@@ -60,6 +61,7 @@
                 communityId: d.communityId ?? null, communityName: d.communityName ?? null,
                 subgroupId: d.subgroupId ?? null, planId: d.planId ?? "1year_revised",
                 achievements: d.achievements ?? [],
+                memos: d.memos ?? {},
             };
         };
 
@@ -261,6 +263,143 @@
                         db.collection('users').doc(uid).set({ achievements: allEarned }, { merge: true });
                         setCurrentUser(prev => ({ ...prev, achievements: allEarned }));
                     }
+                }
+            };
+
+            // PDF 생성 함수 (개인용)
+            const generateMemosPDF = async (userName, userMemos, userStats = {}) => {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // 한글 폰트 대신 기본 폰트 사용 (한글은 유니코드로)
+                const addKoreanText = (text, x, y, options = {}) => {
+                    doc.text(text, x, y, options);
+                };
+                
+                // 표지
+                doc.setFillColor(79, 70, 229); // indigo
+                doc.rect(0, 0, 210, 297, 'F');
+                
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(32);
+                doc.text('📖', 105, 80, { align: 'center' });
+                doc.setFontSize(24);
+                doc.text(`${userName}`, 105, 110, { align: 'center' });
+                doc.setFontSize(18);
+                doc.text('2025 Faith Journal', 105, 130, { align: 'center' });
+                doc.setFontSize(12);
+                doc.text('Bible Reading 365', 105, 150, { align: 'center' });
+                
+                // 통계 페이지
+                doc.addPage();
+                doc.setFillColor(248, 250, 252);
+                doc.rect(0, 0, 210, 297, 'F');
+                
+                doc.setTextColor(30, 41, 59);
+                doc.setFontSize(20);
+                doc.text('My Record', 105, 30, { align: 'center' });
+                
+                doc.setFontSize(12);
+                const memoCount = Object.keys(userMemos).length;
+                const stats = [
+                    `Total Memos: ${memoCount}`,
+                    `Current Day: ${userStats.currentDay || 1}`,
+                    `Score: ${userStats.score || 0}`,
+                    `Streak: ${userStats.streak || 0} days`,
+                ];
+                
+                let yPos = 60;
+                stats.forEach(stat => {
+                    doc.setFillColor(255, 255, 255);
+                    doc.roundedRect(30, yPos - 8, 150, 15, 3, 3, 'F');
+                    doc.text(stat, 40, yPos);
+                    yPos += 25;
+                });
+                
+                // 묵상 페이지들
+                const sortedMemos = Object.entries(userMemos).sort(([a], [b]) => Number(a) - Number(b));
+                
+                sortedMemos.forEach(([day, memo], idx) => {
+                    if (idx % 3 === 0) {
+                        doc.addPage();
+                        doc.setFillColor(255, 255, 255);
+                        doc.rect(0, 0, 210, 297, 'F');
+                        yPos = 20;
+                    }
+                    
+                    // DAY 박스
+                    doc.setFillColor(238, 242, 255);
+                    doc.roundedRect(15, yPos, 180, 80, 5, 5, 'F');
+                    
+                    doc.setTextColor(79, 70, 229);
+                    doc.setFontSize(14);
+                    doc.text(`DAY ${day}`, 25, yPos + 15);
+                    
+                    doc.setTextColor(100, 116, 139);
+                    doc.setFontSize(9);
+                    const dateStr = memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : '';
+                    doc.text(dateStr, 170, yPos + 15, { align: 'right' });
+                    
+                    doc.setTextColor(71, 85, 105);
+                    doc.setFontSize(10);
+                    doc.text(memo.title || '', 25, yPos + 28);
+                    
+                    doc.setTextColor(30, 41, 59);
+                    doc.setFontSize(11);
+                    // 긴 텍스트 줄바꿈 처리
+                    const lines = doc.splitTextToSize(memo.text || '', 160);
+                    doc.text(lines.slice(0, 4), 25, yPos + 42);
+                    
+                    yPos += 90;
+                });
+                
+                // 마지막 페이지
+                doc.addPage();
+                doc.setFillColor(79, 70, 229);
+                doc.rect(0, 0, 210, 297, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.setFontSize(16);
+                doc.text('Congratulations!', 105, 130, { align: 'center' });
+                doc.setFontSize(12);
+                doc.text('Keep running the race of faith!', 105, 150, { align: 'center' });
+                doc.text('- Hebrews 12:1 -', 105, 170, { align: 'center' });
+                
+                // 다운로드
+                doc.save(`${userName}_FaithJournal_2025.pdf`);
+            };
+
+            // CSV 생성 함수 (관리자용)
+            const generateMemosCSV = async () => {
+                if (!db) return;
+                
+                try {
+                    const snap = await db.collection('users').get();
+                    let csvContent = 'Name,Subgroup,Day,Date,Title,Memo\n';
+                    
+                    snap.docs.forEach(doc => {
+                        const data = doc.data();
+                        const userName = data.name || 'Unknown';
+                        const subgroup = data.subgroupId || '-';
+                        const memos = data.memos || {};
+                        
+                        Object.entries(memos).forEach(([day, memo]) => {
+                            const dateStr = memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : '';
+                            const title = (memo.title || '').replace(/,/g, ';').replace(/\n/g, ' ');
+                            const text = (memo.text || '').replace(/,/g, ';').replace(/\n/g, ' ');
+                            csvContent += `"${userName}","${subgroup}","${day}","${dateStr}","${title}","${text}"\n`;
+                        });
+                    });
+                    
+                    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `all_memos_${new Date().toISOString().split('T')[0]}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    console.error('CSV 생성 오류:', e);
+                    alert('CSV 생성 중 오류가 발생했습니다.');
                 }
             };
 
@@ -860,6 +999,80 @@
                                 })()}
                             </div>
 
+                            {/* 묵상 관리 */}
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                        📝 묵상 관리
+                                    </h2>
+                                    <button 
+                                        onClick={generateMemosCSV}
+                                        className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold text-sm"
+                                    >
+                                        <Icon name="download" size={16}/> 전체 CSV 다운로드
+                                    </button>
+                                </div>
+                                
+                                {/* 묵상 통계 */}
+                                {(() => {
+                                    const usersWithMemos = allUsers.filter(u => u.memos && Object.keys(u.memos || {}).length > 0);
+                                    const totalMemos = allUsers.reduce((sum, u) => sum + Object.keys(u.memos || {}).length, 0);
+                                    
+                                    return (
+                                        <div>
+                                            <div className="grid grid-cols-3 gap-4 mb-4">
+                                                <div className="bg-purple-50 p-4 rounded-xl text-center">
+                                                    <div className="text-2xl font-bold text-purple-600">{totalMemos}</div>
+                                                    <div className="text-xs text-slate-500">총 묵상 수</div>
+                                                </div>
+                                                <div className="bg-blue-50 p-4 rounded-xl text-center">
+                                                    <div className="text-2xl font-bold text-blue-600">{usersWithMemos.length}</div>
+                                                    <div className="text-xs text-slate-500">묵상 작성자</div>
+                                                </div>
+                                                <div className="bg-green-50 p-4 rounded-xl text-center">
+                                                    <div className="text-2xl font-bold text-green-600">
+                                                        {allUsers.length > 0 ? Math.round((usersWithMemos.length / allUsers.length) * 100) : 0}%
+                                                    </div>
+                                                    <div className="text-xs text-slate-500">참여율</div>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* 묵상 많이 쓴 순 */}
+                                            <h3 className="font-bold text-slate-700 mb-2">✍️ 묵상왕 TOP 10</h3>
+                                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                                                {allUsers
+                                                    .map(u => ({ ...u, memoCount: Object.keys(u.memos || {}).length }))
+                                                    .filter(u => u.memoCount > 0)
+                                                    .sort((a, b) => b.memoCount - a.memoCount)
+                                                    .slice(0, 10)
+                                                    .map((u, idx) => (
+                                                        <div key={u.uid} className="flex items-center justify-between bg-slate-50 p-3 rounded-lg">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-yellow-400 text-white' : idx === 1 ? 'bg-slate-400 text-white' : idx === 2 ? 'bg-orange-400 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                                                    {idx + 1}
+                                                                </span>
+                                                                <div>
+                                                                    <span className="font-bold text-slate-800">{u.name}</span>
+                                                                    <span className="text-xs text-slate-400 ml-2">{u.subgroupId}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-sm font-bold text-purple-600">{u.memoCount}개</span>
+                                                                <button 
+                                                                    onClick={() => generateMemosPDF(u.name, u.memos || {}, { currentDay: u.currentDay, score: u.score, streak: u.streak })}
+                                                                    className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-200"
+                                                                >
+                                                                    PDF
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
                             {editingUser && (
                                 <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
                                     <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
@@ -1200,7 +1413,26 @@
                                         <h3 className="text-xl font-bold text-slate-800">📝 나의 묵상 기록</h3>
                                         <button onClick={() => setShowMemoList(false)} className="text-slate-400"><Icon name="close"/></button>
                                     </div>
-                                    <div className="space-y-3 overflow-y-auto max-h-[60vh]">
+                                    
+                                    {/* 통계 요약 */}
+                                    <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 mb-4">
+                                        <div className="flex justify-between items-center">
+                                            <div className="text-center flex-1">
+                                                <p className="text-2xl font-bold text-indigo-600">{Object.keys(memos).length}</p>
+                                                <p className="text-[10px] text-slate-500">작성한 묵상</p>
+                                            </div>
+                                            <div className="text-center flex-1 border-l border-indigo-200">
+                                                <p className="text-2xl font-bold text-indigo-600">{currentDay || 1}</p>
+                                                <p className="text-[10px] text-slate-500">현재 Day</p>
+                                            </div>
+                                            <div className="text-center flex-1 border-l border-indigo-200">
+                                                <p className="text-2xl font-bold text-indigo-600">{score || 0}</p>
+                                                <p className="text-[10px] text-slate-500">총 점수</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-3 overflow-y-auto max-h-[45vh]">
                                         {Object.keys(memos).length > 0 ? (
                                             Object.entries(memos)
                                                 .sort(([a], [b]) => Number(b) - Number(a))
@@ -1222,7 +1454,17 @@
                                             </div>
                                         )}
                                     </div>
-                                    <button onClick={() => setShowMemoList(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
+                                    
+                                    {/* PDF 다운로드 버튼 */}
+                                    {Object.keys(memos).length > 0 && (
+                                        <button 
+                                            onClick={() => generateMemosPDF(currentUser.name, memos, { currentDay, score, streak })}
+                                            className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors"
+                                        >
+                                            📥 PDF로 다운로드
+                                        </button>
+                                    )}
+                                    <button onClick={() => setShowMemoList(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-2 text-slate-600">닫기</button>
                                 </div>
                             </div>
                         )}
