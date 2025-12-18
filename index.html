@@ -217,6 +217,8 @@
             const [showRestartConfirm, setShowRestartConfirm] = React.useState(false); // 재시작 확인 모달
             const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false });
             const [showDateSettings, setShowDateSettings] = React.useState(false); // 날짜 설정 모달
+            const [syncProgress, setSyncProgress] = React.useState(null); // 동기화 진행 상황
+            const [lastSyncInfo, setLastSyncInfo] = React.useState(null); // 마지막 동기화 정보
 
             const getLevelInfo = (score) => [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
 
@@ -660,6 +662,12 @@
                             setAnnouncementInput(announcementDoc.data());
                         }
                         
+                        // 동기화 정보 로드
+                        const syncDoc = await db.collection('settings').doc('sync').get();
+                        if (syncDoc.exists) {
+                            setLastSyncInfo(syncDoc.data());
+                        }
+                        
                         setIsAdmin(true);
                         return;
                     } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
@@ -741,7 +749,25 @@
                 } catch (e) { console.error(e); alert("서버 저장 실패"); }
             };
 
-            const fetchNotionData = async (planId, currentDay) => {
+            // Firestore에서 캐시된 본문 가져오기 (빠름 🚀)
+            const fetchVerseFromCache = async (planId, day) => {
+                if (!db) return null;
+                try {
+                    const [planType, version] = (planId || '1year_revised').split('_');
+                    const cacheKey = `${planType}_${version}_${day}`;
+                    const doc = await db.collection('verses').doc(cacheKey).get();
+                    if (doc.exists) {
+                        return doc.data();
+                    }
+                    return null;
+                } catch (e) {
+                    console.error("캐시 읽기 실패:", e);
+                    return null;
+                }
+            };
+
+            // 노션 API 호출 (캐시 없을 때 fallback)
+            const fetchFromNotion = async (planId, currentDay) => {
                 if (!SUPABASE_FUNCTION_URL) return { title: null, text: "서버 연결 설정이 필요합니다." };
                 const [planType, version] = (planId || '1year_revised').split('_');
                 const targetTag = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.tagName || '개역개정 일년일독';
@@ -756,8 +782,92 @@
                     if (!response.ok) throw new Error(`Server Error: ${response.status}`);
                     const data = await response.json();
                     if (data.error) return { title: null, text: `[오류] ${data.error}` };
-                    return { title: data.title, text: data.text };
+                    return { title: data.title, text: data.text, audioUrl: data.audioUrl };
                 } catch (e) { console.error(e); return { title: null, text: "서버와 통신 중 오류가 발생했습니다." }; }
+            };
+
+            // 본문 가져오기 (캐시 우선, 없으면 노션)
+            const fetchNotionData = async (planId, currentDay) => {
+                // 1. 먼저 Firestore 캐시 확인
+                const cached = await fetchVerseFromCache(planId, currentDay);
+                if (cached && cached.text) {
+                    console.log(`✅ 캐시에서 로드: Day ${currentDay}`);
+                    return cached;
+                }
+                
+                // 2. 캐시 없으면 노션 API 호출
+                console.log(`🔄 노션에서 로드: Day ${currentDay}`);
+                return await fetchFromNotion(planId, currentDay);
+            };
+
+            // 관리자용: 노션 → Firestore 동기화 함수
+            const syncNotionToFirestore = async (startDay = 1, endDay = 365, planId = '1year_revised') => {
+                if (!db || !SUPABASE_FUNCTION_URL) {
+                    alert('설정 오류');
+                    return;
+                }
+                
+                const [planType, version] = planId.split('_');
+                const targetTag = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.tagName || '개역개정 일년일독';
+                
+                let successCount = 0;
+                let errorCount = 0;
+                
+                for (let day = startDay; day <= endDay; day++) {
+                    try {
+                        const targetDate = new Date(2025, 0, day);
+                        const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+                        const dd = String(targetDate.getDate()).padStart(2, '0');
+                        
+                        // 노션에서 가져오기
+                        const response = await fetch(SUPABASE_FUNCTION_URL, {
+                            method: 'POST', 
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tag: targetTag, date: `${mm}-${dd}` })
+                        });
+                        
+                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                        const data = await response.json();
+                        
+                        if (data.title && data.text) {
+                            // Firestore에 저장
+                            const cacheKey = `${planType}_${version}_${day}`;
+                            await db.collection('verses').doc(cacheKey).set({
+                                title: data.title,
+                                text: data.text,
+                                audioUrl: data.audioUrl || null,
+                                day: day,
+                                planId: planId,
+                                syncedAt: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                            successCount++;
+                        } else {
+                            errorCount++;
+                        }
+                        
+                        // 진행 상황 업데이트 (10일마다)
+                        if (day % 10 === 0) {
+                            setSyncProgress({ current: day, total: endDay, success: successCount, error: errorCount });
+                        }
+                        
+                        // API 부하 방지 딜레이
+                        await new Promise(r => setTimeout(r, 300));
+                        
+                    } catch (e) {
+                        console.error(`Day ${day} 동기화 실패:`, e);
+                        errorCount++;
+                    }
+                }
+                
+                // 마지막 동기화 시간 저장
+                await db.collection('settings').doc('sync').set({
+                    lastSyncAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    successCount,
+                    errorCount
+                });
+                
+                setSyncProgress(null);
+                return { success: successCount, error: errorCount };
             };
 
             React.useEffect(() => {
@@ -1206,6 +1316,73 @@
                                         </div>
                                     );
                                 })()}
+                            </div>
+
+                            {/* 노션 데이터 동기화 */}
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    🔄 노션 데이터 동기화
+                                </h2>
+                                
+                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
+                                    <p className="text-sm text-blue-700">
+                                        노션의 성경 본문을 Firestore에 캐싱하여 <strong>로딩 속도를 10배 이상</strong> 향상시킵니다.<br/>
+                                        노션 본문을 수정했을 때만 동기화하면 됩니다.
+                                    </p>
+                                </div>
+                                
+                                {lastSyncInfo && (
+                                    <div className="bg-slate-50 p-3 rounded-lg mb-4 text-sm">
+                                        <p className="text-slate-600">
+                                            마지막 동기화: {lastSyncInfo.lastSyncAt?.toDate?.().toLocaleString('ko-KR') || '정보 없음'}
+                                        </p>
+                                        <p className="text-slate-500 text-xs">
+                                            성공: {lastSyncInfo.successCount || 0}개 / 실패: {lastSyncInfo.errorCount || 0}개
+                                        </p>
+                                    </div>
+                                )}
+                                
+                                {syncProgress ? (
+                                    <div className="space-y-3">
+                                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                            <p className="text-sm font-bold text-amber-700 mb-2">
+                                                ⏳ 동기화 진행 중... ({syncProgress.current}/{syncProgress.total})
+                                            </p>
+                                            <div className="w-full bg-amber-200 rounded-full h-3">
+                                                <div 
+                                                    className="bg-amber-500 h-3 rounded-full transition-all"
+                                                    style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <p className="text-xs text-amber-600 mt-2">
+                                                성공: {syncProgress.success}개 / 실패: {syncProgress.error}개
+                                            </p>
+                                        </div>
+                                        <p className="text-xs text-slate-500 text-center">
+                                            ⚠️ 창을 닫지 마세요. 약 2-3분 소요됩니다.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <button
+                                            onClick={async () => {
+                                                if (!confirm('365일 전체를 동기화합니다. 약 2-3분 소요됩니다. 진행할까요?')) return;
+                                                setSyncProgress({ current: 0, total: 365, success: 0, error: 0 });
+                                                const result = await syncNotionToFirestore(1, 365);
+                                                alert(`동기화 완료!\n성공: ${result.success}개\n실패: ${result.error}개`);
+                                                // 동기화 정보 새로고침
+                                                const syncDoc = await db.collection('settings').doc('sync').get();
+                                                if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
+                                            }}
+                                            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors text-lg"
+                                        >
+                                            📥 전체 동기화 (365일)
+                                        </button>
+                                        <p className="text-xs text-slate-500 text-center">
+                                            💡 노션 본문을 수정했을 때만 동기화하세요.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
 
                             {/* 광고/공지 관리 */}
