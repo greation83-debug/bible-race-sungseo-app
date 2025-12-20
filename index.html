@@ -800,7 +800,11 @@
                 return await fetchFromNotion(planId, currentDay);
             };
 
-            // 관리자용: 노션 → Firestore 동기화 함수 (재시도 로직 포함)
+            // Supabase URL들
+            const SUPABASE_BULK_URL = SUPABASE_FUNCTION_URL.replace('notion-proxy', 'notion-proxy-bulk');
+            const SUPABASE_PAGE_URL = SUPABASE_FUNCTION_URL.replace('notion-proxy', 'notion-proxy-page');
+            
+            // 관리자용: 노션 → Firestore 동기화 (Bulk 방식)
             const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                 if (!db || !SUPABASE_FUNCTION_URL) {
                     alert('설정 오류');
@@ -809,9 +813,7 @@
                 
                 let totalSuccess = 0;
                 let totalError = 0;
-                const totalDays = planIds.length * 365;
-                let processedDays = 0;
-                const failedItems = []; // 실패 목록
+                const failedItems = [];
                 
                 for (const planId of planIds) {
                     const [planType, version] = planId.split('_');
@@ -819,92 +821,124 @@
                     const targetTag = versionInfo?.tagName || '개역개정 일년일독';
                     const versionName = versionInfo?.name || planId;
                     
-                    for (let day = 1; day <= 365; day++) {
-                        const targetDate = new Date(2025, 0, day);
-                        const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
-                        const dd = String(targetDate.getDate()).padStart(2, '0');
+                    setSyncProgress({ 
+                        current: 0, 
+                        total: 365, 
+                        success: 0, 
+                        error: 0,
+                        currentVersion: versionName,
+                        currentDay: 0,
+                        status: '📥 노션에서 목록 가져오는 중...'
+                    });
+                    
+                    try {
+                        // 1단계: Bulk로 모든 페이지 메타데이터 가져오기
+                        console.log(`📥 ${versionName} 목록 가져오는 중...`);
+                        const bulkResponse = await fetch(SUPABASE_BULK_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ tag: targetTag, includeContent: false })
+                        });
                         
-                        let success = false;
-                        let lastError = null;
+                        if (!bulkResponse.ok) {
+                            throw new Error(`Bulk API Error: ${bulkResponse.status}`);
+                        }
                         
-                        // 최대 3번 재시도
-                        for (let attempt = 1; attempt <= 3; attempt++) {
+                        const bulkData = await bulkResponse.json();
+                        console.log(`✅ ${bulkData.count}개 페이지 목록 수신`);
+                        
+                        if (!bulkData.items || bulkData.items.length === 0) {
+                            throw new Error('노션에서 가져온 데이터가 없습니다');
+                        }
+                        
+                        // 날짜 → Day 번호 맵
+                        const dateToDay = {};
+                        for (let day = 1; day <= 365; day++) {
+                            const targetDate = new Date(2025, 0, day);
+                            const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+                            const dd = String(targetDate.getDate()).padStart(2, '0');
+                            dateToDay[`${mm}-${dd}`] = day;
+                        }
+                        
+                        // 2단계: 각 페이지의 본문 가져와서 저장
+                        const items = bulkData.items;
+                        let processed = 0;
+                        
+                        for (const item of items) {
+                            const day = dateToDay[item.date];
+                            if (!day) {
+                                console.log(`⚠️ 날짜 매핑 실패: ${item.date}`);
+                                totalError++;
+                                failedItems.push({
+                                    planId, versionName, day: 0, date: item.date,
+                                    error: '날짜 매핑 실패'
+                                });
+                                continue;
+                            }
+                            
                             try {
-                                // 노션에서 가져오기
-                                const response = await fetch(SUPABASE_FUNCTION_URL, {
-                                    method: 'POST', 
+                                // pageId로 직접 본문 가져오기 (DB 쿼리 없이!)
+                                const pageResponse = await fetch(SUPABASE_PAGE_URL, {
+                                    method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ tag: targetTag, date: `${mm}-${dd}` })
+                                    body: JSON.stringify({ pageId: item.pageId })
                                 });
                                 
-                                // 429 (Too Many Requests) 에러 시 더 오래 대기
-                                if (response.status === 429) {
-                                    console.log(`⏳ API 제한 - ${attempt}번째 재시도 대기 (Day ${day})`);
-                                    await new Promise(r => setTimeout(r, 2000 * attempt)); // 2초, 4초, 6초
-                                    continue;
-                                }
+                                if (!pageResponse.ok) throw new Error(`Page API Error: ${pageResponse.status}`);
+                                const pageData = await pageResponse.json();
                                 
-                                if (!response.ok) throw new Error(`API Error: ${response.status}`);
-                                const data = await response.json();
-                                
-                                if (data.title && data.text) {
+                                if (pageData.text) {
                                     // Firestore에 저장
                                     const cacheKey = `${planType}_${version}_${day}`;
                                     await db.collection('verses').doc(cacheKey).set({
-                                        title: data.title,
-                                        text: data.text,
-                                        audioUrl: data.audioUrl || null,
+                                        title: item.title,
+                                        text: pageData.text,
+                                        audioUrl: item.audioUrl || null,
                                         day: day,
                                         planId: planId,
                                         syncedAt: firebase.firestore.FieldValue.serverTimestamp()
                                     });
                                     totalSuccess++;
-                                    success = true;
-                                    break; // 성공하면 재시도 루프 종료
+                                    console.log(`✅ Day ${day} (${item.date}) 저장 완료`);
                                 } else {
-                                    // 노션에 데이터 없음 (재시도 불필요)
-                                    lastError = '노션에 데이터 없음';
-                                    break;
+                                    throw new Error('본문 없음');
                                 }
                                 
                             } catch (e) {
-                                lastError = e.message;
-                                console.error(`${planId} Day ${day} 시도 ${attempt}/3 실패:`, e);
-                                
-                                if (attempt < 3) {
-                                    // 재시도 전 대기 (1초, 2초)
-                                    await new Promise(r => setTimeout(r, 1000 * attempt));
-                                }
+                                totalError++;
+                                failedItems.push({
+                                    planId, versionName, day, date: item.date,
+                                    error: e.message
+                                });
+                                console.error(`❌ Day ${day} 실패:`, e.message);
                             }
+                            
+                            processed++;
+                            
+                            // 진행 상황 업데이트 (5개마다)
+                            if (processed % 5 === 0) {
+                                setSyncProgress({ 
+                                    current: processed, 
+                                    total: items.length, 
+                                    success: totalSuccess, 
+                                    error: totalError,
+                                    currentVersion: versionName,
+                                    currentDay: day,
+                                    status: `📝 본문 저장 중... (${processed}/${items.length})`
+                                });
+                            }
+                            
+                            // API 부하 방지 (200ms)
+                            await new Promise(r => setTimeout(r, 200));
                         }
                         
-                        if (!success) {
-                            totalError++;
-                            failedItems.push({
-                                planId,
-                                versionName,
-                                day,
-                                date: `${mm}-${dd}`,
-                                error: lastError
-                            });
-                        }
-                        
-                        processedDays++;
-                        
-                        // 진행 상황 업데이트 (5일마다)
-                        if (day % 5 === 0) {
-                            setSyncProgress({ 
-                                current: processedDays, 
-                                total: totalDays, 
-                                success: totalSuccess, 
-                                error: totalError,
-                                currentVersion: versionName,
-                                currentDay: day
-                            });
-                        }
-                        
-                        // API 부하 방지 딜레이 (500ms)
-                        await new Promise(r => setTimeout(r, 500));
+                    } catch (e) {
+                        console.error(`❌ ${versionName} 동기화 실패:`, e);
+                        totalError += 365;
+                        failedItems.push({
+                            planId, versionName, day: 0, date: '',
+                            error: `전체 실패: ${e.message}`
+                        });
                     }
                 }
                 
@@ -914,7 +948,7 @@
                     successCount: totalSuccess,
                     errorCount: totalError,
                     syncedVersions: planIds,
-                    failedItems: failedItems.slice(0, 50) // 최대 50개만 저장 (Firestore 용량 제한)
+                    failedItems: failedItems.slice(0, 50)
                 });
                 
                 setSyncProgress(null);
@@ -1419,9 +1453,14 @@
                                             <p className="text-sm font-bold text-amber-700 mb-2">
                                                 ⏳ 동기화 진행 중... ({syncProgress.current}/{syncProgress.total})
                                             </p>
+                                            {syncProgress.status && (
+                                                <p className="text-xs text-amber-800 mb-2 font-medium">
+                                                    {syncProgress.status}
+                                                </p>
+                                            )}
                                             {syncProgress.currentVersion && (
                                                 <p className="text-xs text-amber-600 mb-2">
-                                                    현재: {syncProgress.currentVersion} - Day {syncProgress.currentDay}
+                                                    버전: {syncProgress.currentVersion} {syncProgress.currentDay > 0 && `- Day ${syncProgress.currentDay}`}
                                                 </p>
                                             )}
                                             <div className="w-full bg-amber-200 rounded-full h-3">
@@ -1431,11 +1470,11 @@
                                                 ></div>
                                             </div>
                                             <p className="text-xs text-amber-600 mt-2">
-                                                성공: {syncProgress.success}개 / 실패: {syncProgress.error}개
+                                                ✅ 성공: {syncProgress.success}개 / ❌ 실패: {syncProgress.error}개
                                             </p>
                                         </div>
                                         <p className="text-xs text-slate-500 text-center">
-                                            ⚠️ 창을 닫지 마세요. 선택한 버전 × 365일 동기화 중...
+                                            ⚠️ 창을 닫지 마세요. 약 2분 소요됩니다.
                                         </p>
                                     </div>
                                 ) : (
