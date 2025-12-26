@@ -245,27 +245,33 @@
                 return `${month + 1}월 ${remaining + 1}일`;
             };
 
-            // 실제 본문 Day 계산 (currentDay + dayOffset, 365 넘으면 순환)
+            // 실제 본문 Day 계산 (dayOffset은 Day 1의 날짜를 의미, currentDay는 현재 읽고 있는 Day)
             const getActualDay = (currentDay, dayOffset) => {
                 let actualDay = currentDay + dayOffset;
                 while (actualDay > 365) actualDay -= 365;
+                while (actualDay < 1) actualDay += 365;
                 return actualDay;
             };
 
-            // 시작 날짜 변경
-            const changeStartDate = async (newOffset) => {
+            // 오늘 날짜 설정 (설정한 날짜가 현재 Day의 날짜가 됨)
+            const changeStartDate = async (targetOffset) => {
                 const uid = auth.currentUser?.uid;
                 if (!uid) return;
                 
                 try {
+                    // targetOffset = 오늘 날짜로 설정하고 싶은 날짜의 offset
+                    // currentDay = 현재 읽고 있는 Day
+                    // 계산: Day 1의 날짜 = targetOffset - (currentDay - 1)
+                    const newDayOffset = targetOffset - (currentDay - 1);
+                    
                     await db.collection('users').doc(uid).set({
-                        dayOffset: newOffset,
+                        dayOffset: newDayOffset,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                     
-                    setCurrentUser(prev => ({ ...prev, dayOffset: newOffset }));
+                    setCurrentUser(prev => ({ ...prev, dayOffset: newDayOffset }));
                     setShowDateSettings(false);
-                    alert(`시작 날짜가 ${offsetToDateStr(newOffset)}로 변경되었습니다!`);
+                    alert(`오늘(Day ${currentDay})이 ${offsetToDateStr(targetOffset)}로 설정되었습니다!`);
                 } catch (e) {
                     console.error("날짜 변경 실패:", e);
                     alert('변경 실패');
@@ -2232,13 +2238,13 @@
                             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowDateSettings(false)}>
                                 <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
                                     <div className="flex justify-between items-center mb-4 border-b pb-2">
-                                        <h3 className="text-xl font-bold text-slate-800">📅 읽기 시작 날짜 설정</h3>
+                                        <h3 className="text-xl font-bold text-slate-800">📅 오늘 날짜 설정</h3>
                                         <button onClick={() => setShowDateSettings(false)} className="text-slate-400"><Icon name="close"/></button>
                                     </div>
                                     
                                     <div className="mb-4 bg-blue-50 p-3 rounded-xl border border-blue-200">
                                         <p className="text-sm text-blue-700">
-                                            현재: <strong>{offsetToDateStr(currentUser?.dayOffset || 0)}</strong>부터 시작
+                                            현재: 오늘(Day {currentDay}) = <strong>{offsetToDateStr(getActualDay(currentDay, currentUser?.dayOffset || 0) - 1)}</strong>
                                             {(currentUser?.readCount || 1) > 1 && (
                                                 <span className="ml-2 bg-purple-500 text-white text-xs px-2 py-0.5 rounded-full">{currentUser.readCount}독 중</span>
                                             )}
@@ -2246,7 +2252,7 @@
                                     </div>
                                     
                                     <p className="text-sm text-slate-500 mb-4">
-                                        시작 날짜를 변경하면 해당 날짜의 본문부터 읽게 됩니다.<br/>
+                                        오늘(Day {currentDay})의 날짜를 변경합니다.<br/>
                                         (진행 상황은 유지됩니다)
                                     </p>
                                     
@@ -2459,8 +2465,11 @@
                                     <button onClick={() => setShowAchievements(true)} className="text-xs font-bold text-yellow-600 bg-yellow-50 px-2 py-1 rounded-lg hover:bg-yellow-100">
                                         🏅
                                     </button>
-                                    <button onClick={() => setShowCalendar(true)} className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg hover:bg-green-100">
+                                    <button onClick={() => setShowDateSettings(true)} className="text-xs font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-lg hover:bg-purple-100">
                                         📅
+                                    </button>
+                                    <button onClick={() => setShowCalendar(true)} className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg hover:bg-green-100">
+                                        📆
                                     </button>
                                     <button onClick={() => setShowReadingGuide(true)} className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-lg hover:bg-slate-200">
                                         <Icon name="helpbook" size={14} className="text-slate-500"/>
@@ -2564,7 +2573,7 @@
                             {/* 광고/공지 배너 */}
                             {announcement && announcement.enabled && announcement.text && (
                                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
-                                    <div className="flex items-start gap-3">
+                                    <div className="flex items-center gap-3">
                                         <span className="text-2xl flex-shrink-0">📢</span>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{announcement.text}</p>
@@ -2595,26 +2604,27 @@
                                     </div>
                                     <h2 className="text-xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
                                     <p className="opacity-90 text-sm font-bold text-white/90 mb-2">{verseData.subtitle}</p>
-                                    <p className="opacity-80 text-xs">{getEncouragementMessage()}</p>
-                                </div>
-                                <div className="p-6">
-                                    <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
-                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
-                                    </div>
                                     
-                                    {/* 오디오 플레이어 (TTS) */}
+                                    {/* 오디오 플레이어 (제목 바로 아래) */}
                                     {verseData.audioUrl && (
-                                        <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                        <div className="mt-2 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20">
                                             <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-lg">🎧</span>
-                                                <span className="text-sm font-bold text-slate-700">오디오로 듣기</span>
+                                                <span className="text-base">🎧</span>
+                                                <span className="text-xs font-bold text-white/90">오디오로 듣기</span>
                                             </div>
-                                            <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
+                                            <audio controls className="w-full h-9" style={{borderRadius: '8px'}}>
                                                 <source src={verseData.audioUrl} type="audio/mpeg" />
                                                 브라우저가 오디오를 지원하지 않습니다.
                                             </audio>
                                         </div>
                                     )}
+                                    
+                                    <p className="opacity-80 text-xs mt-2">{getEncouragementMessage()}</p>
+                                </div>
+                                <div className="p-6">
+                                    <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
+                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
+                                    </div>
                                     
                                     <button onClick={handleRead} disabled={verseData.loading} className="w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 bg-slate-900 shadow-blue-200">
                                         <Icon name="book" size={18}/><span>{hasReadToday ? '한 장 더 읽기 (미리 읽기)' : '오늘 말씀 읽기 완료'}</span>
@@ -2657,24 +2667,9 @@
                                         )}
                                     </div>
                                     
-                                    <div className="mt-4 bg-yellow-50 p-3 rounded-xl border border-yellow-100 text-center">
-                                        <p className="text-xs text-yellow-700 font-bold">💡 바빠서 못 읽으셨나요? <br/>주일에 밀린 말씀을 몰아서 읽어도 괜찮습니다!</p>
-                                    </div>
-                                    
                                     {/* 설정 영역 */}
                                     <div className="mt-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                                         <div className="flex items-center justify-between gap-2">
-                                            {/* 날짜 설정 버튼 */}
-                                            <button 
-                                                onClick={() => setShowDateSettings(true)}
-                                                className="flex-1 text-xs bg-blue-100 text-blue-600 px-3 py-2 rounded-lg font-bold hover:bg-blue-200 flex items-center justify-center gap-1"
-                                            >
-                                                📅 시작 날짜 설정
-                                                {(currentUser.readCount || 1) > 1 && (
-                                                    <span className="bg-purple-500 text-white text-[10px] px-1.5 py-0.5 rounded-full ml-1">{currentUser.readCount}독</span>
-                                                )}
-                                            </button>
-                                            
                                             {/* 재시작 버튼 (뒤쳐진 경우만) */}
                                             {isBehind && currentDay > 10 && (
                                                 <button 
