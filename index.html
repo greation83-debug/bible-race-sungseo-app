@@ -1,21 +1,21 @@
 <!DOCTYPE html>
-<html lang=“ko”>
+<html lang="ko">
 <head>
-    <meta charset=“UTF-8”>
-    <meta name=“viewport” content=“width=device-width, initial-scale=1.0”>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>천로역정 성경 레이스</title>
-    <script src=“https://cdn.tailwindcss.com”></script>
-    <script crossorigin src=“https://unpkg.com/react@18/umd/react.production.min.js”></script>
-    <script crossorigin src=“https://unpkg.com/react-dom@18/umd/react-dom.production.min.js”></script>
-    <script src=“https://unpkg.com/@babel/standalone/babel.min.js”></script>
-    <script src=“https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js”></script>
-    <script src=“https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js”></script>
-    <script src=“https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js”></script>
-    <script src=“https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js”></script>
-    <script src=“https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js”></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, “Segoe UI”, Roboto, “Helvetica Neue”, Arial, sans-serif; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .bg-sky-texture { background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%); }
         .bg-map-texture { background-color: #f0fdf4; background-image: radial-gradient(#86efac 1px, transparent 1px); background-size: 20px 20px; }
         @keyframes wiggle { 0%, 100% { transform: rotate(-3deg) scale(1.1); } 50% { transform: rotate(3deg) scale(1.1); } }
@@ -122,7 +122,7 @@
         };
 
         const seniorSubgroups = Array.from({length: 14}, (_, i) => `${i + 1}구역`).concat(['여성실버1', '여성실버2', '남자실버', '젊은부부']);
-        const youthSubgroups = ['현준 목장', '지훈 목장', '아영 목장', '유리 목장', '채현 목장'];
+        const youthSubgroups = ['유리 목장', '아영 목장', '화목 목장', '민혁 목장'];
         const middleHighSubgroups = ['1목장', '2목장', '3목장', '4목장'];
         const elementarySubgroups = ['1학년', '2학년', '3학년', '4학년', '5학년', '6학년'];
         const kindergartenSubgroups = ['소망반', '빌립반', '믿음반'];
@@ -162,8 +162,8 @@
 4. 빛이 하나님이 보시기에 좋았더라 하나님이 빛과 어둠을 나누사
 (중략)`;
 
-        const MarkdownRenderer = ({ content, images = [], audios = [], files = [], videos = [] }) => {
-    if (!content && images.length === 0 && audios.length === 0 && files.length === 0 && videos.length === 0) return null;
+        const MarkdownRenderer = ({ content }) => {
+            if (!content) return null;
             const lines = content.split('\n');
             return (
                 <div className="space-y-1">
@@ -178,89 +178,6 @@
                         if (trimmed === '') return <div key={i} className="h-1"></div>;
                         return <p key={i} className="text-slate-700 leading-normal text-base">{line}</p>;
                     })}
-                    
-                    {/* 🆕 이미지 갤러리 */}
-                    {images.length > 0 && (
-                        <div className="mt-4 space-y-3">
-                            {images.map((img, idx) => (
-                                <div key={idx} className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
-                                    <img 
-                                        src={img.url} 
-                                        alt={img.caption || `이미지 ${idx + 1}`}
-                                        className="w-full h-auto"
-                                        loading="lazy"
-                                    />
-                                    {img.caption && (
-                                        <p className="text-xs text-slate-500 p-2 text-center bg-white">{img.caption}</p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    
-                    {/* 🆕 오디오 플레이어 */}
-                    {audios.length > 0 && (
-                        <div className="mt-4 space-y-3">
-                            {audios.map((audio, idx) => (
-                                <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className="text-lg">🎧</span>
-                                        <span className="text-sm font-bold text-slate-700">
-                                            {audio.caption || `오디오 ${idx + 1}`}
-                                        </span>
-                                    </div>
-                                    <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
-                                        <source src={audio.url} type="audio/mpeg" />
-                                        브라우저가 오디오를 지원하지 않습니다.
-                                    </audio>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                    
-                    {/* 🆕 파일 다운로드 */}
-                    {files.length > 0 && (
-                        <div className="mt-4 space-y-2">
-                            {files.map((file, idx) => (
-                                <a 
-                                    key={idx}
-                                    href={file.url}
-                                    download
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors"
-                                >
-                                    <span className="text-2xl">📎</span>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-slate-800 truncate">{file.name || `파일 ${idx + 1}`}</p>
-                                        {file.caption && <p className="text-xs text-slate-500">{file.caption}</p>}
-                                    </div>
-                                    <Icon name="download" size={16} className="text-slate-400 flex-shrink-0" />
-                                </a>
-                            ))}
-                        </div>
-                    )}
-                    
-                    {/* 🆕 비디오 플레이어 */}
-                    {videos.length > 0 && (
-                        <div className="mt-4 space-y-3">
-                            {videos.map((video, idx) => (
-                                <div key={idx} className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
-                                    <video 
-                                        controls 
-                                        className="w-full h-auto"
-                                        preload="metadata"
-                                    >
-                                        <source src={video.url} type="video/mp4" />
-                                        브라우저가 비디오를 지원하지 않습니다.
-                                    </video>
-                                    {video.caption && (
-                                        <p className="text-xs text-slate-500 p-2 text-center bg-white">{video.caption}</p>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
                 </div>
             );
         };
@@ -275,17 +192,7 @@
             const [showConfetti, setShowConfetti] = React.useState(false);
             const [levelUpToast, setLevelUpToast] = React.useState(null);
             const [subgroupStats, setSubgroupStats] = React.useState({});
-            const [verseData, setVerseData] = React.useState({ 
-    title: '', 
-    subtitle: '', 
-    text: '', 
-    audioUrl: null,
-    images: [],      // 🆕 추가
-    audios: [],      // 🆕 추가
-    files: [],       // 🆕 추가
-    videos: [],      // 🆕 추가
-    loading: false 
-});
+            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', audioUrl: null, loading: false });
             const [hasReadToday, setHasReadToday] = React.useState(false);
             const [showScoreInfo, setShowScoreInfo] = React.useState(false);
             const [showReadingGuide, setShowReadingGuide] = React.useState(false); 
@@ -347,32 +254,23 @@
 
             // 시작 날짜 변경
             const changeStartDate = async (newOffset) => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) return;
-    
-    try {
-        await db.collection('users').doc(uid).set({
-            dayOffset: newOffset,
-            currentDay: 1,  // 🆕 Day 1로 리셋
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        
-        setCurrentUser(prev => ({ 
-            ...prev, 
-            dayOffset: newOffset,
-            currentDay: 1  // 🆕 로컬 상태도 리셋
-        }));
-        
-        setShowDateSettings(false);
-        alert(`시작 날짜가 ${offsetToDateStr(newOffset)}로 변경되었습니다!`);
-        
-        // 🆕 페이지 새로고침
-        window.location.reload();
-    } catch (e) {
-        console.error("날짜 변경 실패:", e);
-        alert('변경 실패');
-    }
-};
+                const uid = auth.currentUser?.uid;
+                if (!uid) return;
+                
+                try {
+                    await db.collection('users').doc(uid).set({
+                        dayOffset: newOffset,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    
+                    setCurrentUser(prev => ({ ...prev, dayOffset: newOffset }));
+                    setShowDateSettings(false);
+                    alert(`시작 날짜가 ${offsetToDateStr(newOffset)}로 변경되었습니다!`);
+                } catch (e) {
+                    console.error("날짜 변경 실패:", e);
+                    alert('변경 실패');
+                }
+            };
 
             // 광고/공지 로드
             const loadAnnouncement = async () => {
@@ -993,17 +891,13 @@
                                     // Firestore에 저장
                                     const cacheKey = `${planType}_${version}_${day}`;
                                     await db.collection('verses').doc(cacheKey).set({
-    title: item.title,
-    text: pageData.text,
-    audioUrl: item.audioUrl || null,
-    images: pageData.images || [],      // 🆕
-    audios: pageData.audios || [],      // 🆕
-    files: pageData.files || [],        // 🆕
-    videos: pageData.videos || [],      // 🆕
-    day: day,
-    planId: planId,
-    syncedAt: firebase.firestore.FieldValue.serverTimestamp()
-});
+                                        title: item.title,
+                                        text: pageData.text,
+                                        audioUrl: item.audioUrl || null,
+                                        day: day,
+                                        planId: planId,
+                                        syncedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                    });
                                     totalSuccess++;
                                     console.log(`✅ Day ${day} (${item.date}) 저장 완료`);
                                 } else {
@@ -1077,17 +971,7 @@
                     const readCountBadge = readCount > 1 ? ` (${readCount}독)` : '';
                     
                     if (notionData?.text && !notionData.text.startsWith('[오류]')) {
-                        setVerseData({ 
-    title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, 
-    subtitle: notionData.title || `(제목 없음)`, 
-    text: notionData.text, 
-    audioUrl: notionData.audioUrl || null,
-    images: notionData.images || [],        // 🆕
-    audios: notionData.audios || [],        // 🆕
-    files: notionData.files || [],          // 🆕
-    videos: notionData.videos || [],        // 🆕
-    loading: false 
-});
+                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, audioUrl: notionData.audioUrl || null, loading: false });
                     } else {
                         const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
                         const displayText = actualDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
@@ -2558,7 +2442,7 @@
                         )}
 
                         <div className="bg-slate-900 text-slate-300 text-[10px] py-1 px-4 flex justify-between items-center">
-                            <span>현재 버전: <strong>{versionName ? `${planTypeName} - ${versionName}` : planTypeName}</strong></span>
+                            <span>현재 버전: <strong>{planTypeName} - {versionName}</strong></span>
                             <button onClick={handleChangeVersionStart} className="flex items-center gap-1 hover:text-white"><Icon name="refresh" size={10} /> 읽는 버전 바꾸기</button>
                         </div>
 
@@ -2715,33 +2599,22 @@
                                 </div>
                                 <div className="p-6">
                                     <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
-                                        {verseData.loading ? '' : <MarkdownRenderer 
-    content={verseData.text}
-    images={verseData.images}
-    audios={verseData.audios}
-    files={verseData.files}
-    videos={verseData.videos}
-/>}
+                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
                                     </div>
                                     
-                                    {/* 🆕 오디오 플레이어 - 가장 먼저 */}
-{verseData.audioUrl && (
-    <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
-        <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg">🎧</span>
-            <span className="text-sm font-bold text-slate-700">오디오로 듣기</span>
-        </div>
-        <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
-            <source src={verseData.audioUrl} type="audio/mpeg" />
-            브라우저가 오디오를 지원하지 않습니다.
-        </audio>
-    </div>
-)}
-
-{/* 본문 */}
-<div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
-    {verseData.loading ? '' : <MarkdownRenderer .../>}
-</div>
+                                    {/* 오디오 플레이어 (TTS) */}
+                                    {verseData.audioUrl && (
+                                        <div className="mb-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-lg">🎧</span>
+                                                <span className="text-sm font-bold text-slate-700">오디오로 듣기</span>
+                                            </div>
+                                            <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
+                                                <source src={verseData.audioUrl} type="audio/mpeg" />
+                                                브라우저가 오디오를 지원하지 않습니다.
+                                            </audio>
+                                        </div>
+                                    )}
                                     
                                     <button onClick={handleRead} disabled={verseData.loading} className="w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 bg-slate-900 shadow-blue-200">
                                         <Icon name="book" size={18}/><span>{hasReadToday ? '한 장 더 읽기 (미리 읽기)' : '오늘 말씀 읽기 완료'}</span>
