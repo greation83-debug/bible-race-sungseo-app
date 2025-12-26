@@ -122,7 +122,7 @@
         };
 
         const seniorSubgroups = Array.from({length: 14}, (_, i) => `${i + 1}구역`).concat(['여성실버1', '여성실버2', '남자실버', '젊은부부']);
-        const youthSubgroups = ['유리 목장', '아영 목장', '화목 목장', '민혁 목장'];
+        const youthSubgroups = ['현준 목장', '지훈 목장', '아영 목장', '유리 목장', '채현 목장'];
         const middleHighSubgroups = ['1목장', '2목장', '3목장', '4목장'];
         const elementarySubgroups = ['1학년', '2학년', '3학년', '4학년', '5학년', '6학년'];
         const kindergartenSubgroups = ['소망반', '빌립반', '믿음반'];
@@ -178,6 +178,89 @@
                         if (trimmed === '') return <div key={i} className="h-1"></div>;
                         return <p key={i} className="text-slate-700 leading-normal text-base">{line}</p>;
                     })}
+                    
+                    {/* 🆕 이미지 갤러리 */}
+                    {images.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                            {images.map((img, idx) => (
+                                <div key={idx} className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
+                                    <img 
+                                        src={img.url} 
+                                        alt={img.caption || `이미지 ${idx + 1}`}
+                                        className="w-full h-auto"
+                                        loading="lazy"
+                                    />
+                                    {img.caption && (
+                                        <p className="text-xs text-slate-500 p-2 text-center bg-white">{img.caption}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* 🆕 오디오 플레이어 */}
+                    {audios.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                            {audios.map((audio, idx) => (
+                                <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-lg">🎧</span>
+                                        <span className="text-sm font-bold text-slate-700">
+                                            {audio.caption || `오디오 ${idx + 1}`}
+                                        </span>
+                                    </div>
+                                    <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
+                                        <source src={audio.url} type="audio/mpeg" />
+                                        브라우저가 오디오를 지원하지 않습니다.
+                                    </audio>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* 🆕 파일 다운로드 */}
+                    {files.length > 0 && (
+                        <div className="mt-4 space-y-2">
+                            {files.map((file, idx) => (
+                                <a 
+                                    key={idx}
+                                    href={file.url}
+                                    download
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors"
+                                >
+                                    <span className="text-2xl">📎</span>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-bold text-slate-800 truncate">{file.name || `파일 ${idx + 1}`}</p>
+                                        {file.caption && <p className="text-xs text-slate-500">{file.caption}</p>}
+                                    </div>
+                                    <Icon name="download" size={16} className="text-slate-400 flex-shrink-0" />
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* 🆕 비디오 플레이어 */}
+                    {videos.length > 0 && (
+                        <div className="mt-4 space-y-3">
+                            {videos.map((video, idx) => (
+                                <div key={idx} className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
+                                    <video 
+                                        controls 
+                                        className="w-full h-auto"
+                                        preload="metadata"
+                                    >
+                                        <source src={video.url} type="video/mp4" />
+                                        브라우저가 비디오를 지원하지 않습니다.
+                                    </video>
+                                    {video.caption && (
+                                        <p className="text-xs text-slate-500 p-2 text-center bg-white">{video.caption}</p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             );
         };
@@ -2853,88 +2936,6 @@
 
             return null;
         };
-        {/* 🆕 이미지 갤러리 */}
-    {images.length > 0 && (
-        <div className="mt-4 space-y-3">
-            {images.map((img, idx) => (
-                <div key={idx} className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
-                    <img 
-                        src={img.url} 
-                        alt={img.caption || `이미지 ${idx + 1}`}
-                        className="w-full h-auto"
-                        loading="lazy"
-                    />
-                    {img.caption && (
-                        <p className="text-xs text-slate-500 p-2 text-center bg-white">{img.caption}</p>
-                    )}
-                </div>
-            ))}
-        </div>
-    )}
-    
-    {/* 🆕 오디오 플레이어 (Notion 블록) */}
-    {audios.length > 0 && (
-        <div className="mt-4 space-y-3">
-            {audios.map((audio, idx) => (
-                <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                    <div className="flex items-center gap-2 mb-2">
-                        <span className="text-lg">🎧</span>
-                        <span className="text-sm font-bold text-slate-700">
-                            {audio.caption || `오디오 ${idx + 1}`}
-                        </span>
-                    </div>
-                    <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
-                        <source src={audio.url} type="audio/mpeg" />
-                        브라우저가 오디오를 지원하지 않습니다.
-                    </audio>
-                </div>
-            ))}
-        </div>
-    )}
-    
-    {/* 🆕 파일 다운로드 */}
-    {files.length > 0 && (
-        <div className="mt-4 space-y-2">
-            {files.map((file, idx) => (
-                <a 
-                    key={idx}
-                    href={file.url}
-                    download
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors"
-                >
-                    <span className="text-2xl">📎</span>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-800 truncate">{file.name || `파일 ${idx + 1}`}</p>
-                        {file.caption && <p className="text-xs text-slate-500">{file.caption}</p>}
-                    </div>
-                    <Icon name="download" size={16} className="text-slate-400 flex-shrink-0" />
-                </a>
-            ))}
-        </div>
-    )}
-    
-    {/* 🆕 비디오 플레이어 */}
-    {videos.length > 0 && (
-        <div className="mt-4 space-y-3">
-            {videos.map((video, idx) => (
-                <div key={idx} className="bg-slate-50 rounded-xl overflow-hidden border border-slate-200">
-                    <video 
-                        controls 
-                        className="w-full h-auto"
-                        preload="metadata"
-                    >
-                        <source src={video.url} type="video/mp4" />
-                        브라우저가 비디오를 지원하지 않습니다.
-                    </video>
-                    {video.caption && (
-                        <p className="text-xs text-slate-500 p-2 text-center bg-white">{video.caption}</p>
-                    )}
-                </div>
-            ))}
-        </div>
-    )}
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
