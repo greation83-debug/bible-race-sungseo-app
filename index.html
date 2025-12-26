@@ -162,25 +162,134 @@
 4. 빛이 하나님이 보시기에 좋았더라 하나님이 빛과 어둠을 나누사
 (중략)`;
 
-        const MarkdownRenderer = ({ content }) => {
-            if (!content) return null;
-            const lines = content.split('\n');
-            return (
-                <div className="space-y-1">
-                    {lines.map((line, i) => {
-                        const trimmed = line.trim();
-                        if (trimmed.startsWith('### ')) return <h3 key={i} className="text-base font-bold text-slate-800 mt-3 mb-1 border-b border-slate-200 pb-1">{trimmed.slice(4)}</h3>;
-                        if (trimmed.startsWith('## ')) return <h2 key={i} className="text-lg font-bold text-slate-800 mt-4 mb-1">{trimmed.slice(3)}</h2>;
-                        if (trimmed.startsWith('# ')) return <h1 key={i} className="text-xl font-bold text-slate-800 mt-4 mb-2">{trimmed.slice(2)}</h1>;
-                        if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={i} className="list-disc list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.slice(2)}</li>;
-                        if (/^\d+\.\s/.test(trimmed)) return <li key={i} className="list-decimal list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.replace(/^\d+\.\s/, '')}</li>;
-                        if (trimmed.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded text-base">{trimmed.slice(2)}</blockquote>;
-                        if (trimmed === '') return <div key={i} className="h-1"></div>;
-                        return <p key={i} className="text-slate-700 leading-normal text-base">{line}</p>;
-                    })}
+const MarkdownRenderer = ({ content, images, audios, files, videos }) => {
+    if (!content) return null;
+    const lines = content.split('\n');
+    return (
+        <div>
+            {/* 기존 텍스트 렌더링 */}
+            <div className="space-y-1">
+                {lines.map((line, i) => {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith('### ')) return <h3 key={i} className="text-base font-bold text-slate-800 mt-3 mb-1 border-b border-slate-200 pb-1">{trimmed.slice(4)}</h3>;
+                    if (trimmed.startsWith('## ')) return <h2 key={i} className="text-lg font-bold text-slate-800 mt-4 mb-1">{trimmed.slice(3)}</h2>;
+                    if (trimmed.startsWith('# ')) return <h1 key={i} className="text-xl font-bold text-slate-800 mt-4 mb-2">{trimmed.slice(2)}</h1>;
+                    if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={i} className="list-disc list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.slice(2)}</li>;
+                    if (/^\d+\.\s/.test(trimmed)) return <li key={i} className="list-decimal list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.replace(/^\d+\.\s/, '')}</li>;
+                    if (trimmed.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded text-base">{trimmed.slice(2)}</blockquote>;
+                    if (trimmed === '') return <div key={i} className="h-1"></div>;
+                    return <p key={i} className="text-slate-700 leading-normal text-base">{line}</p>;
+                })}
+            </div>
+            
+            {/* 🆕 이미지 */}
+            {images && images.length > 0 && (
+                <div className="mt-4 space-y-3">
+                    <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                        <span>🖼️</span>
+                        <span>이미지</span>
+                    </div>
+                    {images.map((img, i) => (
+                        <div key={i} className="border border-slate-200 rounded-xl overflow-hidden bg-white">
+                            <img 
+                                src={img.url} 
+                                alt={img.caption || `이미지 ${i+1}`} 
+                                className="w-full object-contain max-h-96"
+                                loading="lazy"
+                            />
+                            {img.caption && (
+                                <div className="p-2 text-xs text-slate-500 text-center bg-slate-50">
+                                    {img.caption}
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
-            );
-        };
+            )}
+            
+            {/* 🆕 추가 오디오 */}
+            {audios && audios.length > 0 && (
+                <div className="mt-4 space-y-2">
+                    <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                        <span>🎧</span>
+                        <span>오디오 파일</span>
+                    </div>
+                    {audios.map((audio, i) => (
+                        <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            {audio.caption && (
+                                <div className="text-xs text-slate-500 mb-2">{audio.caption}</div>
+                            )}
+                            <audio controls className="w-full h-10" style={{borderRadius: '8px'}}>
+                                <source src={audio.url} type="audio/mpeg" />
+                                브라우저가 오디오를 지원하지 않습니다.
+                            </audio>
+                        </div>
+                    ))}
+                </div>
+            )}
+            
+            {/* 🆕 파일 다운로드 */}
+            {files && files.length > 0 && (
+                <div className="mt-4 space-y-2">
+                    <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                        <span>📎</span>
+                        <span>첨부파일</span>
+                    </div>
+                    {files.map((file, i) => (
+                        <a 
+                            key={i} 
+                            href={file.url} 
+                            download 
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="block bg-blue-50 hover:bg-blue-100 p-3 rounded-lg border border-blue-200 transition-colors"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xl">📄</span>
+                                    <div>
+                                        <div className="font-medium text-slate-800 text-sm">{file.name}</div>
+                                        {file.caption && (
+                                            <div className="text-xs text-slate-500">{file.caption}</div>
+                                        )}
+                                    </div>
+                                </div>
+                                <Icon name="download" size={16} className="text-blue-600" />
+                            </div>
+                        </a>
+                    ))}
+                </div>
+            )}
+
+            {/* 🆕 비디오 */}
+            {videos && videos.length > 0 && (
+                <div className="mt-4 space-y-3">
+                    <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                        <span>🎬</span>
+                        <span>동영상</span>
+                    </div>
+                    {videos.map((video, i) => (
+                        <div key={i} className="border border-slate-200 rounded-xl overflow-hidden bg-black">
+                            <video 
+                                controls 
+                                className="w-full"
+                                preload="metadata"
+                            >
+                                <source src={video.url} />
+                                브라우저가 비디오를 지원하지 않습니다.
+                            </video>
+                            {video.caption && (
+                                <div className="p-2 text-xs text-slate-300 text-center bg-slate-900">
+                                    {video.caption}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
 
         const App = () => {
             const [view, setView] = React.useState('login'); 
@@ -192,7 +301,17 @@
             const [showConfetti, setShowConfetti] = React.useState(false);
             const [levelUpToast, setLevelUpToast] = React.useState(null);
             const [subgroupStats, setSubgroupStats] = React.useState({});
-            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', audioUrl: null, loading: false });
+            const [verseData, setVerseData] = React.useState({ 
+    title: '', 
+    subtitle: '', 
+    text: '', 
+    audioUrl: null,
+    images: [],
+    audios: [],
+    files: [],
+    videos: [],
+    loading: false 
+});
             const [hasReadToday, setHasReadToday] = React.useState(false);
             const [showScoreInfo, setShowScoreInfo] = React.useState(false);
             const [showReadingGuide, setShowReadingGuide] = React.useState(false); 
@@ -782,7 +901,15 @@
                     if (!response.ok) throw new Error(`Server Error: ${response.status}`);
                     const data = await response.json();
                     if (data.error) return { title: null, text: `[오류] ${data.error}` };
-                    return { title: data.title, text: data.text, audioUrl: data.audioUrl };
+                    return { 
+    title: data.title, 
+    text: data.text, 
+    audioUrl: data.audioUrl,
+    images: data.images || [],
+    audios: data.audios || [],
+    files: data.files || [],
+    videos: data.videos || []
+};
                 } catch (e) { console.error(e); return { title: null, text: "서버와 통신 중 오류가 발생했습니다." }; }
             };
 
@@ -971,11 +1098,31 @@
                     const readCountBadge = readCount > 1 ? ` (${readCount}독)` : '';
                     
                     if (notionData?.text && !notionData.text.startsWith('[오류]')) {
-                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, subtitle: notionData.title || `(제목 없음)`, text: notionData.text, audioUrl: notionData.audioUrl || null, loading: false });
+                        setVerseData({ 
+    title: `...`, 
+    subtitle: notionData.title || ``, 
+    text: notionData.text, 
+    audioUrl: notionData.audioUrl || null,
+    images: notionData.images || [],
+    audios: notionData.audios || [],
+    files: notionData.files || [],
+    videos: notionData.videos || [],
+    loading: false 
+});
                     } else {
                         const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
                         const displayText = actualDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
-                        setVerseData({ title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, subtitle: `${versionName} 읽기`, text: displayText, audioUrl: null, loading: false });
+                        setVerseData({ 
+    title: `...`, 
+    subtitle: notionData.title || ``, 
+    text: notionData.text, 
+    audioUrl: notionData.audioUrl || null,
+    images: notionData.images || [],
+    audios: notionData.audios || [],
+    files: notionData.files || [],
+    videos: notionData.videos || [],
+    loading: false 
+});
                     }
 
                     if (communityId) {
@@ -2599,7 +2746,13 @@
                                 </div>
                                 <div className="p-6">
                                     <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
-                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
+                                        <MarkdownRenderer 
+    content={verseData.text}
+    images={verseData.images}
+    audios={verseData.audios}
+    files={verseData.files}
+    videos={verseData.videos}
+/>
                                     </div>
                                     
                                     {/* 오디오 플레이어 (TTS) */}
