@@ -262,12 +262,13 @@
             // 오늘 날짜 설정 (설정한 날짜가 현재 Day의 날짜가 됨)
             const changeStartDate = async (targetOffset) => {
                 const uid = auth.currentUser?.uid;
-                if (!uid) return;
+                if (!uid || !currentUser) return;
                 
                 try {
                     // targetOffset = 오늘 날짜로 설정하고 싶은 날짜의 offset
                     // currentDay = 현재 읽고 있는 Day
                     // 계산: Day 1의 날짜 = targetOffset - (currentDay - 1)
+                    const currentDay = currentUser.currentDay || 1;
                     const newDayOffset = targetOffset - (currentDay - 1);
                     
                     await db.collection('users').doc(uid).set({
@@ -2902,9 +2903,6 @@
                                                 </button>
                                             )}
                                         </div>
-                                        <p className="text-[10px] text-slate-400 mt-2 text-center">
-                                            현재: {offsetToDateStr(currentUser.dayOffset || 0)}부터 시작
-                                        </p>
                                     </div>
                                 </div>
                             </div>
