@@ -692,6 +692,11 @@
     
     // 회원가입 모드
     if (loginTab === 'signup') {
+        console.log('=== 회원가입 시작 ===');
+        console.log('이름:', signupName);
+        console.log('암호 길이:', signupPw.length);
+        console.log('생년월일:', signupBirthdate);
+        
         if(!signupName.trim() || !signupPw.trim() || !signupBirthdate) { 
             setErrorMsg("모든 항목을 입력해주세요."); 
             return; 
@@ -700,98 +705,148 @@
             setErrorMsg("암호가 일치하지 않습니다."); 
             return; 
         }
-        // 회원가입 로직은 기존 로그인과 동일 (이름/암호로 자동 가입)
-        setLoginName(signupName);
-        setLoginPw(signupPw);
-        // 가입 후 자동 로그인되도록 아래 로그인 로직 실행
+        if(signupPw.length < 6) {
+            setErrorMsg("암호는 6자리 이상이어야 합니다.");
+            return;
+        }
     }
     
     // 로그인 모드 검증
     const name = loginTab === 'signup' ? signupName : loginName;
     const pw = loginTab === 'signup' ? signupPw : loginPw;
-                
-                if(!name.trim() || !pw.trim()) { 
-                    setErrorMsg("이름과 암호를 모두 입력해주세요."); 
-                    return; 
-                }
+    
+    if(!name.trim() || !pw.trim()) { 
+        setErrorMsg("이름과 암호를 모두 입력해주세요."); 
+        return; 
+    }
 
-                // 관리자 로그인 (회원가입 탭에서는 관리자 로그인 불가)
-if (name === 'admin' && pw === '08283' && loginTab === 'login') {
+    // 관리자 로그인 (회원가입 탭에서는 관리자 로그인 불가)
+    if (name === 'admin' && pw === '08283' && loginTab === 'login') {
+        try {
+            if (auth && !auth.currentUser) await auth.signInAnonymously();
+            const snap = await db.collection('users').get();
+            setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+            
+            const announcementDoc = await db.collection('settings').doc('announcement').get();
+            if (announcementDoc.exists) {
+                setAnnouncementInput(announcementDoc.data());
+            }
+            
+            const syncDoc = await db.collection('settings').doc('sync').get();
+            if (syncDoc.exists) {
+                setLastSyncInfo(syncDoc.data());
+            }
+            
+            setIsAdmin(true);
+            return;
+        } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
+    }
+
     try {
-        if (auth && !auth.currentUser) await auth.signInAnonymously();
-        const snap = await db.collection('users').get();
-        setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+        const email = makePseudoEmail(name);
+        console.log('생성된 이메일:', email);
         
-        // 광고 데이터 로드
-        const announcementDoc = await db.collection('settings').doc('announcement').get();
-        if (announcementDoc.exists) {
-            setAnnouncementInput(announcementDoc.data());
+        let cred = null;
+        
+        // 먼저 로그인 시도
+        try {
+            console.log('로그인 시도 중...');
+            cred = await auth.signInWithEmailAndPassword(email, pw);
+            console.log('로그인 성공!');
+        } catch (err) {
+            console.log('로그인 실패:', err.code, err.message);
+            
+            if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials' || err?.code === 'auth/invalid-credential') {
+                // 로그인 탭에서는 회원가입 불가
+                if (loginTab === 'login') {
+                    setErrorMsg("등록되지 않은 사용자입니다. 회원가입 탭에서 가입해주세요.");
+                    return;
+                }
+                
+                // 회원가입 탭에서만 신규 계정 생성
+                console.log('회원가입 시도 중...');
+                try {
+                    cred = await auth.createUserWithEmailAndPassword(email, pw);
+                    console.log('회원가입 성공!');
+                } catch (signupErr) {
+                    console.error("회원가입 상세 에러:", signupErr);
+                    console.error("에러 코드:", signupErr?.code);
+                    console.error("에러 메시지:", signupErr?.message);
+                    
+                    if (signupErr?.code === 'auth/email-already-in-use') { 
+                        setErrorMsg("이미 사용 중인 이름입니다. 로그인 탭에서 로그인하거나 다른 이름을 사용해주세요."); 
+                    }
+                    else if (signupErr?.code === 'auth/weak-password') { 
+                        setErrorMsg("암호는 6자리 이상이어야 합니다."); 
+                    }
+                    else if (signupErr?.code === 'auth/invalid-email') {
+                        setErrorMsg("이름에 특수문자를 사용할 수 없습니다.");
+                    }
+                    else { 
+                        setErrorMsg(`회원가입 실패: ${signupErr?.message || '잠시 후 다시 시도해주세요'}`); 
+                    }
+                    return;
+                }
+            } else if (err?.code === 'auth/wrong-password') { 
+                setErrorMsg("암호가 틀렸습니다."); 
+                return; 
+            }
+            else { 
+                console.error('알 수 없는 로그인 에러:', err); 
+                setErrorMsg("로그인 실패(잠시 후 다시 시도)"); 
+                return; 
+            }
         }
+
+        const uid = cred.user.uid;
+        console.log('사용자 UID:', uid);
         
-        // 동기화 정보 로드
-        const syncDoc = await db.collection('settings').doc('sync').get();
-        if (syncDoc.exists) {
-            setLastSyncInfo(syncDoc.data());
-        }
-        
-        setIsAdmin(true);
-        return;
-    } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
-}
+        const ref = db.collection('users').doc(uid);
+        const doc = await ref.get();
 
-try {
-    const email = makePseudoEmail(name);
-            let cred = null;
-            try {
-                cred = await auth.signInWithEmailAndPassword(email, pw);
-            } catch (err) {
-                if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials') {
-                    // 로그인 탭에서는 회원가입 불가
-                    if (loginTab === 'login') {
-                        setErrorMsg("등록되지 않은 사용자입니다. 회원가입 탭에서 가입해주세요.");
-                        return;
-                    }
-                    // 회원가입 탭에서만 신규 계정 생성
-                    try {
-                        cred = await auth.createUserWithEmailAndPassword(email, pw);
-                    } catch (signupErr) {
-                                if (signupErr?.code === 'auth/email-already-in-use') { setErrorMsg("암호가 틀렸습니다."); }
-                                else if (signupErr?.code === 'auth/weak-password') { setErrorMsg("암호는 6자리 이상이어야 합니다."); }
-                                else { console.error(signupErr); setErrorMsg("로그인 실패(잠시 후 다시 시도)"); }
-                                return;
-                            }
-                        } else if (err?.code === 'auth/wrong-password') { setErrorMsg("암호가 틀렸습니다."); return; }
-                        else { console.error(err); setErrorMsg("로그인 실패(잠시 후 다시 시도)"); return; }
-                    }
-
-                    const uid = cred.user.uid;
-                    const ref = db.collection('users').doc(uid);
-                    const doc = await ref.get();
-
-                    if (!doc.exists) {
-                        const newUserBase = {
-                            name: name.trim(), password: pw, startDate: new Date().toDateString(),
-                            currentDay: 1, streak: 0, score: 0, lastReadDate: null, gender: 'male',
-                            planId: "1year_revised", communityId: null, communityName: null, subgroupId: null,
-                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                        };
-                        await ref.set(newUserBase);
-                        setTempUser({ ...newUserBase, uid });
-                        setView('plan_type_select');
-                        return;
-                    }
-
-                    const user = userDocToState(doc);
-                    setCurrentUser(user);
-                    setHasReadToday(user.lastReadDate === new Date().toDateString());
-
-                    if (!user.communityId || !user.subgroupId) {
-                        setTempUser(user);
-                        setView('plan_type_select');
-                    } else { setView('dashboard'); }
-                } catch (err) { console.error(err); setErrorMsg("로그인 처리 중 오류"); }
+        if (!doc.exists) {
+            console.log('신규 사용자 - Firestore에 데이터 생성 중...');
+            const newUserBase = {
+                name: name.trim(), 
+                password: pw, 
+                startDate: new Date().toDateString(),
+                currentDay: 1, 
+                streak: 0, 
+                score: 0, 
+                lastReadDate: null, 
+                gender: 'male',
+                planId: "1year_revised", 
+                communityId: null, 
+                communityName: null, 
+                subgroupId: null,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             };
+            await ref.set(newUserBase);
+            console.log('Firestore 데이터 생성 완료!');
+            
+            setTempUser({ ...newUserBase, uid });
+            setView('plan_type_select');
+            return;
+        }
+
+        console.log('기존 사용자 - 데이터 로드 완료');
+        const user = userDocToState(doc);
+        setCurrentUser(user);
+        setHasReadToday(user.lastReadDate === new Date().toDateString());
+
+        if (!user.communityId || !user.subgroupId) {
+            setTempUser(user);
+            setView('plan_type_select');
+        } else { 
+            setView('dashboard'); 
+        }
+        
+    } catch (err) { 
+        console.error('전체 프로세스 에러:', err); 
+        setErrorMsg("로그인 처리 중 오류"); 
+    }
+};
 
             const handlePlanTypeSelect = (typeId) => { setSelectedPlanType(typeId); setView('bible_version_select'); };
 
