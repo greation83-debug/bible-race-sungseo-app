@@ -949,28 +949,6 @@ const changePassword = async (uid, userName, currentPassword) => {
                 } catch (e) { console.error(e); return { title: null, text: "서버와 통신 중 오류가 발생했습니다." }; }
             };
 
-// 오디오 블록 실시간 로딩 (Notion URL 1시간 만료 대응)
-            const fetchAudioBlocksRealtime = async (pageId) => {
-                if (!pageId) return [];
-                try {
-                    const response = await fetch(SUPABASE_PAGE_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ pageId: pageId, audioOnly: true })
-                    });
-                    if (!response.ok) throw new Error(`Audio fetch error: ${response.status}`);
-                    const data = await response.json();
-                    return data.audios || [];
-                } catch (e) {
-                    console.error('오디오 실시간 로딩 실패:', e);
-                    return [];
-                }
-            };
-
-            // 본문 가져오기 (캐시 우선, 없으면 노션)
-            const fetchNotionData = async (planId, currentDay) => {
-```
-
 ---
 
 ## 📍 **2단계: SUPABASE_PAGE_URL 상수 추가**
