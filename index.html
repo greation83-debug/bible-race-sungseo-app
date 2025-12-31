@@ -34,6 +34,8 @@
 
     <script type="text/babel">
         const SUPABASE_FUNCTION_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy";
+        const SUPABASE_PAGE_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy-page";
+        const SUPABASE_BULK_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy-bulk";
 
         const firebaseConfig = {
             apiKey: "AIzaSyAOMubppe1JZbBh0VBv7UIbZyY2S1RI9fw",
@@ -63,8 +65,8 @@
                 subgroupId: d.subgroupId ?? null, planId: d.planId ?? "1year_revised",
                 achievements: d.achievements ?? [],
                 memos: d.memos ?? {},
-                dayOffset: d.dayOffset ?? 0, // 시작 날짜 오프셋 (4월 시작 = 90)
-                readCount: d.readCount ?? 1, // 몇 독 중인지 (1독, 2독, 3독...)
+                dayOffset: d.dayOffset ?? 0,
+                readCount: d.readCount ?? 1,
             };
         };
 
@@ -138,7 +140,6 @@
         const TOTAL_DAYS = 365;
         const PANIC_DISTANCE = 5;
 
-        // 업적 시스템
         const ACHIEVEMENTS = [
             { id: 'first_read', title: '첫 발걸음', desc: '처음으로 말씀을 읽었습니다', emoji: '👣', condition: (u) => u.currentDay > 1 },
             { id: 'streak_7', title: '일주일 연속', desc: '7일 연속으로 읽었습니다', emoji: '🔥', condition: (u) => u.streak >= 7 },
@@ -184,7 +185,7 @@
 
         const App = () => {
             const [view, setView] = React.useState('login'); 
-            const [loginTab, setLoginTab] = React.useState('login'); // 'login' or 'signup' 
+            const [loginTab, setLoginTab] = React.useState('login');
             const [signupName, setSignupName] = React.useState('');
             const [signupPw, setSignupPw] = React.useState('');
             const [signupPwConfirm, setSignupPwConfirm] = React.useState('');
@@ -207,7 +208,7 @@
             const [allUsers, setAllUsers] = React.useState([]);
             const [editingUser, setEditingUser] = React.useState(null);
             const [changingPassword, setChangingPassword] = React.useState(null);
-const [newPassword, setNewPassword] = React.useState('');
+            const [newPassword, setNewPassword] = React.useState('');
             const [communityMembers, setCommunityMembers] = React.useState([]);
             const [memos, setMemos] = React.useState({});
             const [currentMemo, setCurrentMemo] = React.useState('');
@@ -217,20 +218,19 @@ const [newPassword, setNewPassword] = React.useState('');
             const [showCalendar, setShowCalendar] = React.useState(false);
             const [calendarDate, setCalendarDate] = React.useState(new Date());
             const [readHistory, setReadHistory] = React.useState([]);
-            const [adminFilter, setAdminFilter] = React.useState('all'); // 관리자 부서 필터
-            const [adminViewMode, setAdminViewMode] = React.useState('today'); // 'today' or 'inactive'
-            const [announcement, setAnnouncement] = React.useState(null); // 광고/공지
-            const [showRestartConfirm, setShowRestartConfirm] = React.useState(false); // 재시작 확인 모달
+            const [adminFilter, setAdminFilter] = React.useState('all');
+            const [adminViewMode, setAdminViewMode] = React.useState('today');
+            const [announcement, setAnnouncement] = React.useState(null);
+            const [showRestartConfirm, setShowRestartConfirm] = React.useState(false);
             const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false });
-            const [showDateSettings, setShowDateSettings] = React.useState(false); // 날짜 설정 모달
-            const [showSubgroupChange, setShowSubgroupChange] = React.useState(false); // 소그룹 변경 모달
-            const [syncProgress, setSyncProgress] = React.useState(null); // 동기화 진행 상황
-            const [lastSyncInfo, setLastSyncInfo] = React.useState(null); // 마지막 동기화 정보
-            const [selectedSyncVersions, setSelectedSyncVersions] = React.useState(['1year_revised']); // 동기화할 버전들
+            const [showDateSettings, setShowDateSettings] = React.useState(false);
+            const [showSubgroupChange, setShowSubgroupChange] = React.useState(false);
+            const [syncProgress, setSyncProgress] = React.useState(null);
+            const [lastSyncInfo, setLastSyncInfo] = React.useState(null);
+            const [selectedSyncVersions, setSelectedSyncVersions] = React.useState(['1year_revised']);
 
             const getLevelInfo = (score) => [...LEVEL_SYSTEM].reverse().find(l => score >= l.min) || LEVEL_SYSTEM[0];
 
-            // 날짜 → Day 오프셋 계산 (1월 1일 = 0, 4월 1일 = 90)
             const dateToOffset = (month, day) => {
                 const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
                 let offset = 0;
@@ -241,7 +241,6 @@ const [newPassword, setNewPassword] = React.useState('');
                 return offset;
             };
 
-            // Day 오프셋 → 날짜 문자열 (0 → "1월 1일", 90 → "4월 1일")
             const offsetToDateStr = (offset) => {
                 const daysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
                 let remaining = offset;
@@ -253,7 +252,6 @@ const [newPassword, setNewPassword] = React.useState('');
                 return `${month + 1}월 ${remaining + 1}일`;
             };
 
-            // 실제 본문 Day 계산 (dayOffset은 Day 1의 날짜를 의미, currentDay는 현재 읽고 있는 Day)
             const getActualDay = (currentDay, dayOffset) => {
                 let actualDay = currentDay + dayOffset;
                 while (actualDay > 365) actualDay -= 365;
@@ -261,15 +259,11 @@ const [newPassword, setNewPassword] = React.useState('');
                 return actualDay;
             };
 
-            // 오늘 날짜 설정 (설정한 날짜가 현재 Day의 날짜가 됨)
             const changeStartDate = async (targetOffset) => {
                 const uid = auth.currentUser?.uid;
                 if (!uid || !currentUser) return;
                 
                 try {
-                    // targetOffset = 오늘 날짜로 설정하고 싶은 날짜의 offset
-                    // currentDay = 현재 읽고 있는 Day
-                    // 계산: Day 1의 날짜 = targetOffset - (currentDay - 1)
                     const currentDay = currentUser.currentDay || 1;
                     const newDayOffset = targetOffset - (currentDay - 1);
                     
@@ -287,7 +281,6 @@ const [newPassword, setNewPassword] = React.useState('');
                 }
             };
             
-            // 소그룹 변경
             const changeSubgroup = async (newSubgroup) => {
                 const uid = auth.currentUser?.uid;
                 if (!uid) return;
@@ -302,7 +295,6 @@ const [newPassword, setNewPassword] = React.useState('');
                     setShowSubgroupChange(false);
                     alert(`소그룹이 "${newSubgroup}"(으)로 변경되었습니다!`);
                     
-                    // 커뮤니티 멤버 새로고침
                     if (currentUser.communityId) {
                         const members = await loadCommunityMembers(currentUser.communityId);
                         const updatedMembers = members.map(m => m.uid === uid ? {...m, subgroupId: newSubgroup} : m);
@@ -315,7 +307,6 @@ const [newPassword, setNewPassword] = React.useState('');
                 }
             };
 
-            // 광고/공지 로드
             const loadAnnouncement = async () => {
                 if (!db) return;
                 try {
@@ -326,7 +317,6 @@ const [newPassword, setNewPassword] = React.useState('');
                 } catch (e) { console.error("광고 로딩 실패:", e); }
             };
 
-            // 광고/공지 저장 (관리자용)
             const saveAnnouncement = async () => {
                 if (!db) return;
                 try {
@@ -342,7 +332,6 @@ const [newPassword, setNewPassword] = React.useState('');
                 }
             };
 
-            // 재시작 함수 (뒤쳐진 사람용)
             const handleRestart = async () => {
                 const uid = auth.currentUser?.uid;
                 if (!uid) return;
@@ -375,14 +364,12 @@ const [newPassword, setNewPassword] = React.useState('');
                     setReadHistory([]);
                     setShowRestartConfirm(false);
                     alert('재시작되었습니다! 오늘부터 Day 1입니다. 화이팅! 🔥');
-                    // useEffect가 currentDay 변경을 감지하여 자동으로 본문을 다시 로드합니다
                 } catch (e) {
                     console.error("재시작 실패:", e);
                     alert('재시작 실패');
                 }
             };
 
-            // 묵상 메모 불러오기
             const loadMemos = async (uid) => {
                 if (!db || !uid) return {};
                 try {
@@ -396,17 +383,14 @@ const [newPassword, setNewPassword] = React.useState('');
                 } catch (e) { console.error("메모 로딩 실패:", e); return {}; }
             };
 
-            // 묵상 메모 저장
             const saveMemo = async (day, memoText) => {
                 const uid = auth.currentUser?.uid;
                 if (!uid || !memoText.trim()) return;
                 
-                // 기존 메모 가져오기 (여러 개 저장 지원)
                 const existingMemo = memos[day];
                 let texts = [];
                 
                 if (existingMemo) {
-                    // 기존 데이터 마이그레이션: text → texts 배열
                     if (existingMemo.texts) {
                         texts = [...existingMemo.texts];
                     } else if (existingMemo.text) {
@@ -414,14 +398,13 @@ const [newPassword, setNewPassword] = React.useState('');
                     }
                 }
                 
-                // 새 묵상 추가
                 texts.push(memoText);
                 
                 const newMemos = { 
                     ...memos, 
                     [day]: { 
                         texts: texts,
-                        text: texts.join('\n\n---\n\n'), // 호환성을 위해 text도 유지
+                        text: texts.join('\n\n---\n\n'),
                         date: new Date().toISOString(), 
                         title: verseData.subtitle 
                     } 
@@ -432,12 +415,10 @@ const [newPassword, setNewPassword] = React.useState('');
                 try {
                     await db.collection('users').doc(uid).set({ memos: newMemos, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                     alert(`묵상이 저장되었습니다! ✨ (이 날 총 ${texts.length}개)`);
-                    // 메모 관련 업적 체크
                     checkAchievements(currentUser, newMemos);
                 } catch (e) { console.error("메모 저장 실패:", e); alert("저장 실패"); }
             };
 
-            // 업적 체크 및 알림
             const checkAchievements = (user, userMemos) => {
                 if (!user) return;
                 const earned = ACHIEVEMENTS.filter(a => a.condition(user, userMemos));
@@ -445,11 +426,9 @@ const [newPassword, setNewPassword] = React.useState('');
                 const newOnes = earned.filter(a => !savedAchievements.includes(a.id));
                 
                 if (newOnes.length > 0) {
-                    // 새 업적 토스트 표시
                     setNewAchievement(newOnes[0]);
                     setTimeout(() => setNewAchievement(null), 4000);
                     
-                    // Firestore에 저장
                     const uid = auth.currentUser?.uid;
                     if (uid) {
                         const allEarned = earned.map(a => a.id);
@@ -459,12 +438,10 @@ const [newPassword, setNewPassword] = React.useState('');
                 }
             };
 
-            // HTML 파일 생성 함수 (개인용) - 50대 친화적 디자인
             const generateMemosHTML = (userName, userMemos, userStats = {}) => {
                 const memoCount = Object.keys(userMemos).length;
                 const sortedMemos = Object.entries(userMemos).sort(([a], [b]) => Number(a) - Number(b));
                 
-                // 묵상 항목들 HTML 생성
                 let memosHTML = '';
                 sortedMemos.forEach(([day, memo]) => {
                     const dateStr = memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : '';
@@ -508,7 +485,6 @@ const [newPassword, setNewPassword] = React.useState('');
 </head>
 <body>
     <div class="container">
-        <!-- 표지 -->
         <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 24px; padding: 50px 30px; text-align: center; color: white; margin-bottom: 30px;">
             <div style="font-size: 60px; margin-bottom: 20px;">📖</div>
             <div style="font-size: 32px; font-weight: bold; margin-bottom: 10px;">${userName}</div>
@@ -516,7 +492,6 @@ const [newPassword, setNewPassword] = React.useState('');
             <div style="font-size: 16px; opacity: 0.7; margin-top: 10px;">성경통독 365</div>
         </div>
         
-        <!-- 통계 -->
         <div style="background: white; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);">
             <h2 style="text-align: center; font-size: 24px; color: #1e293b; margin-bottom: 25px;">📊 나의 기록</h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
@@ -542,7 +517,6 @@ const [newPassword, setNewPassword] = React.useState('');
             </div>
         </div>
         
-        <!-- 묵상 목록 -->
         ${sortedMemos.length > 0 ? `
             <h2 style="font-size: 24px; color: #1e293b; margin-bottom: 20px; padding-left: 10px;">✍️ 나의 묵상</h2>
             ${memosHTML}
@@ -553,7 +527,6 @@ const [newPassword, setNewPassword] = React.useState('');
             </div>
         `}
         
-        <!-- 마무리 -->
         <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); border-radius: 24px; padding: 40px 30px; text-align: center; color: white; margin-top: 30px;">
             <div style="font-size: 50px; margin-bottom: 20px;">🎉</div>
             <div style="font-size: 26px; font-weight: bold; margin-bottom: 15px;">축하합니다!</div>
@@ -573,7 +546,6 @@ const [newPassword, setNewPassword] = React.useState('');
 </body>
 </html>`;
 
-                // 다운로드
                 const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -583,7 +555,6 @@ const [newPassword, setNewPassword] = React.useState('');
                 URL.revokeObjectURL(url);
             };
 
-            // CSV 생성 함수 (관리자용)
             const generateMemosCSV = async () => {
                 if (!db) return;
                 
@@ -639,7 +610,6 @@ const [newPassword, setNewPassword] = React.useState('');
                     const readTodayCount = subMembers.filter(m => m.lastReadDate === todayStr).length;
                     const rate = totalCount > 0 ? Math.round((readTodayCount / totalCount) * 100) : 0;
                     
-                    // 누적 진행률 계산 (평균 Day / 365 * 100)
                     const avgDay = totalCount > 0 ? subMembers.reduce((sum, m) => sum + (m.currentDay || 1), 0) / totalCount : 0;
                     const progressRate = Math.round((avgDay / TOTAL_DAYS) * 100);
                     const totalScore = subMembers.reduce((sum, m) => sum + (m.score || 0), 0);
@@ -671,39 +641,36 @@ const [newPassword, setNewPassword] = React.useState('');
                 }
             };
 
-const changePassword = async (uid, userName, currentPassword) => {
-    if (!newPassword || newPassword.length < 6) {
-        alert('새 암호는 6자리 이상이어야 합니다.');
-        return;
-    }
-    
-    if (!confirm(`${userName}님의 암호를 변경하시겠습니까?\n\n새 암호: ${newPassword}`)) {
-        return;
-    }
-    
-    try {
-        // Firebase Authentication에서 암호 변경은 직접 불가능
-        // Firestore에 새 암호 저장 (사용자가 다음 로그인 시 자동 업데이트됨)
-        await db.collection('users').doc(uid).set({
-            password: newPassword,
-            passwordResetRequired: true,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-        
-        alert(`✅ ${userName}님의 암호가 변경되었습니다!\n\n새 암호: ${newPassword}\n\n※ 사용자에게 새 암호를 전달해주세요.`);
-        
-        // 사용자 목록 업데이트
-        setAllUsers(prev => prev.map(u => 
-            u.uid === uid ? { ...u, password: newPassword } : u
-        ));
-        
-        setChangingPassword(null);
-        setNewPassword('');
-    } catch (e) {
-        console.error(e);
-        alert('암호 변경 실패');
-    }
-};
+            const changePassword = async (uid, userName, currentPassword) => {
+                if (!newPassword || newPassword.length < 6) {
+                    alert('새 암호는 6자리 이상이어야 합니다.');
+                    return;
+                }
+                
+                if (!confirm(`${userName}님의 암호를 변경하시겠습니까?\n\n새 암호: ${newPassword}`)) {
+                    return;
+                }
+                
+                try {
+                    await db.collection('users').doc(uid).set({
+                        password: newPassword,
+                        passwordResetRequired: true,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    
+                    alert(`✅ ${userName}님의 암호가 변경되었습니다!\n\n새 암호: ${newPassword}\n\n※ 사용자에게 새 암호를 전달해주세요.`);
+                    
+                    setAllUsers(prev => prev.map(u => 
+                        u.uid === uid ? { ...u, password: newPassword } : u
+                    ));
+                    
+                    setChangingPassword(null);
+                    setNewPassword('');
+                } catch (e) {
+                    console.error(e);
+                    alert('암호 변경 실패');
+                }
+            };
             
             const startEditUser = (user) => setEditingUser({ ...user });
 
@@ -723,166 +690,160 @@ const changePassword = async (uid, userName, currentPassword) => {
             };
 
             const handleLogin = async (e) => {
-    e.preventDefault();
-    setErrorMsg('');
-    
-    // 회원가입 모드
-    if (loginTab === 'signup') {
-        console.log('=== 회원가입 시작 ===');
-        console.log('이름:', signupName);
-        console.log('암호 길이:', signupPw.length);
-        console.log('생년월일:', signupBirthdate);
-        
-        if(!signupName.trim() || !signupPw.trim() || !signupBirthdate) { 
-            setErrorMsg("모든 항목을 입력해주세요."); 
-            return; 
-        }
-        if(signupPw !== signupPwConfirm) { 
-            setErrorMsg("암호가 일치하지 않습니다."); 
-            return; 
-        }
-        if(signupPw.length < 6) {
-            setErrorMsg("암호는 6자리 이상이어야 합니다.");
-            return;
-        }
-    }
-    
-    // 로그인 모드 검증
-    const name = loginTab === 'signup' ? signupName : loginName;
-    const pw = loginTab === 'signup' ? signupPw : loginPw;
-    
-    if(!name.trim() || !pw.trim()) { 
-        setErrorMsg("이름과 암호를 모두 입력해주세요."); 
-        return; 
-    }
-
-    // 관리자 로그인 (회원가입 탭에서는 관리자 로그인 불가)
-    if (name === 'admin' && pw === '08283' && loginTab === 'login') {
-        try {
-            if (auth && !auth.currentUser) await auth.signInAnonymously();
-            const snap = await db.collection('users').get();
-            setAllUsers(snap.docs.map(doc => userDocToState(doc)));
-            
-            const announcementDoc = await db.collection('settings').doc('announcement').get();
-            if (announcementDoc.exists) {
-                setAnnouncementInput(announcementDoc.data());
-            }
-            
-            const syncDoc = await db.collection('settings').doc('sync').get();
-            if (syncDoc.exists) {
-                setLastSyncInfo(syncDoc.data());
-            }
-            
-            setIsAdmin(true);
-            return;
-        } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
-    }
-
-    try {
-        const email = makePseudoEmail(name);
-        console.log('생성된 이메일:', email);
-        
-        let cred = null;
-        
-        // 먼저 로그인 시도
-        try {
-            console.log('로그인 시도 중...');
-            cred = await auth.signInWithEmailAndPassword(email, pw);
-            console.log('로그인 성공!');
-        } catch (err) {
-            console.log('로그인 실패:', err.code, err.message);
-            
-            if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials' || err?.code === 'auth/invalid-credential') {
-                // 로그인 탭에서는 회원가입 불가
-                if (loginTab === 'login') {
-                    setErrorMsg("등록되지 않은 사용자입니다. 회원가입 탭에서 가입해주세요.");
-                    return;
+                e.preventDefault();
+                setErrorMsg('');
+                
+                if (loginTab === 'signup') {
+                    console.log('=== 회원가입 시작 ===');
+                    console.log('이름:', signupName);
+                    console.log('암호 길이:', signupPw.length);
+                    console.log('생년월일:', signupBirthdate);
+                    
+                    if(!signupName.trim() || !signupPw.trim() || !signupBirthdate) { 
+                        setErrorMsg("모든 항목을 입력해주세요."); 
+                        return; 
+                    }
+                    if(signupPw !== signupPwConfirm) { 
+                        setErrorMsg("암호가 일치하지 않습니다."); 
+                        return; 
+                    }
+                    if(signupPw.length < 6) {
+                        setErrorMsg("암호는 6자리 이상이어야 합니다.");
+                        return;
+                    }
                 }
                 
-                // 회원가입 탭에서만 신규 계정 생성
-                console.log('회원가입 시도 중...');
-                try {
-                    cred = await auth.createUserWithEmailAndPassword(email, pw);
-                    console.log('회원가입 성공!');
-                } catch (signupErr) {
-                    console.error("회원가입 상세 에러:", signupErr);
-                    console.error("에러 코드:", signupErr?.code);
-                    console.error("에러 메시지:", signupErr?.message);
-                    
-                    if (signupErr?.code === 'auth/email-already-in-use') { 
-                        setErrorMsg("이미 사용 중인 이름입니다. 로그인 탭에서 로그인하거나 다른 이름을 사용해주세요."); 
-                    }
-                    else if (signupErr?.code === 'auth/weak-password') { 
-                        setErrorMsg("암호는 6자리 이상이어야 합니다."); 
-                    }
-                    else if (signupErr?.code === 'auth/invalid-email') {
-                        setErrorMsg("이름에 특수문자를 사용할 수 없습니다.");
-                    }
-                    else { 
-                        setErrorMsg(`회원가입 실패: ${signupErr?.message || '잠시 후 다시 시도해주세요'}`); 
-                    }
-                    return;
+                const name = loginTab === 'signup' ? signupName : loginName;
+                const pw = loginTab === 'signup' ? signupPw : loginPw;
+                
+                if(!name.trim() || !pw.trim()) { 
+                    setErrorMsg("이름과 암호를 모두 입력해주세요."); 
+                    return; 
                 }
-            } else if (err?.code === 'auth/wrong-password') { 
-                setErrorMsg("암호가 틀렸습니다."); 
-                return; 
-            }
-            else { 
-                console.error('알 수 없는 로그인 에러:', err); 
-                setErrorMsg("로그인 실패(잠시 후 다시 시도)"); 
-                return; 
-            }
-        }
 
-        const uid = cred.user.uid;
-        console.log('사용자 UID:', uid);
-        
-        const ref = db.collection('users').doc(uid);
-        const doc = await ref.get();
+                if (name === 'admin' && pw === '08283' && loginTab === 'login') {
+                    try {
+                        if (auth && !auth.currentUser) await auth.signInAnonymously();
+                        const snap = await db.collection('users').get();
+                        setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+                        
+                        const announcementDoc = await db.collection('settings').doc('announcement').get();
+                        if (announcementDoc.exists) {
+                            setAnnouncementInput(announcementDoc.data());
+                        }
+                        
+                        const syncDoc = await db.collection('settings').doc('sync').get();
+                        if (syncDoc.exists) {
+                            setLastSyncInfo(syncDoc.data());
+                        }
+                        
+                        setIsAdmin(true);
+                        return;
+                    } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
+                }
 
-        if (!doc.exists) {
-            console.log('신규 사용자 - Firestore에 데이터 생성 중...');
-            const newUserBase = {
-                name: name.trim(), 
-                password: pw, 
-                startDate: new Date().toDateString(),
-                currentDay: 1, 
-                streak: 0, 
-                score: 0, 
-                lastReadDate: null, 
-                gender: 'male',
-                planId: "1year_revised", 
-                communityId: null, 
-                communityName: null, 
-                subgroupId: null,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                try {
+                    const email = makePseudoEmail(name);
+                    console.log('생성된 이메일:', email);
+                    
+                    let cred = null;
+                    
+                    try {
+                        console.log('로그인 시도 중...');
+                        cred = await auth.signInWithEmailAndPassword(email, pw);
+                        console.log('로그인 성공!');
+                    } catch (err) {
+                        console.log('로그인 실패:', err.code, err.message);
+                        
+                        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials' || err?.code === 'auth/invalid-credential') {
+                            if (loginTab === 'login') {
+                                setErrorMsg("등록되지 않은 사용자입니다. 회원가입 탭에서 가입해주세요.");
+                                return;
+                            }
+                            
+                            console.log('회원가입 시도 중...');
+                            try {
+                                cred = await auth.createUserWithEmailAndPassword(email, pw);
+                                console.log('회원가입 성공!');
+                            } catch (signupErr) {
+                                console.error("회원가입 상세 에러:", signupErr);
+                                console.error("에러 코드:", signupErr?.code);
+                                console.error("에러 메시지:", signupErr?.message);
+                                
+                                if (signupErr?.code === 'auth/email-already-in-use') { 
+                                    setErrorMsg("이미 사용 중인 이름입니다. 로그인 탭에서 로그인하거나 다른 이름을 사용해주세요."); 
+                                }
+                                else if (signupErr?.code === 'auth/weak-password') { 
+                                    setErrorMsg("암호는 6자리 이상이어야 합니다."); 
+                                }
+                                else if (signupErr?.code === 'auth/invalid-email') {
+                                    setErrorMsg("이름에 특수문자를 사용할 수 없습니다.");
+                                }
+                                else { 
+                                    setErrorMsg(`회원가입 실패: ${signupErr?.message || '잠시 후 다시 시도해주세요'}`); 
+                                }
+                                return;
+                            }
+                        } else if (err?.code === 'auth/wrong-password') { 
+                            setErrorMsg("암호가 틀렸습니다."); 
+                            return; 
+                        }
+                        else { 
+                            console.error('알 수 없는 로그인 에러:', err); 
+                            setErrorMsg("로그인 실패(잠시 후 다시 시도)"); 
+                            return; 
+                        }
+                    }
+
+                    const uid = cred.user.uid;
+                    console.log('사용자 UID:', uid);
+                    
+                    const ref = db.collection('users').doc(uid);
+                    const doc = await ref.get();
+
+                    if (!doc.exists) {
+                        console.log('신규 사용자 - Firestore에 데이터 생성 중...');
+                        const newUserBase = {
+                            name: name.trim(), 
+                            password: pw, 
+                            startDate: new Date().toDateString(),
+                            currentDay: 1, 
+                            streak: 0, 
+                            score: 0, 
+                            lastReadDate: null, 
+                            gender: 'male',
+                            planId: "1year_revised", 
+                            communityId: null, 
+                            communityName: null, 
+                            subgroupId: null,
+                            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        };
+                        await ref.set(newUserBase);
+                        console.log('Firestore 데이터 생성 완료!');
+                        
+                        setTempUser({ ...newUserBase, uid });
+                        setView('plan_type_select');
+                        return;
+                    }
+
+                    console.log('기존 사용자 - 데이터 로드 완료');
+                    const user = userDocToState(doc);
+                    setCurrentUser(user);
+                    setHasReadToday(user.lastReadDate === new Date().toDateString());
+
+                    if (!user.communityId || !user.subgroupId) {
+                        setTempUser(user);
+                        setView('plan_type_select');
+                    } else { 
+                        setView('dashboard'); 
+                    }
+                    
+                } catch (err) { 
+                    console.error('전체 프로세스 에러:', err); 
+                    setErrorMsg("로그인 처리 중 오류"); 
+                }
             };
-            await ref.set(newUserBase);
-            console.log('Firestore 데이터 생성 완료!');
-            
-            setTempUser({ ...newUserBase, uid });
-            setView('plan_type_select');
-            return;
-        }
-
-        console.log('기존 사용자 - 데이터 로드 완료');
-        const user = userDocToState(doc);
-        setCurrentUser(user);
-        setHasReadToday(user.lastReadDate === new Date().toDateString());
-
-        if (!user.communityId || !user.subgroupId) {
-            setTempUser(user);
-            setView('plan_type_select');
-        } else { 
-            setView('dashboard'); 
-        }
-        
-    } catch (err) { 
-        console.error('전체 프로세스 에러:', err); 
-        setErrorMsg("로그인 처리 중 오류"); 
-    }
-};
 
             const handlePlanTypeSelect = (typeId) => { setSelectedPlanType(typeId); setView('bible_version_select'); };
 
@@ -912,7 +873,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                 } catch (e) { console.error(e); alert("서버 저장 실패"); }
             };
 
-            // Firestore에서 캐시된 본문 가져오기 (빠름 🚀)
+            // Firestore에서 캐시된 본문 가져오기
             const fetchVerseFromCache = async (planId, day) => {
                 if (!db) return null;
                 try {
@@ -949,64 +910,66 @@ const changePassword = async (uid, userName, currentPassword) => {
                 } catch (e) { console.error(e); return { title: null, text: "서버와 통신 중 오류가 발생했습니다." }; }
             };
 
----
+            // 오디오 블록 실시간 로딩 (Notion URL 1시간 만료 대응)
+            const fetchAudioBlocksRealtime = async (pageId) => {
+                if (!pageId) return [];
+                try {
+                    const response = await fetch(SUPABASE_PAGE_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ pageId: pageId, audioOnly: true })
+                    });
+                    if (!response.ok) throw new Error(`Audio fetch error: ${response.status}`);
+                    const data = await response.json();
+                    return data.audios || [];
+                } catch (e) {
+                    console.error('오디오 실시간 로딩 실패:', e);
+                    return [];
+                }
+            };
 
-## 📍 **2단계: SUPABASE_PAGE_URL 상수 추가**
+            // 오디오만 가져오기
+            const fetchAudioOnly = async (pageId) => {
+                if (!pageId) return null;
+                try {
+                    const audios = await fetchAudioBlocksRealtime(pageId);
+                    if (audios && audios.length > 0) {
+                        return audios[0].url;
+                    }
+                    return null;
+                } catch (e) {
+                    console.error('오디오 로딩 실패:', e);
+                    return null;
+                }
+            };
 
-### 🔍 검색할 텍스트:
-```
-const SUPABASE_FUNCTION_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy";
-const SUPABASE_PAGE_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy-page";
+            // 본문 가져오기 (캐시 우선, 없으면 노션)
+            const fetchNotionData = async (planId, currentDay) => {
+                // 1. 먼저 Firestore 캐시 확인
+                const cached = await fetchVerseFromCache(planId, currentDay);
+                if (cached && cached.text) {
+                    console.log(`✅ 캐시에서 로드: Day ${currentDay}`);
+                    
+                    // 2. 오디오 블록 마커가 있으면 실시간 로딩
+                    if (cached.text.includes('[AUDIO_BLOCK:')) {
+                        console.log('🎧 오디오 블록 발견 - 실시간 로딩 중...');
+                        const audios = await fetchAudioBlocksRealtime(cached.pageId);
+                        if (audios && audios.length > 0) {
+                            cached.audioUrl = audios[0].url;
+                            console.log(`✅ 오디오 URL 로드 완료`);
+                        }
+                    }
+                    
+                    return cached;
+                }
+                
+                // 2. 캐시 없으면 노션 API 호출
+                console.log(`🔄 노션에서 로드: Day ${currentDay}`);
+                return await fetchFromNotion(planId, currentDay);
+            };
 
-// 오디오 블록 실시간 로딩 (Notion URL 1시간 만료 대응)
-const fetchAudioBlocksRealtime = async (pageId) => {
-    if (!pageId) return [];
-    try {
-        const response = await fetch(SUPABASE_PAGE_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pageId: pageId, audioOnly: true })
-        });
-        if (!response.ok) throw new Error(`Audio fetch error: ${response.status}`);
-        const data = await response.json();
-        return data.audios || [];
-    } catch (e) {
-        console.error('오디오 실시간 로딩 실패:', e);
-        return [];
-    }
-};
-
-// 본문 가져오기 (캐시 우선, 없으면 노션)
-const fetchNotionData = async (planId, currentDay) => {
-    // 1. 먼저 Firestore 캐시 확인
-    const cached = await fetchVerseFromCache(planId, currentDay);
-    if (cached && cached.text) {
-        console.log(`✅ 캐시에서 로드: Day ${currentDay}`);
-        
-        // 2. 오디오 블록 마커가 있으면 실시간 로딩
-        if (cached.text.includes('[AUDIO_BLOCK:')) {
-            console.log('🎧 오디오 블록 발견 - 실시간 로딩 중...');
-            const audios = await fetchAudioBlocksRealtime(cached.pageId);
-            if (audios && audios.length > 0) {
-                cached.audioUrl = audios[0].url;
-                console.log(`✅ 오디오 URL 로드 완료`);
-            }
-        }
-        
-        return cached;
-    }
-    
-    // 2. 캐시 없으면 노션 API 호출
-    console.log(`🔄 노션에서 로드: Day ${currentDay}`);
-    return await fetchFromNotion(planId, currentDay);
-};
-
-// Supabase URL들
-const SUPABASE_BULK_URL = SUPABASE_FUNCTION_URL.replace('notion-proxy', 'notion-proxy-bulk');
-
-// 관리자용: 노션 → Firestore 동기화 (Bulk 방식)
-const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
-    // ... (나머지 동기화 코드는 그대로)
+            // 관리자용: 노션 → Firestore 동기화 (Bulk 방식)
+            const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                 if (!db || !SUPABASE_FUNCTION_URL) {
                     alert('설정 오류');
                     return { success: 0, error: 0, failedItems: [] };
@@ -1078,7 +1041,7 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                             }
                             
                             try {
-                                // pageId로 직접 본문 가져오기 (DB 쿼리 없이!)
+                                // pageId로 직접 본문 가져오기
                                 const pageResponse = await fetch(SUPABASE_PAGE_URL, {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
@@ -1090,12 +1053,11 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                 
                                 if (pageData.text) {
                                     // Firestore에 저장
-                                    // ★ pageId 저장 (오디오 실시간 로드용)
                                     const cacheKey = `${planType}_${version}_${day}`;
                                     await db.collection('verses').doc(cacheKey).set({
                                         title: item.title,
                                         text: pageData.text,
-                                        pageId: item.pageId,  // ★ pageId 저장!
+                                        pageId: item.pageId,
                                         day: day,
                                         planId: planId,
                                         syncedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1173,16 +1135,16 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                     const readCountBadge = readCount > 1 ? ` (${readCount}독)` : '';
                     
                     if (notionData?.text && !notionData.text.startsWith('[오류]')) {
-                        // ★ 먼저 본문 표시 (오디오 없이)
+                        // 먼저 본문 표시 (오디오 없이)
                         setVerseData({ 
                             title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, 
                             subtitle: notionData.title || `(제목 없음)`, 
                             text: notionData.text, 
-                            audioUrl: null,  // 오디오는 나중에
+                            audioUrl: null,
                             loading: false 
                         });
                         
-                        // ★ 오디오 실시간 로드 (pageId가 있으면)
+                        // 오디오 실시간 로드 (pageId가 있으면)
                         if (notionData.pageId) {
                             const audioUrl = await fetchAudioOnly(notionData.pageId);
                             if (audioUrl) {
@@ -1236,8 +1198,8 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                 let completedRound = false;
                 
                 if (newDay > 365) {
-                    newDay = 1; // Day 1로 리셋
-                    newReadCount += 1; // 2독, 3독...
+                    newDay = 1;
+                    newReadCount += 1;
                     completedRound = true;
                 }
                 
@@ -1256,7 +1218,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                 try {
                     const uid = auth.currentUser?.uid;
                     if (uid) {
-                        // 읽기 기록에 오늘 추가
                         const todayISO = new Date().toISOString().split('T')[0];
                         const newHistory = readHistory.includes(todayISO) ? readHistory : [...readHistory, todayISO];
                         setReadHistory(newHistory);
@@ -1311,7 +1272,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                     .sort((a, b) => b.rate - a.rate);
             };
             
-            // 누적 진행률 기준 랭킹
             const getProgressRanking = () => {
                 if (!currentUser || !subgroupStats || Object.keys(subgroupStats).length === 0) return [];
                 return Object.entries(subgroupStats)
@@ -1326,18 +1286,14 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                     .sort((a, b) => b.progressRate - a.progressRate);
             };
 
-            // 주간 MVP 계산
             const getWeeklyMVP = () => {
                 if (!communityMembers || communityMembers.length === 0) return null;
                 const now = new Date();
                 const weekStart = new Date(now);
-                weekStart.setDate(now.getDate() - now.getDay()); // 이번 주 일요일
+                weekStart.setDate(now.getDate() - now.getDay());
                 weekStart.setHours(0, 0, 0, 0);
                 
-                // 이번 주에 가장 높은 streak을 가진 사람
                 const mvpByStreak = [...communityMembers].sort((a, b) => (b.streak || 0) - (a.streak || 0))[0];
-                
-                // 이번 주 가장 높은 점수 획득자 (currentDay 증가량으로 대체)
                 const mvpByProgress = [...communityMembers].sort((a, b) => (b.currentDay || 0) - (a.currentDay || 0))[0];
                 
                 return {
@@ -1346,7 +1302,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                 };
             };
 
-            // 월간 소그룹 대항전 계산
             const getMonthlyContest = () => {
                 if (!subgroupStats || Object.keys(subgroupStats).length === 0) return [];
                 const now = new Date();
@@ -1355,8 +1310,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                 
                 return Object.entries(subgroupStats)
                     .map(([name, data]) => {
-                        // 월간 참여율 = 오늘까지의 총 읽은 일수 / (인원수 × 경과일수) × 100
-                        // 여기서는 오늘 읽은 비율로 대체 (실제로는 월간 누적 필요)
                         const monthlyRate = data.rate || 0;
                         return {
                             name,
@@ -1455,7 +1408,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                     </div>
                                 </div>
                                 
-                                {/* 부서 필터 */}
                                 <div className="flex gap-2 mb-4 flex-wrap">
                                     <button 
                                         onClick={() => setAdminFilter('all')} 
@@ -1479,13 +1431,11 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                         const todayStr = new Date().toDateString();
                                         const today = new Date();
                                         
-                                        // 필터링
                                         let filteredUsers = adminFilter === 'all' 
                                             ? allUsers 
                                             : allUsers.filter(u => u.communityId === adminFilter);
                                         
                                         if (adminViewMode === 'today') {
-                                            // 오늘 안 읽은 사람
                                             const notReadUsers = filteredUsers.filter(u => u.lastReadDate !== todayStr);
                                             const grouped = {};
                                             notReadUsers.forEach(u => {
@@ -1530,13 +1480,12 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                                 </div>
                                             );
                                         } else {
-                                            // 장기 미참여자 (안 읽은 날 순 정렬)
                                             const usersWithDays = filteredUsers.map(u => {
                                                 const lastRead = u.lastReadDate ? new Date(u.lastReadDate) : null;
                                                 const daysSince = lastRead ? Math.floor((today - lastRead) / (1000 * 60 * 60 * 24)) : 999;
                                                 return { ...u, daysSince };
-                                            }).filter(u => u.daysSince >= 1) // 최소 1일 이상 안 읽은 사람
-                                              .sort((a, b) => b.daysSince - a.daysSince); // 오래된 순
+                                            }).filter(u => u.daysSince >= 1)
+                                              .sort((a, b) => b.daysSince - a.daysSince);
                                             
                                             return (
                                                 <div>
@@ -1585,7 +1534,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                     })()}
                                 </div>
                                 
-                                {/* 범례 */}
                                 <div className="mt-4 pt-3 border-t border-slate-100 flex gap-4 text-xs text-slate-500">
                                     <span className="flex items-center gap-1"><span className="w-3 h-3 bg-yellow-400 rounded"></span> 1-2일</span>
                                     <span className="flex items-center gap-1"><span className="w-3 h-3 bg-orange-500 rounded"></span> 3-6일</span>
@@ -1620,7 +1568,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                 })()}
                             </div>
 
-                            {/* 노션 데이터 동기화 */}
                             <div className="bg-white rounded-xl shadow-lg p-6">
                                 <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                                     🔄 노션 데이터 동기화
@@ -1646,7 +1593,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                                 동기화된 버전: {lastSyncInfo.syncedVersions.join(', ')}
                                             </p>
                                         )}
-                                        {/* 실패 목록 표시 */}
                                         {lastSyncInfo.failedItems && lastSyncInfo.failedItems.length > 0 && (
                                             <div className="mt-3 pt-3 border-t border-slate-200">
                                                 <p className="text-red-600 text-xs font-bold mb-2">
@@ -1696,11 +1642,9 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        {/* 버전 선택 */}
                                         <div>
                                             <p className="text-sm font-bold text-slate-700 mb-2">동기화할 버전 선택:</p>
                                             <div className="grid grid-cols-2 gap-2">
-                                                {/* 일년일독 */}
                                                 <div className="bg-slate-50 p-3 rounded-lg">
                                                     <p className="text-xs font-bold text-slate-500 mb-2">📖 일년일독</p>
                                                     {BIBLE_VERSIONS['1year'].map(v => {
@@ -1725,7 +1669,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                                         );
                                                     })}
                                                 </div>
-                                                {/* 신약일독 */}
                                                 <div className="bg-slate-50 p-3 rounded-lg">
                                                     <p className="text-xs font-bold text-slate-500 mb-2">📗 신약일독</p>
                                                     {BIBLE_VERSIONS['nt'].map(v => {
@@ -1753,7 +1696,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                             </div>
                                         </div>
                                         
-                                        {/* 선택 요약 */}
                                         <div className="bg-green-50 p-3 rounded-lg border border-green-200">
                                             <p className="text-sm text-green-700">
                                                 선택됨: <strong>{selectedSyncVersions.length}개</strong> 버전 
@@ -1774,7 +1716,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                                 setSyncProgress({ current: 0, total: totalDays, success: 0, error: 0, currentVersion: '', currentDay: 0 });
                                                 const result = await syncNotionToFirestore(selectedSyncVersions);
                                                 
-                                                // 실패 목록 상세 표시
                                                 let message = `동기화 완료!\n성공: ${result.success}개\n실패: ${result.error}개`;
                                                 if (result.failedItems && result.failedItems.length > 0) {
                                                     message += `\n\n❌ 실패 목록 (최대 10개 표시):`;
@@ -1787,7 +1728,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                                 }
                                                 alert(message);
                                                 
-                                                // 동기화 정보 새로고침
                                                 const syncDoc = await db.collection('settings').doc('sync').get();
                                                 if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
                                             }}
@@ -1803,7 +1743,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                 )}
                             </div>
 
-                            {/* 광고/공지 관리 */}
                             <div className="bg-white rounded-xl shadow-lg p-6">
                                 <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
                                     📢 광고/공지 관리
@@ -1863,7 +1802,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                         </button>
                                     </div>
                                     
-                                    {/* 미리보기 */}
                                     {announcementInput.text && (
                                         <div className="mt-4 p-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300">
                                             <p className="text-xs text-slate-400 mb-2">미리보기:</p>
@@ -1885,7 +1823,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                 </div>
                             </div>
 
-                            {/* 묵상 관리 */}
                             <div className="bg-white rounded-xl shadow-lg p-6">
                                 <div className="flex justify-between items-center mb-4">
                                     <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -1899,7 +1836,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                     </button>
                                 </div>
                                 
-                                {/* 묵상 통계 */}
                                 {(() => {
                                     const usersWithMemos = allUsers.filter(u => u.memos && Object.keys(u.memos || {}).length > 0);
                                     const totalMemos = allUsers.reduce((sum, u) => sum + Object.keys(u.memos || {}).length, 0);
@@ -1923,7 +1859,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                                 </div>
                                             </div>
                                             
-                                            {/* 묵상 많이 쓴 순 */}
                                             <h3 className="font-bold text-slate-700 mb-2">✍️ 묵상왕 TOP 10</h3>
                                             <div className="space-y-2 max-h-60 overflow-y-auto">
                                                 {allUsers
@@ -1986,58 +1921,56 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                 </div>
                             )}
 
-)}
-
-            {changingPassword && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setChangingPassword(null)}>
-                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-xl font-bold text-slate-800 mb-4 border-b pb-2">🔑 암호 변경</h3>
-                        
-                        <div className="bg-blue-50 p-3 rounded-lg mb-4">
-                            <p className="text-sm text-blue-700">
-                                <strong>{changingPassword.name}</strong>님의 암호를 변경합니다.
-                            </p>
-                            <p className="text-xs text-blue-600 mt-1">
-                                현재 암호: {changingPassword.password}
-                            </p>
-                        </div>
-                        
-                        <div className="mb-4">
-                            <label className="block text-sm font-bold text-slate-600 mb-2">새 암호 (6자리 이상)</label>
-                            <input
-                                type="text"
-                                value={newPassword}
-                                onChange={e => setNewPassword(e.target.value)}
-                                placeholder="123456"
-                                className="w-full border border-slate-300 rounded-lg p-3 text-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                autoFocus
-                            />
-                            <p className="text-xs text-slate-400 mt-1">
-                                ※ 사용자에게 이 암호를 전달해주세요
-                            </p>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={() => changePassword(changingPassword.uid, changingPassword.name, changingPassword.password)}
-                                disabled={!newPassword || newPassword.length < 6}
-                                className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
-                            >
-                                암호 변경
-                            </button>
-                            <button 
-                                onClick={() => {
-                                    setChangingPassword(null);
-                                    setNewPassword('');
-                                }}
-                                className="flex-1 bg-slate-200 text-slate-600 py-3 rounded-lg hover:bg-slate-300 font-bold"
-                            >
-                                취소
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                            {changingPassword && (
+                                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setChangingPassword(null)}>
+                                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                                        <h3 className="text-xl font-bold text-slate-800 mb-4 border-b pb-2">🔑 암호 변경</h3>
+                                        
+                                        <div className="bg-blue-50 p-3 rounded-lg mb-4">
+                                            <p className="text-sm text-blue-700">
+                                                <strong>{changingPassword.name}</strong>님의 암호를 변경합니다.
+                                            </p>
+                                            <p className="text-xs text-blue-600 mt-1">
+                                                현재 암호: {changingPassword.password}
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-bold text-slate-600 mb-2">새 암호 (6자리 이상)</label>
+                                            <input
+                                                type="text"
+                                                value={newPassword}
+                                                onChange={e => setNewPassword(e.target.value)}
+                                                placeholder="123456"
+                                                className="w-full border border-slate-300 rounded-lg p-3 text-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                autoFocus
+                                            />
+                                            <p className="text-xs text-slate-400 mt-1">
+                                                ※ 사용자에게 이 암호를 전달해주세요
+                                            </p>
+                                        </div>
+                                        
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => changePassword(changingPassword.uid, changingPassword.name, changingPassword.password)}
+                                                disabled={!newPassword || newPassword.length < 6}
+                                                className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                                            >
+                                                암호 변경
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    setChangingPassword(null);
+                                                    setNewPassword('');
+                                                }}
+                                                className="flex-1 bg-slate-200 text-slate-600 py-3 rounded-lg hover:bg-slate-300 font-bold"
+                                            >
+                                                취소
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             
                             <div className="bg-white rounded-xl shadow-lg p-6">
                                 <h2 className="text-lg font-bold text-slate-800 mb-4">👥 전체 회원 목록</h2>
@@ -2063,7 +1996,7 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                                         <td className="px-3 py-3 text-center font-bold text-blue-600">{u.currentDay}</td>
                                                         <td className="px-3 py-3 text-center">{u.score}</td>
                                                         <td className="px-3 py-3 text-center text-xs text-slate-400">{u.lastReadDate ? new Date(u.lastReadDate).toLocaleDateString('ko-KR') : '-'}</td>
-<td className="px-3 py-3 text-center">
+                                                        <td className="px-3 py-3 text-center">
                                                             <div className="flex justify-center gap-1">
                                                                 <button onClick={() => setChangingPassword(u)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="암호 변경"><Icon name="refresh" size={14} /></button>
                                                                 <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded" title="정보 수정"><Icon name="edit" size={14} /></button>
@@ -2095,7 +2028,6 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                 <p className="text-slate-400 text-sm mt-2">유쾌한 신앙생활의 시작!</p>
                             </div>
                             
-                            {/* 탭 UI */}
                             <div className="flex gap-2 mb-6">
                                 <button 
                                     type="button"
@@ -2152,25 +2084,25 @@ const syncNotionToFirestore = async (planIds = ['1year_revised']) => {
                                         />
                                     </div>
                                     <div>
-    <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">생년월일</label>
-    <input 
-        type="text" 
-        inputMode="numeric"
-        pattern="[0-9]*"
-        maxLength="8"
-        value={signupBirthdate} 
-        onChange={e => {
-            const value = e.target.value.replace(/[^0-9]/g, '');
-            setSignupBirthdate(value);
-        }}
-        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg tracking-wider" 
-        placeholder="19500101"
-        required
-    />
-    <p className="text-[10px] text-slate-400 mt-1 ml-1">
-        8자리 숫자로 입력 (예: 19500101)
-    </p>
-</div>
+                                        <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">생년월일</label>
+                                        <input 
+                                            type="text" 
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            maxLength="8"
+                                            value={signupBirthdate} 
+                                            onChange={e => {
+                                                const value = e.target.value.replace(/[^0-9]/g, '');
+                                                setSignupBirthdate(value);
+                                            }}
+                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg tracking-wider" 
+                                            placeholder="19500101"
+                                            required
+                                        />
+                                        <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                                            8자리 숫자로 입력 (예: 19500101)
+                                        </p>
+                                    </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">암호</label>
                                         <input 
