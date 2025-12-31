@@ -206,6 +206,8 @@
             const [isAdmin, setIsAdmin] = React.useState(false);
             const [allUsers, setAllUsers] = React.useState([]);
             const [editingUser, setEditingUser] = React.useState(null);
+            const [changingPassword, setChangingPassword] = React.useState(null);
+const [newPassword, setNewPassword] = React.useState('');
             const [communityMembers, setCommunityMembers] = React.useState([]);
             const [memos, setMemos] = React.useState({});
             const [currentMemo, setCurrentMemo] = React.useState('');
@@ -669,6 +671,40 @@
                 }
             };
 
+const changePassword = async (uid, userName, currentPassword) => {
+    if (!newPassword || newPassword.length < 6) {
+        alert('새 암호는 6자리 이상이어야 합니다.');
+        return;
+    }
+    
+    if (!confirm(`${userName}님의 암호를 변경하시겠습니까?\n\n새 암호: ${newPassword}`)) {
+        return;
+    }
+    
+    try {
+        // Firebase Authentication에서 암호 변경은 직접 불가능
+        // Firestore에 새 암호 저장 (사용자가 다음 로그인 시 자동 업데이트됨)
+        await db.collection('users').doc(uid).set({
+            password: newPassword,
+            passwordResetRequired: true,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        
+        alert(`✅ ${userName}님의 암호가 변경되었습니다!\n\n새 암호: ${newPassword}\n\n※ 사용자에게 새 암호를 전달해주세요.`);
+        
+        // 사용자 목록 업데이트
+        setAllUsers(prev => prev.map(u => 
+            u.uid === uid ? { ...u, password: newPassword } : u
+        ));
+        
+        setChangingPassword(null);
+        setNewPassword('');
+    } catch (e) {
+        console.error(e);
+        alert('암호 변경 실패');
+    }
+};
+            
             const startEditUser = (user) => setEditingUser({ ...user });
 
             const saveEditUser = async () => {
@@ -1896,6 +1932,59 @@
                                 </div>
                             )}
 
+)}
+
+            {changingPassword && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setChangingPassword(null)}>
+                    <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h3 className="text-xl font-bold text-slate-800 mb-4 border-b pb-2">🔑 암호 변경</h3>
+                        
+                        <div className="bg-blue-50 p-3 rounded-lg mb-4">
+                            <p className="text-sm text-blue-700">
+                                <strong>{changingPassword.name}</strong>님의 암호를 변경합니다.
+                            </p>
+                            <p className="text-xs text-blue-600 mt-1">
+                                현재 암호: {changingPassword.password}
+                            </p>
+                        </div>
+                        
+                        <div className="mb-4">
+                            <label className="block text-sm font-bold text-slate-600 mb-2">새 암호 (6자리 이상)</label>
+                            <input
+                                type="text"
+                                value={newPassword}
+                                onChange={e => setNewPassword(e.target.value)}
+                                placeholder="123456"
+                                className="w-full border border-slate-300 rounded-lg p-3 text-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                autoFocus
+                            />
+                            <p className="text-xs text-slate-400 mt-1">
+                                ※ 사용자에게 이 암호를 전달해주세요
+                            </p>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => changePassword(changingPassword.uid, changingPassword.name, changingPassword.password)}
+                                disabled={!newPassword || newPassword.length < 6}
+                                className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
+                            >
+                                암호 변경
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    setChangingPassword(null);
+                                    setNewPassword('');
+                                }}
+                                className="flex-1 bg-slate-200 text-slate-600 py-3 rounded-lg hover:bg-slate-300 font-bold"
+                            >
+                                취소
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+                            
                             <div className="bg-white rounded-xl shadow-lg p-6">
                                 <h2 className="text-lg font-bold text-slate-800 mb-4">👥 전체 회원 목록</h2>
                                 <div className="overflow-x-auto">
@@ -1920,10 +2009,11 @@
                                                         <td className="px-3 py-3 text-center font-bold text-blue-600">{u.currentDay}</td>
                                                         <td className="px-3 py-3 text-center">{u.score}</td>
                                                         <td className="px-3 py-3 text-center text-xs text-slate-400">{u.lastReadDate ? new Date(u.lastReadDate).toLocaleDateString('ko-KR') : '-'}</td>
-                                                        <td className="px-3 py-3 text-center">
+<td className="px-3 py-3 text-center">
                                                             <div className="flex justify-center gap-1">
-                                                                <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded"><Icon name="edit" size={14} /></button>
-                                                                <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded"><Icon name="trash" size={14} /></button>
+                                                                <button onClick={() => setChangingPassword(u)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="암호 변경"><Icon name="refresh" size={14} /></button>
+                                                                <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded" title="정보 수정"><Icon name="edit" size={14} /></button>
+                                                                <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded" title="삭제"><Icon name="trash" size={14} /></button>
                                                             </div>
                                                         </td>
                                                     </tr>
