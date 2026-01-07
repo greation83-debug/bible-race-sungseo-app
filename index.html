@@ -1,30 +1,80 @@
 <!DOCTYPE html>
+<!-- ============================================================================
+     천로역정 성경 레이스 - 성경 통독 앱
+     ============================================================================
+     
+     📋 코드 구조 (총 3295줄)
+     
+     [섹션 A] HTML 헤드 & 라이브러리 로드 (1-16줄)
+     [섹션 B] CSS 스타일 (17-30줄)
+     [섹션 C] 설정 및 상수 (36-164줄)
+             - C-1: Firebase/Supabase 설정 (36-52)
+             - C-2: 유틸리티 함수 (54-69)
+             - C-3: SVG 아이콘 (71-91)
+             - C-4: 레벨/계급 시스템 (93-104) ★ 레벨 이름 변경
+             - C-5: 읽기 플랜 설정 (106-122) ★ 성경 버전 추가
+             - C-6: 공동체/소그룹 (124-136) ★ 소그룹 추가
+             - C-7: 업적 시스템 (141-157) ★ 새 업적 추가
+     [섹션 D] 유틸리티 컴포넌트 (165-183줄) - MarkdownRenderer
+     [섹션 E] 상태 관리 State (186-360줄)
+     [섹션 F] 데이터 처리 함수 (361-673줄)
+     [섹션 G] 인증 시스템 (778-966줄)
+     [섹션 H] 데이터 페칭 (968-1246줄)
+     [섹션 I] 읽기 완료 처리 (1248-1324줄) ★ 점수 계산 변경
+     [섹션 J] 통계/랭킹 계산 (1334-1420줄)
+     [섹션 K] 관리자 화면 UI (1420-2130줄)
+     [섹션 L] 로그인/회원가입 화면 UI (2132-2400줄)
+     [섹션 M] 대시보드 화면 UI (2400-3290줄)
+     ============================================================================ -->
 <html lang="ko">
 <head>
+    <!-- ========== [섹션 A] HTML 헤드 & 라이브러리 로드 ========== -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>천로역정 성경 레이스</title>
+    
+    <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React 18 - UI 라이브러리 -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel - JSX를 JavaScript로 변환 -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Firebase - 인증 및 데이터베이스 -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    
+    <!-- PDF/이미지 생성 (현재 미사용) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
+    <!-- ========== [섹션 B] CSS 스타일 ========== -->
     <style>
+        /* 기본 폰트 설정 */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
-        .bg-sky-texture { background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%); }
-        .bg-map-texture { background-color: #f0fdf4; background-image: radial-gradient(#86efac 1px, transparent 1px); background-size: 20px 20px; }
+        
+        /* 배경 텍스처 */
+        .bg-sky-texture { background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%); }  /* 하늘색 그라데이션 */
+        .bg-map-texture { background-color: #f0fdf4; background-image: radial-gradient(#86efac 1px, transparent 1px); background-size: 20px 20px; }  /* 점 패턴 */
+        
+        /* 애니메이션: 흔들림 효과 */
         @keyframes wiggle { 0%, 100% { transform: rotate(-3deg) scale(1.1); } 50% { transform: rotate(3deg) scale(1.1); } }
         .animate-wiggle { animation: wiggle 0.3s ease-in-out infinite; }
+        
+        /* 애니메이션: 떠다니는 효과 (구름용) */
         .animate-float { animation: float 6s ease-in-out infinite; }
         .animate-float-slow { animation: float 10s ease-in-out infinite; }
         @keyframes float { 0% { transform: translateX(0px); } 50% { transform: translateX(10px); } 100% { transform: translateX(0px); } }
+        
+        /* 스크롤바 숨김 */
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* 산 배경 그래픽 (clip-path로 산 모양 표현) */
         .mountain-back { position: absolute; bottom: 0; left: 0; width: 100%; height: 60%; background: #86efac; clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%); z-index: 1; opacity: 0.8; }
         .mountain-front { position: absolute; bottom: 0; left: 0; width: 100%; height: 45%; background: #4ade80; clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%); z-index: 2; }
     </style>
@@ -33,8 +83,20 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        // ============================================================================
+        // [섹션 C] 설정 및 상수
+        // ============================================================================
+        
+        // --------------------------------------------------------------------------
+        // [섹션 C-1] Supabase & Firebase 설정
+        // --------------------------------------------------------------------------
+        
+        // Supabase Edge Function URL - 노션 API 프록시
+        // ★ 변경: Supabase 프로젝트 URL 변경 시 수정
         const SUPABASE_FUNCTION_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy";
 
+        // Firebase 프로젝트 설정
+        // ★ 변경: Firebase 프로젝트 변경 시 전체 교체
         const firebaseConfig = {
             apiKey: "AIzaSyAOMubppe1JZbBh0VBv7UIbZyY2S1RI9fw",
             authDomain: "bible-sungseo.firebaseapp.com",
@@ -44,54 +106,95 @@
             appId: "1:1061949588108:web:e8e3bbd6c3f73afa5131a9"
         };
         
+        // Firebase 초기화
         let db, auth;
         try {
             firebase.initializeApp(firebaseConfig);
-            auth = firebase.auth();
-            db = firebase.firestore();
+            auth = firebase.auth();   // Firebase Authentication
+            db = firebase.firestore(); // Firestore Database
         } catch (e) { console.error("Firebase init failed:", e); }
 
+        // --------------------------------------------------------------------------
+        // [섹션 C-2] 유틸리티 함수
+        // --------------------------------------------------------------------------
+        
+        // 이름 → 가짜 이메일 변환 (Firebase Auth는 이메일 기반이므로 이름을 이메일로 변환)
         const makePseudoEmail = (name) => `${encodeURIComponent(String(name || "").trim())}@bible.local`;
 
+        // Firestore 문서 → 사용자 상태 객체 변환
+        // Firestore에서 가져온 문서를 앱에서 사용하는 형식으로 변환
         const userDocToState = (doc) => {
             const d = doc.data();
             return {
-                uid: doc.id, name: d.name, password: d.password, startDate: d.startDate,
-                currentDay: d.currentDay ?? 1, streak: d.streak ?? 0, score: d.score ?? 0,
-                lastReadDate: d.lastReadDate ?? null, gender: d.gender ?? "male",
-                communityId: d.communityId ?? null, communityName: d.communityName ?? null,
-                subgroupId: d.subgroupId ?? null, planId: d.planId ?? "1year_revised",
-                achievements: d.achievements ?? [],
-                memos: d.memos ?? {},
-                dayOffset: d.dayOffset ?? 0, // 시작 날짜 오프셋 (4월 시작 = 90)
-                readCount: d.readCount ?? 1, // 몇 독 중인지 (1독, 2독, 3독...)
+                uid: doc.id,                          // 사용자 고유 ID
+                name: d.name,                         // 이름
+                password: d.password,                 // 비밀번호 (평문 저장 - 개선 필요)
+                startDate: d.startDate,               // 시작 날짜
+                currentDay: d.currentDay ?? 1,        // 현재 진행 Day (1-365)
+                streak: d.streak ?? 0,                // 연속 읽기 일수
+                score: d.score ?? 0,                  // 총 점수
+                lastReadDate: d.lastReadDate ?? null, // 마지막 읽은 날짜
+                gender: d.gender ?? "male",           // 성별
+                communityId: d.communityId ?? null,   // 소속 부서 ID (senior, youth 등)
+                communityName: d.communityName ?? null, // 소속 부서 이름
+                subgroupId: d.subgroupId ?? null,     // 소그룹 ID (1구역, 현준 목장 등)
+                planId: d.planId ?? "1year_revised",  // 읽기 플랜 ID (플랜타입_버전)
+                achievements: d.achievements ?? [],   // 획득한 업적 ID 배열
+                memos: d.memos ?? {},                 // 묵상 메모 {day: {text, date, title}}
+                dayOffset: d.dayOffset ?? 0,          // 시작 날짜 오프셋 (4월 시작 = 90)
+                readCount: d.readCount ?? 1,          // N독 중인지 (1독, 2독, 3독...)
             };
         };
 
+        // --------------------------------------------------------------------------
+        // [섹션 C-3] SVG 아이콘 컴포넌트
+        // --------------------------------------------------------------------------
+        
+        // Icon 컴포넌트 - name으로 아이콘 선택, size와 className으로 스타일링
         const Icon = ({ name, size = 20, className = "" }) => {
             const icons = {
+                // 왕관 - 완주자, 1위 표시
                 crown: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m2 4 3 12h14l3-12-6 7-4-3-4 3-6-7zm5 16h10"/></svg>,
+                // 트로피 - 랭킹, 대회
                 trophy: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>,
+                // 사용자들 - 공동체, 소그룹
                 users: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+                // 책 - 성경, 읽기
                 book: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
+                // 오른쪽 화살표 - 다음, 이동
                 arrowRight: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>,
+                // 뒤로 화살표 - 이전, 뒤로가기
                 back: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m15 18-6-6 6-6"/></svg>,
+                // 불꽃 - 연속 읽기 streak
                 flame: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>,
+                // 닫기 X - 모달 닫기
                 close: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+                // 휴지통 - 삭제
                 trash: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
+                // 다운로드 - 파일 다운로드
                 download: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+                // 새로고침 - 동기화, 재시작
                 refresh: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>,
+                // 편집 연필 - 수정
                 edit: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+                // 도움말 책 - 가이드
                 helpbook: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>,
+                // 차트 - 통계
                 chart: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>,
+                // 메달 - 업적
                 medal: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15"/><path d="M11 12 5.12 2.2"/><path d="m13 12 5.88-9.8"/><path d="M8 7h8"/><circle cx="12" cy="17" r="5"/><path d="M12 18v-2h-.5"/></svg>,
+                // 달력 - 날짜
                 calendar: <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
             };
             return icons[name] || null;
         };
 
+        // --------------------------------------------------------------------------
+        // [섹션 C-4] 레벨/계급 시스템 - 천로역정 테마
+        // ★ 변경: 레벨 이름/이모지 수정, 필요 점수(min) 조정
+        // --------------------------------------------------------------------------
         const LEVEL_SYSTEM = [
-            { min: 0, title: '멸망의 도시', emoji: '🏚️' },
+            { min: 0, title: '멸망의 도시', emoji: '🏚️' },      // 시작 레벨
             { min: 50, title: '좁은 문', emoji: '🚪' },
             { min: 150, title: '어려움의 산', emoji: '⛰️' },
             { min: 350, title: '평안의 궁전', emoji: '🏰' },
@@ -100,68 +203,118 @@
             { min: 1500, title: '의심의 성', emoji: '🏔️' },
             { min: 2200, title: '기쁨의 산', emoji: '🌄' },
             { min: 3200, title: '천성 문 앞', emoji: '✨' },
-            { min: 4300, title: '천성', emoji: '🌈' }
+            { min: 4300, title: '천성', emoji: '🌈' }           // 최고 레벨
         ];
 
+        // --------------------------------------------------------------------------
+        // [섹션 C-5] 읽기 플랜 설정
+        // ★ 변경: 새 플랜 추가 시 PLAN_TYPES와 BIBLE_VERSIONS 모두 수정
+        // --------------------------------------------------------------------------
+        
+        // 플랜 타입 (대분류)
         const PLAN_TYPES = [
             { id: '1year', title: '일년 일독', desc: '1년에 성경 1독을 합니다.' },
             { id: 'nt', title: '신약 일독', desc: '1년 동안 신약 1독을 합니다.' }
         ];
 
+        // 각 플랜별 성경 버전
+        // tagName: 노션 데이터베이스의 태그와 일치해야 함
         const BIBLE_VERSIONS = {
-            '1year': [
+            '1year': [  // 일년 일독 버전들
                 { id: 'revised', name: '개역개정', desc: '교회에서 평소에 사용하는 성경', tagName: '개역개정 일년일독' },
                 { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 일년일독' },
                 { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 일년일독' }
             ],
-            'nt': [
+            'nt': [  // 신약 일독 버전들
                 { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 신약일독' },
                 { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 신약일독' },
                 { id: 'message', name: '메시지 성경', desc: '현대 문화와 일상 언어로 생생하게 재해석한 의역 성경', tagName: '메시지 신약일독' }
             ]
         };
 
-        const seniorSubgroups = Array.from({length: 14}, (_, i) => `${i + 1}구역`).concat(['여성실버1', '여성실버2', '남성실버', '젊은부부', '1남선교회', '2남선교회', '3남선교회', '4남선교회', '5남선교회', '소속없음']);
+        // --------------------------------------------------------------------------
+        // [섹션 C-6] 공동체(부서) 및 소그룹 설정
+        // ★ 변경: 소그룹 추가/삭제, 새 부서 추가
+        // --------------------------------------------------------------------------
+        
+        // 각 부서별 소그룹 목록
+        const seniorSubgroups = Array.from({length: 14}, (_, i) => `${i + 1}구역`)  // 1구역~14구역
+            .concat(['여성실버1', '여성실버2', '남성실버', '젊은부부', '1남선교회', '2남선교회', '3남선교회', '4남선교회', '5남선교회', '소속없음']);
         const youthSubgroups = ['현준 목장', '지훈 목장', '아영 목장', '유리 목장', '채현 목장'];
-        const middleHighSubgroups = ['남학생', '여학생'];
+        const middleHighSubgroups = ['1목장', '2목장', '3목장', '4목장'];
         const elementarySubgroups = ['1학년', '2학년', '3학년', '4학년', '5학년', '6학년'];
         const kindergartenSubgroups = ['소망반', '빌립반', '믿음반'];
 
+        // 공동체(부서) 목록
         const MOCK_COMMUNITIES = [
-          { id: 'senior', name: '장년부', color: 'bg-orange-500', icon: '🏔️', subgroups: seniorSubgroups },
-          { id: 'youth', name: '청년부', color: 'bg-blue-500', icon: '🏃', subgroups: youthSubgroups },
-          { id: 'middlehigh', name: '중고등부', color: 'bg-purple-500', icon: '🏫', subgroups: middleHighSubgroups },
-          { id: 'elementary', name: '유초등부', color: 'bg-yellow-500', icon: '🐥', subgroups: elementarySubgroups },
-          { id: 'kinder', name: '유아유치부', color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
+            { id: 'senior', name: '장년부', color: 'bg-orange-500', icon: '🏔️', subgroups: seniorSubgroups },
+            { id: 'youth', name: '청년부', color: 'bg-blue-500', icon: '🏃', subgroups: youthSubgroups },
+            { id: 'middlehigh', name: '중고등부', color: 'bg-purple-500', icon: '🏫', subgroups: middleHighSubgroups },
+            { id: 'elementary', name: '유초등부', color: 'bg-yellow-500', icon: '🐥', subgroups: elementarySubgroups },
+            { id: 'kinder', name: '유아유치부', color: 'bg-pink-500', icon: '🍼', subgroups: kindergartenSubgroups },
         ];
 
-        const TOTAL_DAYS = 365;
-        const PANIC_DISTANCE = 5;
+        // 상수
+        const TOTAL_DAYS = 365;     // 1년 = 365일
+        const PANIC_DISTANCE = 5;   // 경고 거리 (현재 미사용)
 
-        // 업적 시스템
+        // --------------------------------------------------------------------------
+        // [섹션 C-7] 업적 시스템
+        // ★ 변경: 새 업적 추가 - id(고유), title, desc, emoji, condition(함수)
+        // condition: (u) => 조건 - u는 사용자 객체, m은 메모 객체
+        // --------------------------------------------------------------------------
         const ACHIEVEMENTS = [
-            { id: 'first_read', title: '첫 발걸음', desc: '처음으로 말씀을 읽었습니다', emoji: '👣', condition: (u) => u.currentDay > 1 },
-            { id: 'streak_7', title: '일주일 연속', desc: '7일 연속으로 읽었습니다', emoji: '🔥', condition: (u) => u.streak >= 7 },
-            { id: 'streak_30', title: '한 달 연속', desc: '30일 연속으로 읽었습니다', emoji: '💪', condition: (u) => u.streak >= 30 },
-            { id: 'streak_100', title: '백일의 기적', desc: '100일 연속으로 읽었습니다', emoji: '🌟', condition: (u) => u.streak >= 100 },
-            { id: 'day_30', title: '30일 완주', desc: '30일차를 달성했습니다', emoji: '🏃', condition: (u) => u.currentDay >= 30 },
-            { id: 'day_100', title: '100일 완주', desc: '100일차를 달성했습니다', emoji: '🎯', condition: (u) => u.currentDay >= 100 },
-            { id: 'day_200', title: '200일 완주', desc: '200일차를 달성했습니다', emoji: '🚀', condition: (u) => u.currentDay >= 200 },
-            { id: 'day_365', title: '완독 성공', desc: '365일 완독을 달성했습니다!', emoji: '👑', condition: (u) => u.currentDay >= 365 },
-            { id: 'first_memo', title: '첫 묵상', desc: '처음으로 묵상을 기록했습니다', emoji: '📝', condition: (u, m) => Object.keys(m || {}).length >= 1 },
-            { id: 'memo_10', title: '묵상 10개', desc: '묵상을 10개 작성했습니다', emoji: '📚', condition: (u, m) => Object.keys(m || {}).length >= 10 },
-            { id: 'memo_50', title: '묵상 50개', desc: '묵상을 50개 작성했습니다', emoji: '🎓', condition: (u, m) => Object.keys(m || {}).length >= 50 },
-            { id: 'score_100', title: '100점 달성', desc: '총 100점을 달성했습니다', emoji: '💯', condition: (u) => u.score >= 100 },
-            { id: 'score_500', title: '500점 달성', desc: '총 500점을 달성했습니다', emoji: '⭐', condition: (u) => u.score >= 500 },
-            { id: 'score_1000', title: '1000점 달성', desc: '총 1000점을 달성했습니다', emoji: '🏆', condition: (u) => u.score >= 1000 },
+            // 읽기 시작 관련
+            { id: 'first_read', title: '첫 발걸음', desc: '처음으로 말씀을 읽었습니다', emoji: '👣', 
+              condition: (u) => u.currentDay > 1 },
+            
+            // 연속 읽기 (streak) 관련
+            { id: 'streak_7', title: '일주일 연속', desc: '7일 연속으로 읽었습니다', emoji: '🔥', 
+              condition: (u) => u.streak >= 7 },
+            { id: 'streak_30', title: '한 달 연속', desc: '30일 연속으로 읽었습니다', emoji: '💪', 
+              condition: (u) => u.streak >= 30 },
+            { id: 'streak_100', title: '백일의 기적', desc: '100일 연속으로 읽었습니다', emoji: '🌟', 
+              condition: (u) => u.streak >= 100 },
+            
+            // 진행 Day 관련
+            { id: 'day_30', title: '30일 완주', desc: '30일차를 달성했습니다', emoji: '🏃', 
+              condition: (u) => u.currentDay >= 30 },
+            { id: 'day_100', title: '100일 완주', desc: '100일차를 달성했습니다', emoji: '🎯', 
+              condition: (u) => u.currentDay >= 100 },
+            { id: 'day_200', title: '200일 완주', desc: '200일차를 달성했습니다', emoji: '🚀', 
+              condition: (u) => u.currentDay >= 200 },
+            { id: 'day_365', title: '완독 성공', desc: '365일 완독을 달성했습니다!', emoji: '👑', 
+              condition: (u) => u.currentDay >= 365 },
+            
+            // 묵상 메모 관련
+            { id: 'first_memo', title: '첫 묵상', desc: '처음으로 묵상을 기록했습니다', emoji: '📝', 
+              condition: (u, m) => Object.keys(m || {}).length >= 1 },
+            { id: 'memo_10', title: '묵상 10개', desc: '묵상을 10개 작성했습니다', emoji: '📚', 
+              condition: (u, m) => Object.keys(m || {}).length >= 10 },
+            { id: 'memo_50', title: '묵상 50개', desc: '묵상을 50개 작성했습니다', emoji: '🎓', 
+              condition: (u, m) => Object.keys(m || {}).length >= 50 },
+            
+            // 점수 관련
+            { id: 'score_100', title: '100점 달성', desc: '총 100점을 달성했습니다', emoji: '💯', 
+              condition: (u) => u.score >= 100 },
+            { id: 'score_500', title: '500점 달성', desc: '총 500점을 달성했습니다', emoji: '⭐', 
+              condition: (u) => u.score >= 500 },
+            { id: 'score_1000', title: '1000점 달성', desc: '총 1000점을 달성했습니다', emoji: '🏆', 
+              condition: (u) => u.score >= 1000 },
         ];
 
+        // 기본 텍스트 (창세기 1장 - 캐시/노션 로드 실패 시 기본값)
         const GENESIS_1 = `### 1. 태초에 하나님이 천지를 창조하시니라
 2. 땅이 혼돈하고 공허하며 흑암이 깊음 위에 있고 하나님의 영은 수면 위에 운행하시니라
 3. 하나님이 이르시되 빛이 있으라 하시니 빛이 있었고
 4. 빛이 하나님이 보시기에 좋았더라 하나님이 빛과 어둠을 나누사
 (중략)`;
 
+        // --------------------------------------------------------------------------
+        // [섹션 D] 유틸리티 컴포넌트 - MarkdownRenderer
+        // 마크다운 문법을 HTML로 변환하여 렌더링
+        // 지원: # 제목, - 리스트, > 인용문, 빈 줄
+        // --------------------------------------------------------------------------
         const MarkdownRenderer = ({ content }) => {
             if (!content) return null;
             const lines = content.split('\n');
@@ -169,63 +322,87 @@
                 <div className="space-y-1">
                     {lines.map((line, i) => {
                         const trimmed = line.trim();
+                        // ### 제목 레벨 3 → <h3>
                         if (trimmed.startsWith('### ')) return <h3 key={i} className="text-base font-bold text-slate-800 mt-3 mb-1 border-b border-slate-200 pb-1">{trimmed.slice(4)}</h3>;
+                        // ## 제목 레벨 2 → <h2>
                         if (trimmed.startsWith('## ')) return <h2 key={i} className="text-lg font-bold text-slate-800 mt-4 mb-1">{trimmed.slice(3)}</h2>;
+                        // # 제목 레벨 1 → <h1>
                         if (trimmed.startsWith('# ')) return <h1 key={i} className="text-xl font-bold text-slate-800 mt-4 mb-2">{trimmed.slice(2)}</h1>;
+                        // • 또는 - 로 시작 → 불릿 리스트
                         if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={i} className="list-disc list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.slice(2)}</li>;
+                        // 숫자. 로 시작 → 번호 리스트
                         if (/^\d+\.\s/.test(trimmed)) return <li key={i} className="list-decimal list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.replace(/^\d+\.\s/, '')}</li>;
+                        // > 로 시작 → 인용문
                         if (trimmed.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded text-base">{trimmed.slice(2)}</blockquote>;
+                        // 빈 줄 → 간격
                         if (trimmed === '') return <div key={i} className="h-1"></div>;
+                        // 일반 텍스트 → <p>
                         return <p key={i} className="text-slate-700 leading-normal text-base">{line}</p>;
                     })}
                 </div>
             );
         };
 
+        // ============================================================================
+        // [섹션 E~M] App 컴포넌트 - 메인 애플리케이션
+        // ============================================================================
         const App = () => {
-            const [view, setView] = React.useState('login'); 
-            const [loginTab, setLoginTab] = React.useState('login'); // 'login' or 'signup' 
-            const [signupName, setSignupName] = React.useState('');
-            const [signupPw, setSignupPw] = React.useState('');
-            const [signupPwConfirm, setSignupPwConfirm] = React.useState('');
-            const [signupBirthdate, setSignupBirthdate] = React.useState('');
-            const [loginName, setLoginName] = React.useState('');
-            const [loginPw, setLoginPw] = React.useState('');
-            const [tempUser, setTempUser] = React.useState(null); 
-            const [currentUser, setCurrentUser] = React.useState(null); 
-            const [errorMsg, setErrorMsg] = React.useState('');
-            const [showConfetti, setShowConfetti] = React.useState(false);
-            const [levelUpToast, setLevelUpToast] = React.useState(null);
-            const [subgroupStats, setSubgroupStats] = React.useState({});
-            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', audioUrl: null, loading: false });
-            const [hasReadToday, setHasReadToday] = React.useState(false);
-            const [showScoreInfo, setShowScoreInfo] = React.useState(false);
-            const [showReadingGuide, setShowReadingGuide] = React.useState(false); 
-            const [bonusToast, setBonusToast] = React.useState(null);
-            const [selectedPlanType, setSelectedPlanType] = React.useState(null);
-            const [isAdmin, setIsAdmin] = React.useState(false);
-            const [allUsers, setAllUsers] = React.useState([]);
-            const [editingUser, setEditingUser] = React.useState(null);
-            const [changingPassword, setChangingPassword] = React.useState(null);
-const [newPassword, setNewPassword] = React.useState('');
-            const [communityMembers, setCommunityMembers] = React.useState([]);
-            const [memos, setMemos] = React.useState({});
-            const [currentMemo, setCurrentMemo] = React.useState('');
-            const [showMemoList, setShowMemoList] = React.useState(false);
-            const [showAchievements, setShowAchievements] = React.useState(false);
-            const [newAchievement, setNewAchievement] = React.useState(null);
-            const [showCalendar, setShowCalendar] = React.useState(false);
-            const [calendarDate, setCalendarDate] = React.useState(new Date());
-            const [readHistory, setReadHistory] = React.useState([]);
-            const [adminFilter, setAdminFilter] = React.useState('all'); // 관리자 부서 필터
-            const [adminSort, setAdminSort] = React.useState({ key: 'name', order: 'asc' }); // 관리자 목록 정렬
-            const [adminViewMode, setAdminViewMode] = React.useState('today'); // 'today' or 'inactive'
-            const [announcement, setAnnouncement] = React.useState(null); // 광고/공지
-            const [showRestartConfirm, setShowRestartConfirm] = React.useState(false); // 재시작 확인 모달
-            const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false });
+            // ----------------------------------------------------------------------
+            // [섹션 E] 상태 관리 (State)
+            // ----------------------------------------------------------------------
+            
+            // --- 화면 및 인증 상태 ---
+            const [view, setView] = React.useState('login');  // 현재 화면: 'login', 'dashboard', 'admin' 등
+            const [loginTab, setLoginTab] = React.useState('login'); // 로그인/회원가입 탭 ('login' or 'signup')
+            const [signupName, setSignupName] = React.useState('');   // 회원가입: 이름
+            const [signupPw, setSignupPw] = React.useState('');       // 회원가입: 비밀번호
+            const [signupPwConfirm, setSignupPwConfirm] = React.useState(''); // 회원가입: 비밀번호 확인
+            const [signupBirthdate, setSignupBirthdate] = React.useState(''); // 회원가입: 생년월일
+            const [loginName, setLoginName] = React.useState('');     // 로그인: 이름
+            const [loginPw, setLoginPw] = React.useState('');         // 로그인: 비밀번호
+            const [tempUser, setTempUser] = React.useState(null);     // 임시 사용자 (가입 진행 중)
+            const [currentUser, setCurrentUser] = React.useState(null); // 현재 로그인된 사용자
+            const [errorMsg, setErrorMsg] = React.useState('');       // 에러 메시지
+            
+            // --- UI 효과 상태 ---
+            const [showConfetti, setShowConfetti] = React.useState(false);  // 축하 효과 표시
+            const [levelUpToast, setLevelUpToast] = React.useState(null);   // 레벨업 토스트 메시지
+            const [bonusToast, setBonusToast] = React.useState(null);       // 보너스 점수 토스트
+            const [newAchievement, setNewAchievement] = React.useState(null); // 새 업적 알림
+            
+            // --- 데이터 상태 ---
+            const [subgroupStats, setSubgroupStats] = React.useState({});   // 소그룹별 통계
+            const [verseData, setVerseData] = React.useState({ title: '', subtitle: '', text: '', audioUrl: null, loading: false }); // 오늘의 말씀
+            const [hasReadToday, setHasReadToday] = React.useState(false);  // 오늘 읽음 여부
+            const [communityMembers, setCommunityMembers] = React.useState([]); // 공동체 멤버 목록
+            const [memos, setMemos] = React.useState({});                   // 묵상 메모 객체
+            const [currentMemo, setCurrentMemo] = React.useState('');       // 현재 입력 중인 메모
+            const [readHistory, setReadHistory] = React.useState([]);       // 읽기 기록 (날짜 배열)
+            const [announcement, setAnnouncement] = React.useState(null);   // 공지사항
+            
+            // --- 모달 표시 상태 ---
+            const [showScoreInfo, setShowScoreInfo] = React.useState(false);     // 점수 안내 모달
+            const [showReadingGuide, setShowReadingGuide] = React.useState(false); // 읽기 가이드 모달
+            const [showMemoList, setShowMemoList] = React.useState(false);       // 메모 목록 모달
+            const [showAchievements, setShowAchievements] = React.useState(false); // 업적 모달
+            const [showCalendar, setShowCalendar] = React.useState(false);       // 캘린더 모달
+            const [calendarDate, setCalendarDate] = React.useState(new Date());  // 캘린더 현재 월
             const [showDateSettings, setShowDateSettings] = React.useState(false); // 날짜 설정 모달
             const [showSubgroupChange, setShowSubgroupChange] = React.useState(false); // 소그룹 변경 모달
-            const [syncProgress, setSyncProgress] = React.useState(null); // 동기화 진행 상황
+            const [showRestartConfirm, setShowRestartConfirm] = React.useState(false); // 재시작 확인 모달
+            
+            // --- 관리자 관련 상태 ---
+            const [selectedPlanType, setSelectedPlanType] = React.useState(null); // 선택된 플랜 타입
+            const [isAdmin, setIsAdmin] = React.useState(false);            // 관리자 모드 여부
+            const [allUsers, setAllUsers] = React.useState([]);             // 전체 사용자 목록 (관리자용)
+            const [editingUser, setEditingUser] = React.useState(null);     // 편집 중인 사용자
+            const [changingPassword, setChangingPassword] = React.useState(null); // 비밀번호 변경 대상
+const [newPassword, setNewPassword] = React.useState('');       // 새 비밀번호
+            const [adminFilter, setAdminFilter] = React.useState('all');    // 관리자 필터: 전체/부서별
+            const [adminViewMode, setAdminViewMode] = React.useState('today'); // 'today' or 'inactive'
+            const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false }); // 공지 입력
+            const [syncProgress, setSyncProgress] = React.useState(null);   // 동기화 진행 상황
+const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고 있는 Day (null이면 currentDay)
             const [lastSyncInfo, setLastSyncInfo] = React.useState(null); // 마지막 동기화 정보
             const [selectedSyncVersions, setSelectedSyncVersions] = React.useState(['1year_revised']); // 동기화할 버전들
             const [authLoading, setAuthLoading] = React.useState(true); // 인증 상태 로딩 중
@@ -776,11 +953,16 @@ const changePassword = async (uid, userName, currentPassword) => {
                 } catch (e) { console.error(e); alert("수정 실패"); }
             };
 
+            // ----------------------------------------------------------------------
+            // [섹션 G] 인증 시스템 - handleLogin
+            // 로그인/회원가입 폼 제출 시 실행
+            // ★ 변경: 관리자 비밀번호는 '08283' 부분 수정
+            // ----------------------------------------------------------------------
             const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
     
-    // 회원가입 모드
+    // 회원가입 모드일 때 추가 검증
     if (loginTab === 'signup') {
         console.log('=== 회원가입 시작 ===');
         console.log('이름:', signupName);
@@ -801,7 +983,7 @@ const changePassword = async (uid, userName, currentPassword) => {
         }
     }
     
-    // 로그인 모드 검증
+    // 로그인 모드 기본 검증
     const name = loginTab === 'signup' ? signupName : loginName;
     const pw = loginTab === 'signup' ? signupPw : loginPw;
     
@@ -810,7 +992,8 @@ const changePassword = async (uid, userName, currentPassword) => {
         return; 
     }
 
-    // 관리자 로그인 (회원가입 탭에서는 관리자 로그인 불가)
+    // ★ 관리자 로그인 체크 (관리자 비밀번호: '08283')
+    // 회원가입 탭에서는 관리자 로그인 불가
     if (name === 'admin' && pw === '08283' && loginTab === 'login') {
         try {
             if (auth && !auth.currentUser) await auth.signInAnonymously();
@@ -827,13 +1010,14 @@ const changePassword = async (uid, userName, currentPassword) => {
                 setLastSyncInfo(syncDoc.data());
             }
             
-            setIsAdmin(true);
+            setIsAdmin(true);  // 관리자 모드 활성화
             return;
         } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
     }
 
+    // 일반 사용자 Firebase 인증
     try {
-        const email = makePseudoEmail(name);
+        const email = makePseudoEmail(name);  // 이름 → 가짜 이메일 변환
         console.log('생성된 이메일:', email);
         
         let cred = null;
@@ -846,6 +1030,7 @@ const changePassword = async (uid, userName, currentPassword) => {
         } catch (err) {
             console.log('로그인 실패:', err.code, err.message);
             
+            // 사용자가 없으면 회원가입 진행 (회원가입 탭에서만)
             if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials' || err?.code === 'auth/invalid-credential') {
                 // 로그인 탭에서는 회원가입 불가
                 if (loginTab === 'login') {
@@ -894,11 +1079,12 @@ const changePassword = async (uid, userName, currentPassword) => {
         const ref = db.collection('users').doc(uid);
         const doc = await ref.get();
 
+        // Firestore에 사용자 데이터가 없으면 신규 생성
         if (!doc.exists) {
             console.log('신규 사용자 - Firestore에 데이터 생성 중...');
             const newUserBase = {
-                name: name.trim(), 
-                password: pw, 
+                name: name.trim(),          // 이름
+                password: pw,               // 비밀번호 (평문 - 개선 필요) 
                 startDate: new Date().toDateString(),
                 currentDay: 1, 
                 streak: 0, 
@@ -1193,16 +1379,25 @@ const changePassword = async (uid, userName, currentPassword) => {
                 return { success: totalSuccess, error: totalError, failedItems };
             };
 
+            // ----------------------------------------------------------------------
+            // [섹션 H] 데이터 페칭 - 대시보드 진입 시 말씀 로딩
+            // ----------------------------------------------------------------------
             React.useEffect(() => {
                 if (view !== 'dashboard' || !currentUser) return;
+                // viewingDay 초기화 (처음 진입 시)
+                if (viewingDay === null) {
+                    setViewingDay(currentUser.currentDay || 1);
+                }
                 const loadData = async () => {
                     setVerseData(prev => ({ ...prev, loading: true }));
                     const { currentDay, planId, communityId, dayOffset = 0, readCount = 1 } = currentUser;
+                    // viewingDay가 있으면 그 Day를, 없으면 currentDay 사용
+                    const dayToShow = viewingDay || currentDay;
                     const [planType, version] = (planId || '1year_revised').split('_');
                     const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
                     
-                    // 실제 본문 Day 계산 (오프셋 적용)
-                    const actualDay = getActualDay(currentDay, dayOffset);
+                    // 실제 본문 Day 계산 (오프셋 적용) - viewingDay 사용
+                    const actualDay = getActualDay(dayToShow, dayOffset);
                     const notionData = await fetchNotionData(planId, actualDay);
                     
                     // 타이틀에 2독/3독 표시
@@ -1211,7 +1406,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                     if (notionData?.text && !notionData.text.startsWith('[오류]')) {
                         // ★ 먼저 본문 표시 (오디오 없이)
                         setVerseData({ 
-                            title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, 
+                            title: `${planTypeName} DAY ${dayToShow}일${readCountBadge}`, 
                             subtitle: notionData.title || `(제목 없음)`, 
                             text: notionData.text, 
                             audioUrl: null,  // 오디오는 나중에
@@ -1244,29 +1439,43 @@ const changePassword = async (uid, userName, currentPassword) => {
                     await loadAnnouncement();
                 };
                 loadData();
-            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId, currentUser?.dayOffset]);
+            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId, currentUser?.dayOffset, viewingDay]);
 
+            // ----------------------------------------------------------------------
+            // [섹션 I] 읽기 완료 처리 - handleRead
+            // "읽었습니다" 버튼 클릭 시 실행
+            // ★ 변경: 기본 점수(10), 보너스 최대값(5), 자동 순환 로직
+            // ----------------------------------------------------------------------
             const handleRead = async () => {
                 const todayStr = new Date().toDateString();
                 const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
                 const yesterdayStr = yesterday.toDateString();
 
+                // 1. 연속 읽기(streak) 계산
+                // - 어제 읽었으면: streak + 1
+                // - 오늘 이미 읽었으면: 유지
+                // - 그 외(연속 끊김): 1로 리셋
                 let newStreak = currentUser.streak || 0;
                 if (currentUser.lastReadDate === yesterdayStr) newStreak += 1;
                 else if (currentUser.lastReadDate !== todayStr) newStreak = 1;
                 
-                const streakBonus = Math.min(newStreak, 5);
-                const pointsEarned = 10 + streakBonus;
+                // 2. 점수 계산
+                // ★ 변경: 기본 점수 = 10, 연속 보너스 = 최대 5점
+                const streakBonus = Math.min(newStreak, 5);  // streak가 5 이상이면 최대 5점
+                const pointsEarned = 10 + streakBonus;       // 기본 10점 + 보너스
                 const newScore = (currentUser.score || 0) + pointsEarned;
                 
+                // 3. 레벨업 체크 - 새 레벨이 기존보다 높으면 토스트 표시
                 const oldLevel = getLevelInfo(currentUser.score || 0);
                 const newLevel = getLevelInfo(newScore);
                 if (newLevel.min > oldLevel.min) { setLevelUpToast(newLevel); setTimeout(() => setLevelUpToast(null), 4000); }
 
+                // 4. 보너스 토스트 표시
                 setBonusToast({ basic: 10, streak: streakBonus, total: pointsEarned });
                 setTimeout(() => setBonusToast(null), 4000);
 
-                // 365일 완료 체크 → 자동 순환 (2독, 3독...)
+                // 5. 365일 완료 체크 → 자동 순환 (2독, 3독...)
+                // ★ 변경: 자동 순환 끄려면 이 블록 제거
                 let newDay = currentUser.currentDay + 1;
                 let newReadCount = currentUser.readCount || 1;
                 let completedRound = false;
@@ -1277,6 +1486,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                     completedRound = true;
                 }
                 
+                // 6. 상태 업데이트
                 const updatedUser = { 
                     ...currentUser, 
                     currentDay: newDay, 
@@ -1289,6 +1499,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                 setCurrentUser(updatedUser);
                 setHasReadToday(true);
                 
+                // 7. Firestore에 저장
                 try {
                     const uid = auth.currentUser?.uid;
                     if (uid) {
@@ -1322,6 +1533,9 @@ const changePassword = async (uid, userName, currentPassword) => {
                 
                 // 업적 체크
                 checkAchievements(updatedUser, memos);
+                
+                // 최상단으로 스크롤 이동
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             };
 
             const handleLogout = () => {
@@ -1370,11 +1584,32 @@ const changePassword = async (uid, userName, currentPassword) => {
                 weekStart.setDate(now.getDate() - now.getDay()); // 이번 주 일요일
                 weekStart.setHours(0, 0, 0, 0);
                 
-                // 이번 주에 가장 높은 streak을 가진 사람
-                const mvpByStreak = [...communityMembers].sort((a, b) => (b.streak || 0) - (a.streak || 0))[0];
+                // 이번 주에 읽은 일수 계산 함수
+                const getWeeklyReadCount = (member) => {
+                    if (!member.readHistory || !Array.isArray(member.readHistory)) return 0;
+                    return member.readHistory.filter(dateStr => {
+                        const readDate = new Date(dateStr);
+                        return readDate >= weekStart;
+                    }).length;
+                };
                 
-                // 이번 주 가장 높은 점수 획득자 (currentDay 증가량으로 대체)
-                const mvpByProgress = [...communityMembers].sort((a, b) => (b.currentDay || 0) - (a.currentDay || 0))[0];
+                // 이번 주에 가장 많이 읽은 사람 (연속 읽기왕)
+                const mvpByStreak = [...communityMembers]
+                    .map(m => ({ ...m, weeklyCount: getWeeklyReadCount(m) }))
+                    .sort((a, b) => (b.weeklyCount || 0) - (a.weeklyCount || 0))[0];
+                
+                // 이번 주 currentDay 증가량이 가장 높은 사람 (진행왕)
+                // readHistory 기반으로 이번 주 읽은 횟수 = Day 증가량
+                const mvpByProgress = [...communityMembers]
+                    .map(m => ({ ...m, weeklyCount: getWeeklyReadCount(m) }))
+                    .sort((a, b) => {
+                        // 1순위: 이번 주 읽은 횟수
+                        if ((b.weeklyCount || 0) !== (a.weeklyCount || 0)) {
+                            return (b.weeklyCount || 0) - (a.weeklyCount || 0);
+                        }
+                        // 2순위: 현재 진행 Day (동점 시)
+                        return (b.currentDay || 0) - (a.currentDay || 0);
+                    })[0];
                 
                 return {
                     streakMVP: mvpByStreak,
@@ -1421,7 +1656,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                 return { totalUsers, readToday, readRate, communityStats };
             };
 
-            // ========== VIEWS ==========
+            // ========== [섹션 K~M] VIEWS - 화면 렌더링 ==========
 
             // ★ 인증 상태 확인 중일 때 로딩 화면
             if (authLoading) {
@@ -2088,36 +2323,7 @@ const changePassword = async (uid, userName, currentPassword) => {
             )}
                             
                             <div className="bg-white rounded-xl shadow-lg p-6">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-lg font-bold text-slate-800">👥 전체 회원 목록</h2>
-                                    <div className="flex gap-2 text-xs">
-                                        <span className="text-slate-400">정렬:</span>
-                                        <button 
-                                            onClick={() => setAdminSort({ key: 'name', order: adminSort.key === 'name' && adminSort.order === 'asc' ? 'desc' : 'asc' })}
-                                            className={`px-2 py-1 rounded ${adminSort.key === 'name' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
-                                        >
-                                            이름 {adminSort.key === 'name' && (adminSort.order === 'asc' ? '↑' : '↓')}
-                                        </button>
-                                        <button 
-                                            onClick={() => setAdminSort({ key: 'day', order: adminSort.key === 'day' && adminSort.order === 'desc' ? 'asc' : 'desc' })}
-                                            className={`px-2 py-1 rounded ${adminSort.key === 'day' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
-                                        >
-                                            Day {adminSort.key === 'day' && (adminSort.order === 'asc' ? '↑' : '↓')}
-                                        </button>
-                                        <button 
-                                            onClick={() => setAdminSort({ key: 'score', order: adminSort.key === 'score' && adminSort.order === 'desc' ? 'asc' : 'desc' })}
-                                            className={`px-2 py-1 rounded ${adminSort.key === 'score' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
-                                        >
-                                            점수 {adminSort.key === 'score' && (adminSort.order === 'asc' ? '↑' : '↓')}
-                                        </button>
-                                        <button 
-                                            onClick={() => setAdminSort({ key: 'community', order: adminSort.key === 'community' && adminSort.order === 'asc' ? 'desc' : 'asc' })}
-                                            className={`px-2 py-1 rounded ${adminSort.key === 'community' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
-                                        >
-                                            부서 {adminSort.key === 'community' && (adminSort.order === 'asc' ? '↑' : '↓')}
-                                        </button>
-                                    </div>
-                                </div>
+                                <h2 className="text-lg font-bold text-slate-800 mb-4">👥 전체 회원 목록</h2>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-left text-slate-600">
                                         <thead className="text-xs text-slate-700 uppercase bg-slate-50">
@@ -2131,20 +2337,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {[...allUsers].sort((a, b) => {
-                                                const { key, order } = adminSort;
-                                                let compare = 0;
-                                                if (key === 'name') {
-                                                    compare = (a.name || '').localeCompare(b.name || '', 'ko');
-                                                } else if (key === 'day') {
-                                                    compare = (a.currentDay || 0) - (b.currentDay || 0);
-                                                } else if (key === 'score') {
-                                                    compare = (a.score || 0) - (b.score || 0);
-                                                } else if (key === 'community') {
-                                                    compare = (a.communityName || '').localeCompare(b.communityName || '', 'ko') || (a.subgroupId || '').localeCompare(b.subgroupId || '', 'ko');
-                                                }
-                                                return order === 'asc' ? compare : -compare;
-                                            }).map((u, idx) => {
+                                            {allUsers.map((u, idx) => {
                                                 const readToday = u.lastReadDate === new Date().toDateString();
                                                 return (
                                                     <tr key={idx} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
@@ -3123,7 +3316,31 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         )}
                                         <div className="bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">🏁 완독 D-{daysRemaining}</div>
                                     </div>
-                                    <h2 className="text-xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
+                                    <div className="flex items-center justify-center gap-3 mb-1">
+                                        <button 
+                                            onClick={() => setViewingDay(prev => Math.max(1, (prev || currentDay) - 1))}
+                                            disabled={viewingDay <= 1}
+                                            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                                        >
+                                            <Icon name="back" size={16} />
+                                        </button>
+                                        <h2 className="text-xl font-bold">{verseData.loading ? '로딩중...' : verseData.title}</h2>
+                                        <button 
+                                            onClick={() => setViewingDay(prev => Math.min(currentDay, (prev || currentDay) + 1))}
+                                            disabled={viewingDay >= currentDay}
+                                            className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center rotate-180"
+                                        >
+                                            <Icon name="back" size={16} />
+                                        </button>
+                                    </div>
+                                    {viewingDay !== currentDay && (
+                                        <button 
+                                            onClick={() => setViewingDay(currentDay)}
+                                            className="text-xs bg-white/20 px-3 py-1 rounded-full mb-2 hover:bg-white/30"
+                                        >
+                                            📍 오늘로 돌아가기 (Day {currentDay})
+                                        </button>
+                                    )}
                                     <p className="opacity-90 text-sm font-bold text-white/90 mb-2">{verseData.subtitle}</p>
                                     
                                     {/* 오디오 플레이어 (제목 바로 아래) */}
