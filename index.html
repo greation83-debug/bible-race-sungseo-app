@@ -315,33 +315,37 @@
         // 마크다운 문법을 HTML로 변환하여 렌더링
         // 지원: # 제목, - 리스트, > 인용문, 빈 줄
         // --------------------------------------------------------------------------
-        const MarkdownRenderer = ({ content }) => {
-            if (!content) return null;
-            const lines = content.split('\n');
-            return (
-                <div className="space-y-1">
-                    {lines.map((line, i) => {
-                        const trimmed = line.trim();
-                        // ### 제목 레벨 3 → <h3>
-                        if (trimmed.startsWith('### ')) return <h3 key={i} className="text-base font-bold text-slate-800 mt-3 mb-1 border-b border-slate-200 pb-1">{trimmed.slice(4)}</h3>;
-                        // ## 제목 레벨 2 → <h2>
-                        if (trimmed.startsWith('## ')) return <h2 key={i} className="text-lg font-bold text-slate-800 mt-4 mb-1">{trimmed.slice(3)}</h2>;
-                        // # 제목 레벨 1 → <h1>
-                        if (trimmed.startsWith('# ')) return <h1 key={i} className="text-xl font-bold text-slate-800 mt-4 mb-2">{trimmed.slice(2)}</h1>;
-                        // • 또는 - 로 시작 → 불릿 리스트
-                        if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={i} className="list-disc list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.slice(2)}</li>;
-                        // 숫자. 로 시작 → 번호 리스트
-                        if (/^\d+\.\s/.test(trimmed)) return <li key={i} className="list-decimal list-inside ml-4 text-slate-700 text-base leading-normal">{trimmed.replace(/^\d+\.\s/, '')}</li>;
-                        // > 로 시작 → 인용문
-                        if (trimmed.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded text-base">{trimmed.slice(2)}</blockquote>;
-                        // 빈 줄 → 간격
-                        if (trimmed === '') return <div key={i} className="h-1"></div>;
-                        // 일반 텍스트 → <p>
-                        return <p key={i} className="text-slate-700 leading-normal text-base">{line}</p>;
-                    })}
-                </div>
-            );
-        };
+        const MarkdownRenderer = ({ content, fontSize = 16 }) => {
+    if (!content) return null;
+    const lines = content.split('\n');
+    // 제목은 본문보다 크게
+    const h1Size = fontSize + 6;
+    const h2Size = fontSize + 4;
+    const h3Size = fontSize + 2;
+    return (
+        <div className="space-y-1">
+            {lines.map((line, i) => {
+                const trimmed = line.trim();
+                // ### 제목 레벨 3 → <h3>
+                if (trimmed.startsWith('### ')) return <h3 key={i} className="font-bold text-slate-800 mt-3 mb-1 border-b border-slate-200 pb-1" style={{ fontSize: `${h3Size}px` }}>{trimmed.slice(4)}</h3>;
+                // ## 제목 레벨 2 → <h2>
+                if (trimmed.startsWith('## ')) return <h2 key={i} className="font-bold text-slate-800 mt-4 mb-1" style={{ fontSize: `${h2Size}px` }}>{trimmed.slice(3)}</h2>;
+                // # 제목 레벨 1 → <h1>
+                if (trimmed.startsWith('# ')) return <h1 key={i} className="font-bold text-slate-800 mt-4 mb-2" style={{ fontSize: `${h1Size}px` }}>{trimmed.slice(2)}</h1>;
+                // • 또는 - 로 시작 → 불릿 리스트
+                if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={i} className="list-disc list-inside ml-4 text-slate-700 leading-relaxed" style={{ fontSize: `${fontSize}px` }}>{trimmed.slice(2)}</li>;
+                // 숫자. 로 시작 → 번호 리스트
+                if (/^\d+\.\s/.test(trimmed)) return <li key={i} className="list-decimal list-inside ml-4 text-slate-700 leading-relaxed" style={{ fontSize: `${fontSize}px` }}>{trimmed.replace(/^\d+\.\s/, '')}</li>;
+                // > 로 시작 → 인용문
+                if (trimmed.startsWith('> ')) return <blockquote key={i} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded" style={{ fontSize: `${fontSize}px` }}>{trimmed.slice(2)}</blockquote>;
+                // 빈 줄 → 간격
+                if (trimmed === '') return <div key={i} className="h-1"></div>;
+                // 일반 텍스트 → <p>
+                return <p key={i} className="text-slate-700 leading-relaxed" style={{ fontSize: `${fontSize}px` }}>{line}</p>;
+            })}
+        </div>
+    );
+};
 
         // ============================================================================
         // [섹션 E~M] App 컴포넌트 - 메인 애플리케이션
@@ -406,6 +410,10 @@ const [newPassword, setNewPassword] = React.useState('');       // 새 비밀번
             const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false }); // 공지 입력
             const [syncProgress, setSyncProgress] = React.useState(null);   // 동기화 진행 상황
 const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고 있는 Day (null이면 currentDay)
+             const [fontSize, setFontSize] = React.useState(() => {
+    const saved = localStorage.getItem('bible_fontSize');
+    return saved ? parseInt(saved, 10) : 16; // 기본값 16px
+});
             const [lastSyncInfo, setLastSyncInfo] = React.useState(null); // 마지막 동기화 정보
             const [selectedSyncVersions, setSelectedSyncVersions] = React.useState(['1year_revised']); // 동기화할 버전들
             const [authLoading, setAuthLoading] = React.useState(true); // 인증 상태 로딩 중
@@ -3625,11 +3633,34 @@ const changePassword = async (uid, userName, currentPassword) => {
                                     )}
                                     
                                     <p className="opacity-80 text-xs mt-2">{getEncouragementMessage()}</p>
+                                     <div className="absolute bottom-3 right-4 flex items-center gap-1 bg-white/20 backdrop-blur-md rounded-full px-2 py-1">
+    <button 
+        onClick={() => {
+            const newSize = Math.max(12, fontSize - 2);
+            setFontSize(newSize);
+            localStorage.setItem('bible_fontSize', newSize);
+        }}
+        className="w-7 h-7 rounded-full bg-white/30 hover:bg-white/50 flex items-center justify-center text-white font-bold text-lg"
+    >
+        −
+    </button>
+    <span className="text-white text-xs font-bold px-1">{fontSize}</span>
+    <button 
+        onClick={() => {
+            const newSize = Math.min(28, fontSize + 2);
+            setFontSize(newSize);
+            localStorage.setItem('bible_fontSize', newSize);
+        }}
+        className="w-7 h-7 rounded-full bg-white/30 hover:bg-white/50 flex items-center justify-center text-white font-bold text-lg"
+    >
+        +
+    </button>
+</div>
                                 </div>
                                 <div className="p-6">
-                                    <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`}>
-                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} />}
-                                    </div>
+                                    <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`} style={{ fontSize: `${fontSize}px` }}>
+    {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} fontSize={fontSize} />}
+</div>
                                     
                                     <button onClick={handleRead} disabled={verseData.loading} className="w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 bg-slate-900 shadow-blue-200">
                                         <Icon name="book" size={18}/><span>{hasReadToday ? '한 장 더 읽기 (미리 읽기)' : '오늘 말씀 읽기 완료'}</span>
