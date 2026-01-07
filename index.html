@@ -2375,11 +2375,17 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                         return (b.currentDay || 0) - (a.currentDay || 0);
                                                     } else if (adminSortBy === 'score') {
                                                         return (b.score || 0) - (a.score || 0);
-                                                    } else if (adminSortBy === 'subgroup') {
+} else if (adminSortBy === 'subgroup') {
+                                                        // 1단계: 부서명 가나다순
                                                         const commA = a.communityName || '';
                                                         const commB = b.communityName || '';
-                                                        if (commA !== commB) return commA.localeCompare(commB);
-                                                        return (a.subgroupId || '').localeCompare(b.subgroupId || '');
+                                                        const commCompare = commA.localeCompare(commB, 'ko-KR');
+                                                        if (commCompare !== 0) return commCompare;
+                                                        
+                                                        // 2단계: 소그룹명 가나다순
+                                                        const subA = a.subgroupId || '';
+                                                        const subB = b.subgroupId || '';
+                                                        return subA.localeCompare(subB, 'ko-KR');
                                                     }
                                                     return 0;
                                                 });
