@@ -3251,12 +3251,27 @@ const changePassword = async (uid, userName, currentPassword) => {
                                     <span className="text-[9px] font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded-full mt-2 shadow-sm border border-slate-200 relative z-20">천국성</span>
                                 </div>
                                 
-                                {(() => {
-                                    // 나 주변 사람들만 표시 (앞 5명 + 나 + 뒤 5명)
-                                    const myIndex = racers.findIndex(r => r.isMe);
-                                    const startIdx = Math.max(0, myIndex - 5);
-                                    const endIdx = Math.min(racers.length, myIndex + 6);
-                                    const visibleRacers = racers.slice(startIdx, endIdx);
+{(() => {
+                                    // 1. 전체 1-10등 추출
+                                    const top10 = racers
+                                        .sort((a, b) => b.day - a.day)
+                                        .slice(0, 10);
+                                    
+                                    // 2. 같은 소그룹 멤버 추출
+                                    const sameSubgroup = racers.filter(r => 
+                                        r.subgroupId === currentUser.subgroupId
+                                    );
+                                    
+                                    // 3. 합치기 (중복 제거)
+                                    const visibleRacers = [...top10];
+                                    sameSubgroup.forEach(racer => {
+                                        if (!visibleRacers.find(r => r.uid === racer.uid)) {
+                                            visibleRacers.push(racer);
+                                        }
+                                    });
+                                    
+                                    // 4. 진행도 순으로 정렬 (화면 배치용)
+                                    visibleRacers.sort((a, b) => a.day - b.day);
                                     
                                     return visibleRacers.map((racer, idx) => {
                                         const p = Math.min((racer.day / TOTAL_DAYS) * 100, 100);
