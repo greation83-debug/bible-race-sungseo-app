@@ -400,6 +400,7 @@
 const [newPassword, setNewPassword] = React.useState('');       // 새 비밀번호
             const [adminFilter, setAdminFilter] = React.useState('all');    // 관리자 필터: 전체/부서별
             const [adminViewMode, setAdminViewMode] = React.useState('today'); // 'today' or 'inactive'
+            const [adminSortBy, setAdminSortBy] = React.useState('name'); // 'name', 'day', 'score', 'subgroup'
             const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false }); // 공지 입력
             const [syncProgress, setSyncProgress] = React.useState(null);   // 동기화 진행 상황
 const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고 있는 Day (null이면 currentDay)
@@ -2322,8 +2323,36 @@ const changePassword = async (uid, userName, currentPassword) => {
                 </div>
             )}
                             
-                            <div className="bg-white rounded-xl shadow-lg p-6">
-                                <h2 className="text-lg font-bold text-slate-800 mb-4">👥 전체 회원 목록</h2>
+<div className="bg-white rounded-xl shadow-lg p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-lg font-bold text-slate-800">👥 전체 회원 목록</h2>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => setAdminSortBy('name')}
+                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'name' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                        >
+                                            이름순
+                                        </button>
+                                        <button 
+                                            onClick={() => setAdminSortBy('day')}
+                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'day' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                        >
+                                            진행순
+                                        </button>
+                                        <button 
+                                            onClick={() => setAdminSortBy('score')}
+                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'score' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                        >
+                                            점수순
+                                        </button>
+                                        <button 
+                                            onClick={() => setAdminSortBy('subgroup')}
+                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'subgroup' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                        >
+                                            소그룹순
+                                        </button>
+                                    </div>
+                                </div>
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-sm text-left text-slate-600">
                                         <thead className="text-xs text-slate-700 uppercase bg-slate-50">
@@ -2337,7 +2366,25 @@ const changePassword = async (uid, userName, currentPassword) => {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {allUsers.map((u, idx) => {
+                                            {(() => {
+                                                // 정렬 로직
+                                                const sorted = [...allUsers].sort((a, b) => {
+                                                    if (adminSortBy === 'name') {
+                                                        return a.name.localeCompare(b.name);
+                                                    } else if (adminSortBy === 'day') {
+                                                        return (b.currentDay || 0) - (a.currentDay || 0);
+                                                    } else if (adminSortBy === 'score') {
+                                                        return (b.score || 0) - (a.score || 0);
+                                                    } else if (adminSortBy === 'subgroup') {
+                                                        const commA = a.communityName || '';
+                                                        const commB = b.communityName || '';
+                                                        if (commA !== commB) return commA.localeCompare(commB);
+                                                        return (a.subgroupId || '').localeCompare(b.subgroupId || '');
+                                                    }
+                                                    return 0;
+                                                });
+                                                
+                                                return sorted.map((u, idx) => {
                                                 const readToday = u.lastReadDate === new Date().toDateString();
                                                 return (
                                                     <tr key={idx} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
@@ -2355,7 +2402,8 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                         </td>
                                                     </tr>
                                                 );
-                                            })}
+                                            });
+                                            })()}
                                         </tbody>
                                     </table>
                                 </div>
