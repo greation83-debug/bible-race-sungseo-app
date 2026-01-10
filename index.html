@@ -3583,16 +3583,32 @@ const changePassword = async (uid, userName, currentPassword) => {
                             )}
 
                             <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
-                                <div className="p-6 pt-12 text-white relative bg-gradient-to-br from-indigo-600 to-blue-700">
-                                    <div className="absolute top-2 right-4 flex items-center gap-2">
-                                        {(currentUser.readCount || 1) > 1 && (
-                                            <div className="bg-purple-500/90 backdrop-blur-md text-white border border-purple-300/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
-                                                🏆 {currentUser.readCount}독 중
+                                <div className="p-6 text-white relative bg-gradient-to-br from-indigo-600 to-blue-700">
+                                    <div className="flex items-center justify-center gap-3 mb-2">
+                                        <button 
+                                            onClick={() => setViewingDay(prev => Math.max(1, (prev || currentDay) - 1))}
+                                            disabled={viewingDay <= 1}
+                                            className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
+                                        >
+                                            <Icon name="back" size={18} />
+                                        </button>
+                                        <div className="text-center">
+                                            <h2 className="text-2xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
+                                            <div className="flex items-center justify-center gap-2">
+                                                {(currentUser.readCount || 1) > 1 && (
+                                                    <span className="text-xs bg-purple-500/90 px-2 py-0.5 rounded-full">🏆 {currentUser.readCount}독</span>
+                                                )}
+                                                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">🏁 D-{daysRemaining}</span>
                                             </div>
-                                        )}
-                                        <div className="bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">🏁 완독 D-{daysRemaining}</div>
+                                        </div>
+                                        <button 
+                                            onClick={() => setViewingDay(prev => Math.min(currentDay, (prev || currentDay) + 1))}
+                                            disabled={viewingDay >= currentDay}
+                                            className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center rotate-180"
+                                        >
+                                            <Icon name="back" size={18} />
+                                        </button>
                                     </div>
-                                    <div className="flex items-center justify-center gap-3 mb-3">
 <button 
                                             onClick={() => setViewingDay(prev => Math.max(1, (prev || currentDay) - 1))}
                                             disabled={viewingDay <= 1}
