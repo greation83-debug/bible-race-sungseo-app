@@ -2276,10 +2276,16 @@ const changePassword = async (uid, userName, currentPassword) => {
                                             <p className="text-xs text-slate-400 mb-2">미리보기:</p>
                                             <div className="flex flex-wrap gap-2">
                                                 {quickLinks.filter(l => l.enabled && l.text && l.url).map((link, idx) => (
-                                                    <div key={idx} className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
-                                                        {link.text}
-                                                    </div>
-                                                ))}
+                                        
+                                            key={idx}
+                                            href={link.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors shadow-sm"
+                                        >
+                                            {link.text}
+                                        </a>
+                                    ))}
                                             </div>
                                         </div>
                                     </>
