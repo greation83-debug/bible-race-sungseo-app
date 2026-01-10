@@ -407,8 +407,7 @@ const [newPassword, setNewPassword] = React.useState('');       // 새 비밀번
             const [adminFilter, setAdminFilter] = React.useState('all');    // 관리자 필터: 전체/부서별
             const [adminViewMode, setAdminViewMode] = React.useState('today'); // 'today' or 'inactive'
             const [adminSortBy, setAdminSortBy] = React.useState('name'); // 'name', 'day', 'score', 'subgroup'
-            const [announcementInput, setAnnouncementInput] = React.useState({ text: '', enabled: false });
-            const [quickLinks, setQuickLinks] = React.useState([]);
+            const [announcementInput, setAnnouncementInput] = React.useState({ text: '', linkUrl: '', linkText: '', enabled: false }); // 공지 입력
             const [syncProgress, setSyncProgress] = React.useState(null);   // 동기화 진행 상황
 const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고 있는 Day (null이면 currentDay)
              const [fontSize, setFontSize] = React.useState(() => {
@@ -566,13 +565,7 @@ const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고
                     if (doc.exists && doc.data().enabled) {
                         setAnnouncement(doc.data());
                     }
-                    
-                    // 퀵링크 로드
-                    const linksDoc = await db.collection('settings').doc('quickLinks').get();
-                    if (linksDoc.exists) {
-                        setQuickLinks(linksDoc.data().links || []);
-                    }
-                } catch (e) { console.error("광고/링크 로딩 실패:", e); }
+                } catch (e) { console.error("광고 로딩 실패:", e); }
             };
 
             // 광고/공지 저장 (관리자용)
@@ -589,38 +582,6 @@ const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고
                     console.error("광고 저장 실패:", e); 
                     alert('저장 실패');
                 }
-            };
-
-            const saveQuickLinks = async () => {
-                if (!db) return;
-                try {
-                    await db.collection('settings').doc('quickLinks').set({
-                        links: quickLinks,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    alert('퀵링크가 저장되었습니다!');
-                } catch (e) {
-                    console.error("퀵링크 저장 실패:", e);
-                    alert('저장 실패');
-                }
-            };
-
-            const addQuickLink = () => {
-                if (quickLinks.length >= 10) {
-                    alert('최대 10개까지만 추가할 수 있습니다.');
-                    return;
-                }
-                setQuickLinks([...quickLinks, { text: '', url: '', enabled: false }]);
-            };
-
-            const updateQuickLink = (index, field, value) => {
-                const updated = [...quickLinks];
-                updated[index][field] = value;
-                setQuickLinks(updated);
-            };
-
-            const removeQuickLink = (index) => {
-                setQuickLinks(quickLinks.filter((_, i) => i !== index));
             };
 
             // 재시작 함수 (뒤쳐진 사람용)
@@ -2155,6 +2116,29 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         />
                                     </div>
                                     
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-600 mb-1">링크 URL (선택)</label>
+                                            <input
+                                                type="url"
+                                                value={announcementInput.linkUrl}
+                                                onChange={(e) => setAnnouncementInput(prev => ({ ...prev, linkUrl: e.target.value }))}
+                                                placeholder="https://forms.google.com/..."
+                                                className="w-full p-2 border rounded-lg text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-600 mb-1">버튼 텍스트</label>
+                                            <input
+                                                type="text"
+                                                value={announcementInput.linkText}
+                                                onChange={(e) => setAnnouncementInput(prev => ({ ...prev, linkText: e.target.value }))}
+                                                placeholder="신청하기"
+                                                className="w-full p-2 border rounded-lg text-sm"
+                                            />
+                                        </div>
+                                    </div>
+                                    
                                     <div className="flex items-center justify-between">
                                         <label className="flex items-center gap-2 cursor-pointer">
                                             <input
@@ -2163,14 +2147,14 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                 onChange={(e) => setAnnouncementInput(prev => ({ ...prev, enabled: e.target.checked }))}
                                                 className="w-5 h-5 rounded"
                                             />
-                                            <span className="text-sm font-bold text-slate-600">공지 활성화</span>
+                                            <span className="text-sm font-bold text-slate-600">광고 활성화</span>
                                         </label>
                                         
                                         <button
                                             onClick={saveAnnouncement}
                                             className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-700"
                                         >
-                                            공지 저장
+                                            저장하기
                                         </button>
                                     </div>
                                     
@@ -2183,113 +2167,17 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                     <span className="text-2xl">📢</span>
                                                     <div className="flex-1">
                                                         <p className="text-sm text-slate-700 whitespace-pre-wrap">{announcementInput.text}</p>
+                                                        {announcementInput.linkUrl && announcementInput.linkText && (
+                                                            <button className="mt-2 bg-amber-500 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                                                                {announcementInput.linkText} →
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                            </div>
-
-                            {/* 퀵링크 관리 */}
-                            <div className="bg-white rounded-xl shadow-lg p-6">
-                                <div className="flex justify-between items-center mb-4">
-                                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                                        🔗 퀵링크 관리
-                                    </h2>
-                                    <button
-                                        onClick={addQuickLink}
-                                        disabled={quickLinks.length >= 10}
-                                        className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-                                    >
-                                        + 링크 추가 ({quickLinks.length}/10)
-                                    </button>
-                                </div>
-                                
-                                <div className="space-y-3 mb-4">
-                                    {quickLinks.map((link, idx) => (
-                                        <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <span className="text-sm font-bold text-slate-600">링크 #{idx + 1}</span>
-                                                <button
-                                                    onClick={() => removeQuickLink(idx)}
-                                                    className="text-red-500 hover:text-red-700 text-xs"
-                                                >
-                                                    🗑️ 삭제
-                                                </button>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-3 mb-3">
-                                                <div>
-                                                    <label className="block text-xs font-bold text-slate-500 mb-1">버튼 텍스트</label>
-                                                    <input
-                                                        type="text"
-                                                        value={link.text}
-                                                        onChange={(e) => updateQuickLink(idx, 'text', e.target.value)}
-                                                        placeholder="출석체크"
-                                                        className="w-full p-2 border rounded-lg text-sm"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-xs font-bold text-slate-500 mb-1">링크 URL</label>
-                                                    <input
-                                                        type="url"
-                                                        value={link.url}
-                                                        onChange={(e) => updateQuickLink(idx, 'url', e.target.value)}
-                                                        placeholder="https://..."
-                                                        className="w-full p-2 border rounded-lg text-sm"
-                                                    />
-                                                </div>
-                                            </div>
-                                            
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={link.enabled}
-                                                    onChange={(e) => updateQuickLink(idx, 'enabled', e.target.checked)}
-                                                    className="w-4 h-4 rounded"
-                                                />
-                                                <span className="text-xs font-bold text-slate-600">활성화</span>
-                                            </label>
-                                        </div>
-                                    ))}
-                                    
-                                    {quickLinks.length === 0 && (
-                                        <div className="text-center py-8 text-slate-400">
-                                            <p className="text-sm">등록된 퀵링크가 없습니다.</p>
-                                            <p className="text-xs mt-1">위의 "링크 추가" 버튼을 눌러 추가하세요.</p>
-                                        </div>
-                                    )}
-                                </div>
-                                
-                                {quickLinks.length > 0 && (
-                                    <>
-                                        <button
-                                            onClick={saveQuickLinks}
-                                            className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700"
-                                        >
-                                            💾 퀵링크 저장
-                                        </button>
-                                        
-                                        {/* 미리보기 */}
-                                        <div className="mt-4 p-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-300">
-                                            <p className="text-xs text-slate-400 mb-2">미리보기:</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {quickLinks.filter(l => l.enabled && l.text && l.url).map((link, idx) => (
-                                        
-                                            key={idx}
-                                            href={link.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors shadow-sm"
-                                        >
-                                            {link.text}
-                                        </a>
-                                    ))}
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
                             </div>
 
                             {/* 묵상 관리 */}
@@ -3679,55 +3567,32 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         <span className="text-2xl flex-shrink-0">📢</span>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{announcement.text}</p>
+                                            {announcement.linkUrl && announcement.linkText && (
+                                                <a 
+                                                    href={announcement.linkUrl} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="inline-block mt-3 bg-amber-500 text-white px-5 py-2 rounded-xl text-sm font-bold hover:bg-amber-600 transition-colors shadow-sm"
+                                                >
+                                                    {announcement.linkText} →
+                                                </a>
+                                            )}
                                         </div>
                                     </div>
-                                </div>
-                            )}
-
-                            {/* 퀵링크 버튼들 */}
-                            {quickLinks.filter(l => l.enabled && l.text && l.url).length > 0 && (
-                                <div className="flex flex-wrap gap-2">
-                                    {quickLinks.filter(l => l.enabled && l.text && l.url).map((link, idx) => (
-                                        
-                                            key={idx}
-                                            href={link.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-600 transition-colors shadow-sm"
-                                        >
-                                            {link.text}
-                                        </a>
-                                    ))}
                                 </div>
                             )}
 
                             <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
                                 <div className="p-6 text-white relative bg-gradient-to-br from-indigo-600 to-blue-700">
-                                    <div className="flex items-center justify-center gap-3 mb-2">
-                                        <button 
-                                            onClick={() => setViewingDay(prev => Math.max(1, (prev || currentDay) - 1))}
-                                            disabled={viewingDay <= 1}
-                                            className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center"
-                                        >
-                                            <Icon name="back" size={18} />
-                                        </button>
-                                        <div className="text-center">
-                                            <h2 className="text-2xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
-                                            <div className="flex items-center justify-center gap-2">
-                                                {(currentUser.readCount || 1) > 1 && (
-                                                    <span className="text-xs bg-purple-500/90 px-2 py-0.5 rounded-full">🏆 {currentUser.readCount}독</span>
-                                                )}
-                                                <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">🏁 D-{daysRemaining}</span>
+                                    <div className="absolute top-4 right-4 flex items-center gap-2">
+                                        {(currentUser.readCount || 1) > 1 && (
+                                            <div className="bg-purple-500/90 backdrop-blur-md text-white border border-purple-300/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                🏆 {currentUser.readCount}독 중
                                             </div>
-                                        </div>
-                                        <button 
-                                            onClick={() => setViewingDay(prev => Math.min(currentDay, (prev || currentDay) + 1))}
-                                            disabled={viewingDay >= currentDay}
-                                            className="w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center rotate-180"
-                                        >
-                                            <Icon name="back" size={18} />
-                                        </button>
+                                        )}
+                                        <div className="bg-white/20 backdrop-blur-md text-white border border-white/30 text-xs font-bold px-3 py-1 rounded-full shadow-sm">🏁 완독 D-{daysRemaining}</div>
                                     </div>
+                                    <div className="flex items-center justify-center gap-3 mb-1">
 <button 
                                             onClick={() => setViewingDay(prev => Math.max(1, (prev || currentDay) - 1))}
                                             disabled={viewingDay <= 1}
