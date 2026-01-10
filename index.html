@@ -1509,6 +1509,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                 
                 setCurrentUser(updatedUser);
                 setHasReadToday(true);
+                setViewingDay(newDay);  // 읽기 완료 후 자동으로 다음 날 컨텐츠 로드
                 
                 // 7. Firestore에 저장
                 try {
