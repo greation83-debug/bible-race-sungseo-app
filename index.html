@@ -3372,6 +3372,9 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                                         <span className={`font-bold text-sm ${isMe ? 'text-blue-600' : 'text-slate-700'}`}>
                                                                             {member.name} {isMe && '(나)'}
                                                                         </span>
+                                                                        {(member.readCount || 1) > 1 && (
+                                                                            <span className="text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">{member.readCount}독</span>
+                                                                        )}
                                                                         {readToday && <span className="text-green-500 text-xs">✓</span>}
                                                                     </div>
                                                                     <div className="text-right">
@@ -3538,12 +3541,20 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         const p = Math.min((racer.day / TOTAL_DAYS) * 100, 100);
                                         const isMe = racer.isMe;
                                         const racerLevel = getLevelInfo(racer.score || 0);
+                                        const racerReadCount = racer.readCount || 1;
                                         return (
                                             <div key={racer.uid || idx} className="absolute transition-all duration-1000 ease-out flex flex-col items-center"
                                                 style={{ left: `calc(${p}% - 16px)`, top: isMe ? '50%' : `${35+(idx%4)*12}%`, zIndex: isMe ? 50 : idx + 20 }}>
                                                 <div className={`text-[9px] px-1.5 py-0.5 rounded-full mb-1 shadow-sm font-bold truncate max-w-[60px] ${isMe ? 'bg-blue-600 text-white' : 'bg-white/90 text-slate-500'}`}>{racer.name}</div>
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-md border-[3px] bg-white ${isMe ? 'border-blue-400' : 'border-white opacity-70'}`}>
-                                                    {racerLevel.emoji}
+                                                <div className="relative">
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-md border-[3px] bg-white ${isMe ? 'border-blue-400' : 'border-white opacity-70'}`}>
+                                                        {racerLevel.emoji}
+                                                    </div>
+                                                    {racerReadCount > 1 && (
+                                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                                                            <span className="text-[8px] font-bold text-white">{racerReadCount}</span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -3763,6 +3774,9 @@ const changePassword = async (uid, userName, currentPassword) => {
                                             <div key={u.uid} className={`flex items-center gap-2 px-3 py-2 rounded-full border ${idx === 0 ? 'bg-yellow-100 border-yellow-300' : idx === 1 ? 'bg-slate-100 border-slate-300' : idx === 2 ? 'bg-orange-100 border-orange-300' : 'bg-white border-slate-200'}`}>
                                                 <span>{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅'}</span>
                                                 <span className="text-sm font-bold text-slate-700">{u.name}</span>
+                                                {(u.readCount || 1) > 1 && (
+                                                    <span className="text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">{u.readCount}독</span>
+                                                )}
                                                 <span className="text-xs text-slate-400">{u.score}점</span>
                                             </div>
                                         ))}
