@@ -1450,7 +1450,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                     await loadAnnouncement();
                 };
                 loadData();
-            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId, currentUser?.dayOffset, viewingDay]);
+            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId, currentUser?.dayOffset, currentUser?.readCount, viewingDay]);
 
             // ----------------------------------------------------------------------
             // [섹션 I] 읽기 완료 처리 - handleRead
@@ -1509,7 +1509,8 @@ const changePassword = async (uid, userName, currentPassword) => {
                 
                 setCurrentUser(updatedUser);
                 setHasReadToday(true);
-                setViewingDay(newDay);  // 읽기 완료 후 자동으로 다음 날 컨텐츠 로드
+                // viewingDay를 약간 지연시켜 currentUser 업데이트가 완료된 후 데이터 로드를 보장
+                setTimeout(() => setViewingDay(newDay), 0);
                 
                 // 7. Firestore에 저장
                 try {
