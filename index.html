@@ -143,6 +143,7 @@
                 memos: d.memos ?? {},                 // 묵상 메모 {day: {text, date, title}}
                 dayOffset: d.dayOffset ?? 0,          // 시작 날짜 오프셋 (4월 시작 = 90)
                 readCount: d.readCount ?? 1,          // N독 중인지 (1독, 2독, 3독...)
+                readHistory: d.readHistory ?? [],     // 읽기 기록 (날짜 배열) - 월간 대항전 계산에 필요
             };
         };
 
@@ -396,7 +397,8 @@
             const [showDateSettings, setShowDateSettings] = React.useState(false); // 날짜 설정 모달
             const [showSubgroupChange, setShowSubgroupChange] = React.useState(false); // 소그룹 변경 모달
             const [showRestartConfirm, setShowRestartConfirm] = React.useState(false); // 재시작 확인 모달
-            
+            const [showMonthlyContestInfo, setShowMonthlyContestInfo] = React.useState(false); // 월간 대항전 설명 모달
+
             // --- 관리자 관련 상태 ---
             const [selectedPlanType, setSelectedPlanType] = React.useState(null); // 선택된 플랜 타입
             const [isAdmin, setIsAdmin] = React.useState(false);            // 관리자 모드 여부
@@ -1395,15 +1397,18 @@ const changePassword = async (uid, userName, currentPassword) => {
             // ----------------------------------------------------------------------
             React.useEffect(() => {
                 if (view !== 'dashboard' || !currentUser) return;
-                // viewingDay 초기화 (처음 진입 시)
+
+                // viewingDay 초기화 (처음 진입 시) - 초기화만 하고 return하여 다음 렌더에서 데이터 로드
                 if (viewingDay === null) {
                     setViewingDay(currentUser.currentDay || 1);
+                    return; // 초기화 후 즉시 return하여 이번 useEffect에서는 loadData를 실행하지 않음
                 }
+
                 const loadData = async () => {
                     setVerseData(prev => ({ ...prev, loading: true }));
                     const { currentDay, planId, communityId, dayOffset = 0, readCount = 1 } = currentUser;
-                    // viewingDay가 있으면 그 Day를, 없으면 currentDay 사용
-                    const dayToShow = viewingDay || currentDay;
+                    // viewingDay는 항상 설정되어 있음 (위에서 null 체크 후 return)
+                    const dayToShow = viewingDay;
                     const [planType, version] = (planId || '1year_revised').split('_');
                     const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
                     
@@ -1507,10 +1512,10 @@ const changePassword = async (uid, userName, currentPassword) => {
                     readCount: newReadCount
                 };
                 
+                // viewingDay와 currentUser를 동시에 업데이트하여 데이터 로드가 한 번만 일어나도록 보장
+                setViewingDay(newDay);
                 setCurrentUser(updatedUser);
                 setHasReadToday(true);
-                // viewingDay를 약간 지연시켜 currentUser 업데이트가 완료된 후 데이터 로드를 보장
-                setTimeout(() => setViewingDay(newDay), 0);
                 
                 // 7. Firestore에 저장
                 try {
@@ -1630,28 +1635,64 @@ const changePassword = async (uid, userName, currentPassword) => {
                 };
             };
 
-            // 월간 소그룹 대항전 계산
+            // 월간 소그룹 대항전 계산 - 월간 누적 참여율 기준
             const getMonthlyContest = () => {
-                if (!subgroupStats || Object.keys(subgroupStats).length === 0) return [];
+                if (!currentUser?.communityId) return [];
+
                 const now = new Date();
-                const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-                const daysPassed = now.getDate();
-                
-                return Object.entries(subgroupStats)
-                    .map(([name, data]) => {
-                        // 월간 참여율 = 오늘까지의 총 읽은 일수 / (인원수 × 경과일수) × 100
-                        // 여기서는 오늘 읽은 비율로 대체 (실제로는 월간 누적 필요)
-                        const monthlyRate = data.rate || 0;
+                const year = now.getFullYear();
+                const month = now.getMonth(); // 0-11
+                const daysPassed = now.getDate(); // 이번 달 경과일수
+
+                // 이번 달 1일
+                const monthStart = new Date(year, month, 1);
+
+                // 소그룹별로 그룹화
+                const comm = MOCK_COMMUNITIES.find(c => c.id === currentUser.communityId);
+                if (!comm) return [];
+
+                const groupedBySubgroup = {};
+                comm.subgroups.forEach(sub => {
+                    groupedBySubgroup[sub] = communityMembers.filter(m => m.subgroupId === sub);
+                });
+
+                // 각 소그룹별 월간 누적 참여율 계산
+                const contest = Object.entries(groupedBySubgroup)
+                    .map(([subgroupName, members]) => {
+                        const totalCount = members.length;
+                        if (totalCount === 0) return null;
+
+                        // 이번 달 총 읽은 횟수 계산
+                        const totalReads = members.reduce((sum, member) => {
+                            if (!member.readHistory || !Array.isArray(member.readHistory)) return sum;
+
+                            const monthlyReads = member.readHistory.filter(dateStr => {
+                                const readDate = new Date(dateStr);
+                                return readDate >= monthStart && readDate <= now;
+                            }).length;
+
+                            return sum + monthlyReads;
+                        }, 0);
+
+                        // 최대 가능 횟수 = 인원수 × 경과일수
+                        const maxPossible = totalCount * daysPassed;
+
+                        // 월간 누적 참여율
+                        const monthlyRate = maxPossible > 0 ? Math.round((totalReads / maxPossible) * 100) : 0;
+
                         return {
-                            name,
+                            name: subgroupName,
                             rate: monthlyRate,
-                            readCount: data.readCount || 0,
-                            totalCount: data.totalCount || 0,
-                            avgDay: data.avgDay || 0
+                            totalCount,
+                            totalReads,
+                            maxPossible,
+                            daysPassed
                         };
                     })
-                    .filter(g => g.totalCount > 0)
+                    .filter(g => g !== null && g.totalCount > 0)
                     .sort((a, b) => b.rate - a.rate);
+
+                return contest;
             };
 
             const getAdminStats = () => {
@@ -2773,6 +2814,54 @@ const changePassword = async (uid, userName, currentPassword) => {
                             </div>
                         )}
 
+                        {showMonthlyContestInfo && (
+                            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowMonthlyContestInfo(false)}>
+                                <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                        <h3 className="text-xl font-bold text-red-700">🏆 월간 소그룹 대항전</h3>
+                                        <button onClick={() => setShowMonthlyContestInfo(false)} className="text-slate-400"><Icon name="close"/></button>
+                                    </div>
+                                    <div className="space-y-4 overflow-y-auto max-h-[60vh]">
+                                        <div>
+                                            <h4 className="font-bold text-red-600 mb-2">📊 계산 방식</h4>
+                                            <div className="bg-red-50 p-3 rounded-xl border border-red-100 text-sm text-slate-700 leading-relaxed">
+                                                <p className="mb-2"><strong>월간 누적 참여율</strong> = (이번 달 총 읽은 횟수) ÷ (인원 × 경과일수) × 100</p>
+                                                <p className="text-xs text-slate-500">※ 이번 달 1일부터 오늘까지 소그룹 전체가 읽은 누적 기록을 반영합니다</p>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <h4 className="font-bold text-slate-700 mb-2">💡 예시</h4>
+                                            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-2">
+                                                <div>
+                                                    <p className="font-bold text-slate-700 mb-1">1구역 (10명, 1월 12일 기준)</p>
+                                                    <ul className="text-slate-600 space-y-0.5 pl-3">
+                                                        <li>• 이번 달 총 읽은 횟수: <strong>100회</strong></li>
+                                                        <li>• 최대 가능 횟수: 10명 × 12일 = <strong>120회</strong></li>
+                                                        <li>• 월간 참여율: 100 ÷ 120 × 100 = <strong className="text-red-600">83%</strong></li>
+                                                    </ul>
+                                                </div>
+                                                <div className="pt-2 border-t border-slate-200">
+                                                    <p className="text-slate-500">→ 평균적으로 매일 83%의 사람들이 꾸준히 읽고 있다는 의미입니다</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <h4 className="font-bold text-blue-600 mb-2">✅ 왜 공정한가요?</h4>
+                                            <ul className="text-xs text-slate-600 space-y-2 pl-3">
+                                                <li>• <strong>한 달 전체의 꾸준함</strong>을 반영합니다</li>
+                                                <li>• 하루 못 읽어도 그동안의 노력으로 만회 가능</li>
+                                                <li>• 인원이 다른 소그룹도 비율로 공정 비교</li>
+                                                <li>• 오늘만 잘해서 1등하는 게 아니라 <strong>진짜 열심히 한 팀</strong>이 상위권</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setShowMonthlyContestInfo(false)} className="w-full bg-red-100 font-bold py-3 rounded-xl mt-4 text-red-700 hover:bg-red-200 transition-colors">닫기</button>
+                                </div>
+                            </div>
+                        )}
+
                         {showReadingGuide && (
                             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowReadingGuide(false)}>
                                 <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -3821,11 +3910,20 @@ const changePassword = async (uid, userName, currentPassword) => {
                                 const contest = getMonthlyContest();
                                 if (!contest || contest.length === 0) return null;
                                 const monthName = new Date().toLocaleDateString('ko-KR', { month: 'long' });
+                                const daysPassed = new Date().getDate();
                                 return (
                                     <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl border border-red-200 p-5 shadow-sm">
                                         <div className="flex justify-between items-center mb-4">
                                             <h3 className="font-bold text-red-700 flex items-center">🏆 {monthName} 소그룹 대항전</h3>
-                                            <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">월간</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">월간 누적</span>
+                                                <button
+                                                    onClick={() => setShowMonthlyContestInfo(true)}
+                                                    className="w-5 h-5 rounded-full bg-red-200 text-red-700 flex items-center justify-center text-xs font-bold hover:bg-red-300 transition-colors"
+                                                >
+                                                    ?
+                                                </button>
+                                            </div>
                                         </div>
                                         <div className="space-y-2">
                                             {contest.slice(0, 3).map((group, idx) => {
@@ -3835,12 +3933,15 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                     <div key={group.name} className={`flex items-center gap-3 p-2 rounded-lg ${isMyGroup ? 'bg-red-100 border border-red-200' : 'bg-white'}`}>
                                                         <span className="text-xl">{medal}</span>
                                                         <div className="flex-1">
-                                                            <div className="flex justify-between">
+                                                            <div className="flex justify-between items-center mb-1">
                                                                 <span className={`text-sm font-bold ${isMyGroup ? 'text-red-700' : 'text-slate-700'}`}>{group.name} {isMyGroup && '(우리팀)'}</span>
                                                                 <span className="text-sm font-bold text-slate-500">{group.rate}%</span>
                                                             </div>
-                                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mt-1">
+                                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-1">
                                                                 <div className={`h-full rounded-full ${idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : 'bg-orange-400'}`} style={{ width: `${group.rate}%` }}></div>
+                                                            </div>
+                                                            <div className="text-[9px] text-slate-400">
+                                                                {group.totalReads}회 / {group.maxPossible}회 ({group.totalCount}명 × {daysPassed}일)
                                                             </div>
                                                         </div>
                                                     </div>
@@ -3848,7 +3949,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                                             })}
                                         </div>
                                         <div className="mt-3 text-center">
-                                            <p className="text-[10px] text-slate-400">📊 기준: 오늘 읽은 비율 (읽은 인원 / 전체 인원)</p>
+                                            <p className="text-[10px] text-slate-500 font-medium">이번 달 누적 참여율 기준 (한 달 전체 꾸준함 반영)</p>
                                         </div>
                                     </div>
                                 );
