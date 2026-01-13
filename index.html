@@ -459,11 +459,14 @@
             const [showSubgroupChange, setShowSubgroupChange] = React.useState(false); // 소그룹 변경 모달
             const [showRestartConfirm, setShowRestartConfirm] = React.useState(false); // 재시작 확인 모달
             const [showMonthlyContestInfo, setShowMonthlyContestInfo] = React.useState(false); // 월간 대항전 설명 모달
+            const [rankingCommunityFilter, setRankingCommunityFilter] = React.useState('all'); // 누적 랭킹 대그룹 필터
+            const [rankingSubgroupFilter, setRankingSubgroupFilter] = React.useState('all'); // 누적 랭킹 소그룹 필터
 
             // --- 관리자 관련 상태 ---
             const [selectedPlanType, setSelectedPlanType] = React.useState(null); // 선택된 플랜 타입
             const [isAdmin, setIsAdmin] = React.useState(false);            // 관리자 모드 여부
             const [allUsers, setAllUsers] = React.useState([]);             // 전체 사용자 목록 (관리자용)
+            const [allMembersForRace, setAllMembersForRace] = React.useState([]); // 레이스용 전체 멤버
             const [editingUser, setEditingUser] = React.useState(null);     // 편집 중인 사용자
             const [changingPassword, setChangingPassword] = React.useState(null); // 비밀번호 변경 대상
 const [newPassword, setNewPassword] = React.useState('');       // 새 비밀번호
@@ -1024,6 +1027,15 @@ const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고
                 } catch (e) { console.error(e); return []; }
             };
 
+            const loadAllMembers = async () => {
+                if (!db) return [];
+                try {
+                    const snap = await db.collection('users').get();
+                    const members = snap.docs.map(doc => userDocToState(doc));
+                    return members;
+                } catch (e) { console.error(e); return []; }
+            };
+
             const calculateSubgroupStats = (members, communityId) => {
                 const todayStr = new Date().toDateString();
                 const comm = MOCK_COMMUNITIES.find(c => c.id === communityId);
@@ -1034,12 +1046,19 @@ const [viewingDay, setViewingDay] = React.useState(null);       // 현재 보고
                     const totalCount = subMembers.length;
                     const readTodayCount = subMembers.filter(m => m.lastReadDate === todayStr).length;
                     const rate = totalCount > 0 ? Math.round((readTodayCount / totalCount) * 100) : 0;
-                    
-                    // 누적 진행률 계산 (평균 Day / 365 * 100)
-                    const avgDay = totalCount > 0 ? subMembers.reduce((sum, m) => sum + (m.currentDay || 1), 0) / totalCount : 0;
+
+                    // 누적 진행률 계산 (2독 이상 반영)
+                    // 실제 진행도 = (readCount - 1) * 365 + currentDay
+                    const avgDay = totalCount > 0
+                        ? subMembers.reduce((sum, m) => {
+                            const readCount = m.readCount || 1;
+                            const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
+                            return sum + actualProgress;
+                        }, 0) / totalCount
+                        : 0;
                     const progressRate = Math.round((avgDay / TOTAL_DAYS) * 100);
                     const totalScore = subMembers.reduce((sum, m) => sum + (m.score || 0), 0);
-                    
+
                     stats[sub] = { rate, readCount: readTodayCount, totalCount, progressRate, avgDay: Math.round(avgDay), totalScore };
                 });
                 return stats;
@@ -1598,11 +1617,15 @@ const changePassword = async (uid, userName, currentPassword) => {
                         const members = await loadCommunityMembers(communityId);
                         if (members?.length > 0) setSubgroupStats(calculateSubgroupStats(members, communityId));
                     }
-                    
+
+                    // 레이스용 전체 멤버 로드
+                    const allMembers = await loadAllMembers();
+                    setAllMembersForRace(allMembers);
+
                     // 메모 불러오기
                     const uid = auth.currentUser?.uid;
                     if (uid) await loadMemos(uid);
-                    
+
                     // 광고 불러오기
                     await loadAnnouncement();
                 };
@@ -1673,11 +1696,30 @@ const changePassword = async (uid, userName, currentPassword) => {
                 try {
                     const uid = auth.currentUser?.uid;
                     if (uid) {
-                        // 읽기 기록에 오늘 추가
+                        // 읽기 기록에 오늘 추가 (새로운 형식: {date, daysRead})
                         const todayISO = new Date().toISOString().split('T')[0];
-                        const newHistory = readHistory.includes(todayISO) ? readHistory : [...readHistory, todayISO];
+
+                        // 기존 데이터 마이그레이션: 문자열 배열을 객체 배열로 변환
+                        const migratedHistory = readHistory.map(item =>
+                            typeof item === 'string' ? { date: item, daysRead: 1 } : item
+                        );
+
+                        // 오늘 기록 찾기
+                        const todayRecord = migratedHistory.find(r => r.date === todayISO);
+                        let newHistory;
+
+                        if (todayRecord) {
+                            // 오늘 이미 읽었으면 daysRead 증가
+                            newHistory = migratedHistory.map(r =>
+                                r.date === todayISO ? { ...r, daysRead: r.daysRead + 1 } : r
+                            );
+                        } else {
+                            // 오늘 처음 읽으면 새로 추가
+                            newHistory = [...migratedHistory, { date: todayISO, daysRead: 1 }];
+                        }
+
                         setReadHistory(newHistory);
-                        
+
                         await db.collection('users').doc(uid).set({
                             currentDay: newDay, streak: newStreak, score: newScore, lastReadDate: todayStr,
                             readHistory: newHistory,
@@ -1749,41 +1791,94 @@ const changePassword = async (uid, userName, currentPassword) => {
             // 주간 MVP 계산
             const getWeeklyMVP = () => {
                 if (!communityMembers || communityMembers.length === 0) return null;
+
                 const now = new Date();
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() - now.getDay()); // 이번 주 일요일
                 weekStart.setHours(0, 0, 0, 0);
-                
-                // 이번 주에 읽은 일수 계산 함수
+
+                // 이번 주에 읽은 DAY 분량 계산 함수 (새로운 데이터 구조 지원)
                 const getWeeklyReadCount = (member) => {
                     if (!member.readHistory || !Array.isArray(member.readHistory)) return 0;
-                    return member.readHistory.filter(dateStr => {
-                        const readDate = new Date(dateStr);
-                        return readDate >= weekStart;
-                    }).length;
+
+                    return member.readHistory.reduce((total, item) => {
+                        try {
+                            // 기존 형식(문자열)과 새 형식(객체) 모두 지원
+                            const date = typeof item === 'string' ? item : item.date;
+                            const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
+
+                            const readDate = new Date(date);
+                            if (readDate >= weekStart) {
+                                return total + daysRead; // 이번 주에 읽은 DAY 분량 누적
+                            }
+                            return total;
+                        } catch (e) {
+                            return total;
+                        }
+                    }, 0);
                 };
-                
-                // 이번 주에 가장 많이 읽은 사람 (연속 읽기왕)
-                const mvpByStreak = [...communityMembers]
-                    .map(m => ({ ...m, weeklyCount: getWeeklyReadCount(m) }))
-                    .sort((a, b) => (b.weeklyCount || 0) - (a.weeklyCount || 0))[0];
-                
-                // 이번 주 currentDay 증가량이 가장 높은 사람 (진행왕)
-                // readHistory 기반으로 이번 주 읽은 횟수 = Day 증가량
-                const mvpByProgress = [...communityMembers]
-                    .map(m => ({ ...m, weeklyCount: getWeeklyReadCount(m) }))
+
+                // 이번 주 누적 읽기왕 (이번 주에 가장 많이 읽은 사람)
+                const weeklyWithCounts = communityMembers
+                    .map(m => ({
+                        ...m,
+                        weeklyCount: getWeeklyReadCount(m),
+                        totalCount: (m.readHistory?.length || 0)
+                    }))
+                    .filter(m => m.weeklyCount > 0) // 이번 주에 읽은 사람만
                     .sort((a, b) => {
                         // 1순위: 이번 주 읽은 횟수
-                        if ((b.weeklyCount || 0) !== (a.weeklyCount || 0)) {
-                            return (b.weeklyCount || 0) - (a.weeklyCount || 0);
+                        if (b.weeklyCount !== a.weeklyCount) {
+                            return b.weeklyCount - a.weeklyCount;
                         }
-                        // 2순위: 현재 진행 Day (동점 시)
-                        return (b.currentDay || 0) - (a.currentDay || 0);
-                    })[0];
-                
+                        // 2순위: 전체 누적 (동점 시)
+                        return b.totalCount - a.totalCount;
+                    });
+
+                // 디버깅: 주간 읽기왕 상위 5명 출력
+                console.log('=== 주간 읽기왕 후보 (상위 5명) ===');
+                weeklyWithCounts.slice(0, 5).forEach((m, i) => {
+                    console.log(`${i+1}위: ${m.name} - 이번주: ${m.weeklyCount}일, 소그룹: ${m.subgroupId}`);
+                });
+
+                const mvpByWeekly = weeklyWithCounts.length > 0 ? weeklyWithCounts[0] : null;
+                const weeklyTop10 = weeklyWithCounts.slice(0, 10);
+
+                // 전체 누적 읽기왕 (currentDay + readCount 기반)
+                // 실제 누적 = (readCount - 1) * 365 + currentDay
+                const totalWithCounts = communityMembers
+                    .map(m => {
+                        const readCount = m.readCount || 1;
+                        const currentDay = m.currentDay || 0;
+                        const actualTotal = (readCount - 1) * 365 + currentDay;
+                        return {
+                            ...m,
+                            totalCount: actualTotal
+                        };
+                    })
+                    .filter(m => m.totalCount > 0); // 읽기 기록이 있는 사람만
+
+                // 누적 읽기왕 정렬
+                const sortedByTotal = totalWithCounts.sort((a, b) => b.totalCount - a.totalCount);
+
+                // 디버깅: 상위 5명 출력
+                console.log('=== 누적 읽기왕 후보 (상위 5명) ===');
+                sortedByTotal.slice(0, 5).forEach((m, i) => {
+                    console.log(`${i+1}위: ${m.name} - 실제누적: ${m.totalCount}일, readCount: ${m.readCount}독, currentDay: ${m.currentDay}`);
+                });
+
+                const mvpByTotal = sortedByTotal.length > 0 ? sortedByTotal[0] : null;
+                const totalTop10 = sortedByTotal.slice(0, 10);
+
+                if (mvpByTotal) {
+                    console.log(`✅ 누적 읽기왕: ${mvpByTotal.name} (${mvpByTotal.totalCount}일)`);
+                }
+
                 return {
-                    streakMVP: mvpByStreak,
-                    progressMVP: mvpByProgress
+                    streakMVP: mvpByWeekly,
+                    progressMVP: mvpByTotal,
+                    weeklyTop10,
+                    totalTop10
                 };
             };
 
@@ -1976,22 +2071,45 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         if (adminViewMode === 'today') {
                                             // 오늘 안 읽은 사람
                                             const notReadUsers = filteredUsers.filter(u => u.lastReadDate !== todayStr);
-                                            const grouped = {};
+
+                                            // 대그룹별, 소그룹별로 그룹화
+                                            const groupedByCommunity = {};
                                             notReadUsers.forEach(u => {
-                                                const key = u.subgroupId || '미배정';
-                                                if (!grouped[key]) grouped[key] = [];
-                                                grouped[key].push(u);
+                                                const commKey = u.communityId || 'none';
+                                                if (!groupedByCommunity[commKey]) groupedByCommunity[commKey] = {};
+                                                const subKey = u.subgroupId || '미배정';
+                                                if (!groupedByCommunity[commKey][subKey]) groupedByCommunity[commKey][subKey] = [];
+                                                groupedByCommunity[commKey][subKey].push(u);
                                             });
-                                            
+
+                                            // MOCK_COMMUNITIES 순서대로 정렬
+                                            const sortedGroups = [];
+                                            MOCK_COMMUNITIES.forEach(comm => {
+                                                const subgroups = groupedByCommunity[comm.id];
+                                                if (subgroups) {
+                                                    comm.subgroups.forEach(subName => {
+                                                        if (subgroups[subName]) {
+                                                            sortedGroups.push([subName, subgroups[subName]]);
+                                                        }
+                                                    });
+                                                }
+                                            });
+                                            // 미배정 추가
+                                            Object.entries(groupedByCommunity).forEach(([commId, subgroups]) => {
+                                                if (subgroups['미배정']) {
+                                                    sortedGroups.push(['미배정', subgroups['미배정']]);
+                                                }
+                                            });
+
                                             const totalNotRead = notReadUsers.length;
-                                            
+
                                             return (
                                                 <div>
                                                     <div className="mb-3 text-sm text-slate-500">
                                                         총 <strong className="text-red-600">{totalNotRead}명</strong>이 오늘 아직 안 읽었습니다.
                                                     </div>
-                                                    {Object.entries(grouped).length > 0 ? (
-                                                        Object.entries(grouped).map(([group, users]) => (
+                                                    {sortedGroups.length > 0 ? (
+                                                        sortedGroups.map(([group, users]) => (
                                                             <div key={group} className="mb-4 bg-slate-50 p-3 rounded-lg">
                                                                 <div className="text-sm font-bold text-slate-700 mb-2 flex justify-between">
                                                                     <span>📁 {group}</span>
@@ -2019,18 +2137,62 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                 </div>
                                             );
                                         } else {
-                                            // 장기 미참여자 (안 읽은 날 순 정렬)
+                                            // 장기 미참여자 정렬
                                             const usersWithDays = filteredUsers.map(u => {
                                                 const lastRead = u.lastReadDate ? new Date(u.lastReadDate) : null;
                                                 const daysSince = lastRead ? Math.floor((today - lastRead) / (1000 * 60 * 60 * 24)) : 999;
                                                 return { ...u, daysSince };
                                             }).filter(u => u.daysSince >= 1) // 최소 1일 이상 안 읽은 사람
-                                              .sort((a, b) => b.daysSince - a.daysSince); // 오래된 순
-                                            
+                                              .sort((a, b) => {
+                                                if (adminSortBy === 'name') {
+                                                    return a.name.localeCompare(b.name);
+                                                } else if (adminSortBy === 'day') {
+                                                    const aTotalDays = ((a.readCount || 1) - 1) * 365 + (a.currentDay || 1);
+                                                    const bTotalDays = ((b.readCount || 1) - 1) * 365 + (b.currentDay || 1);
+                                                    return bTotalDays - aTotalDays;
+                                                } else if (adminSortBy === 'score') {
+                                                    return (b.score || 0) - (a.score || 0);
+                                                } else if (adminSortBy === 'subgroup') {
+                                                    const commA = a.communityName || '';
+                                                    const commB = b.communityName || '';
+                                                    const commCompare = commA.localeCompare(commB, 'ko-KR');
+                                                    if (commCompare !== 0) return commCompare;
+                                                    const subA = a.subgroupId || '';
+                                                    const subB = b.subgroupId || '';
+                                                    return subA.localeCompare(subB, 'ko-KR');
+                                                } else {
+                                                    // 기본: 안 읽은 날 순
+                                                    return b.daysSince - a.daysSince;
+                                                }
+                                            });
+
                                             return (
                                                 <div>
-                                                    <div className="mb-3 text-sm text-slate-500">
-                                                        안 읽은 날 기준 정렬 (오래된 순)
+                                                    <div className="mb-3 flex gap-2">
+                                                        <button
+                                                            onClick={() => setAdminSortBy('name')}
+                                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'name' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                                        >
+                                                            이름순
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setAdminSortBy('day')}
+                                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'day' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                                        >
+                                                            진행순
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setAdminSortBy('score')}
+                                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'score' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                                        >
+                                                            점수순
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setAdminSortBy('subgroup')}
+                                                            className={`text-xs px-3 py-1.5 rounded-lg font-bold ${adminSortBy === 'subgroup' ? 'bg-blue-500 text-white' : 'bg-slate-100 text-slate-600'}`}
+                                                        >
+                                                            소그룹순
+                                                        </button>
                                                     </div>
                                                     {usersWithDays.length > 0 ? (
                                                         <table className="w-full text-sm">
@@ -2052,7 +2214,22 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                                                 {u.daysSince === 999 ? '기록없음' : `${u.daysSince}일`}
                                                                             </span>
                                                                         </td>
-                                                                        <td className="px-3 py-2 text-center text-xs text-slate-500">DAY {u.currentDay || 1}</td>
+                                                                        <td className="px-3 py-2 text-center text-xs">
+                                                                            {(() => {
+                                                                                const readCount = u.readCount || 1;
+                                                                                const currentDay = u.currentDay || 1;
+                                                                                const totalDays = (readCount - 1) * 365 + currentDay;
+                                                                                if (readCount > 1) {
+                                                                                    return (
+                                                                                        <div className="flex items-center justify-center gap-1">
+                                                                                            <span className="font-bold text-slate-700">DAY {totalDays}</span>
+                                                                                            <span className="px-1.5 py-0.5 bg-gradient-to-br from-purple-500 to-purple-700 text-white text-[10px] font-bold rounded-full">{readCount}독</span>
+                                                                                        </div>
+                                                                                    );
+                                                                                }
+                                                                                return <span className="font-bold text-slate-700">DAY {currentDay}</span>;
+                                                                            })()}
+                                                                        </td>
                                                                     </tr>
                                                                 ))}
                                                             </tbody>
@@ -2084,20 +2261,30 @@ const changePassword = async (uid, userName, currentPassword) => {
 
                             <div className="bg-white rounded-xl shadow-lg p-6">
                                 <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                    👑 완주자 명예의 전당 ({allUsers.filter(u => u.currentDay >= 365).length}명)
+                                    👑 완주자 명예의 전당 ({allUsers.filter(u => u.currentDay >= 365 || (u.readCount || 1) >= 2).length}명)
                                 </h2>
                                 {(() => {
-                                    const finishers = allUsers.filter(u => u.currentDay >= 365).sort((a, b) => (b.score || 0) - (a.score || 0));
+                                    const finishers = allUsers
+                                        .filter(u => u.currentDay >= 365 || (u.readCount || 1) >= 2)
+                                        .sort((a, b) => (b.score || 0) - (a.score || 0));
                                     return finishers.length > 0 ? (
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                            {finishers.map((u, idx) => (
-                                                <div key={u.uid} className={`p-4 rounded-xl text-center border-2 ${idx === 0 ? 'bg-yellow-50 border-yellow-300' : idx === 1 ? 'bg-slate-50 border-slate-300' : idx === 2 ? 'bg-orange-50 border-orange-300' : 'bg-white border-slate-100'}`}>
-                                                    <div className="text-2xl mb-1">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅'}</div>
-                                                    <div className="font-bold text-slate-800">{u.name}</div>
-                                                    <div className="text-xs text-slate-500">{u.score || 0}점</div>
-                                                    <div className="text-[10px] text-slate-400">{u.communityName} {u.subgroupId}</div>
-                                                </div>
-                                            ))}
+                                            {finishers.map((u, idx) => {
+                                                const readCount = u.readCount || 1;
+                                                return (
+                                                    <div key={u.uid} className={`p-4 rounded-xl text-center border-2 ${idx === 0 ? 'bg-yellow-50 border-yellow-300' : idx === 1 ? 'bg-slate-50 border-slate-300' : idx === 2 ? 'bg-orange-50 border-orange-300' : 'bg-white border-slate-100'}`}>
+                                                        <div className="text-2xl mb-1">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅'}</div>
+                                                        <div className="font-bold text-slate-800 flex items-center justify-center gap-1">
+                                                            {u.name}
+                                                            {readCount >= 2 && (
+                                                                <span className="text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">{readCount}독</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500">{u.score || 0}점</div>
+                                                        <div className="text-[10px] text-slate-400">{u.communityName} {u.subgroupId}</div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <div className="text-center py-8 text-slate-400">
@@ -2107,189 +2294,6 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         </div>
                                     );
                                 })()}
-                            </div>
-
-                            {/* 노션 데이터 동기화 */}
-                            <div className="bg-white rounded-xl shadow-lg p-6">
-                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                    🔄 노션 데이터 동기화
-                                </h2>
-                                
-                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
-                                    <p className="text-sm text-blue-700">
-                                        노션의 성경 본문을 Firestore에 캐싱하여 <strong>로딩 속도를 10배 이상</strong> 향상시킵니다.<br/>
-                                        노션 본문을 수정했을 때만 동기화하면 됩니다.
-                                    </p>
-                                </div>
-                                
-                                {lastSyncInfo && (
-                                    <div className="bg-slate-50 p-3 rounded-lg mb-4 text-sm">
-                                        <p className="text-slate-600">
-                                            마지막 동기화: {lastSyncInfo.lastSyncAt?.toDate?.().toLocaleString('ko-KR') || '정보 없음'}
-                                        </p>
-                                        <p className="text-slate-500 text-xs">
-                                            성공: {lastSyncInfo.successCount || 0}개 / 실패: {lastSyncInfo.errorCount || 0}개
-                                        </p>
-                                        {lastSyncInfo.syncedVersions && (
-                                            <p className="text-slate-400 text-xs mt-1">
-                                                동기화된 버전: {lastSyncInfo.syncedVersions.join(', ')}
-                                            </p>
-                                        )}
-                                        {/* 실패 목록 표시 */}
-                                        {lastSyncInfo.failedItems && lastSyncInfo.failedItems.length > 0 && (
-                                            <div className="mt-3 pt-3 border-t border-slate-200">
-                                                <p className="text-red-600 text-xs font-bold mb-2">
-                                                    ❌ 실패 목록 ({lastSyncInfo.failedItems.length}개):
-                                                </p>
-                                                <div className="max-h-32 overflow-y-auto bg-white rounded p-2 text-xs">
-                                                    {lastSyncInfo.failedItems.map((item, idx) => (
-                                                        <div key={idx} className="text-red-500 py-0.5">
-                                                            • {item.versionName} Day {item.day} ({item.date}) - {item.error}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                
-                                {syncProgress ? (
-                                    <div className="space-y-3">
-                                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
-                                            <p className="text-sm font-bold text-amber-700 mb-2">
-                                                ⏳ 동기화 진행 중... ({syncProgress.current}/{syncProgress.total})
-                                            </p>
-                                            {syncProgress.status && (
-                                                <p className="text-xs text-amber-800 mb-2 font-medium">
-                                                    {syncProgress.status}
-                                                </p>
-                                            )}
-                                            {syncProgress.currentVersion && (
-                                                <p className="text-xs text-amber-600 mb-2">
-                                                    버전: {syncProgress.currentVersion} {syncProgress.currentDay > 0 && `- Day ${syncProgress.currentDay}`}
-                                                </p>
-                                            )}
-                                            <div className="w-full bg-amber-200 rounded-full h-3">
-                                                <div 
-                                                    className="bg-amber-500 h-3 rounded-full transition-all"
-                                                    style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
-                                                ></div>
-                                            </div>
-                                            <p className="text-xs text-amber-600 mt-2">
-                                                ✅ 성공: {syncProgress.success}개 / ❌ 실패: {syncProgress.error}개
-                                            </p>
-                                        </div>
-                                        <p className="text-xs text-slate-500 text-center">
-                                            ⚠️ 창을 닫지 마세요. 약 2분 소요됩니다.
-                                        </p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {/* 버전 선택 */}
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-700 mb-2">동기화할 버전 선택:</p>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                {/* 일년일독 */}
-                                                <div className="bg-slate-50 p-3 rounded-lg">
-                                                    <p className="text-xs font-bold text-slate-500 mb-2">📖 일년일독</p>
-                                                    {BIBLE_VERSIONS['1year'].map(v => {
-                                                        const planId = `1year_${v.id}`;
-                                                        const isChecked = selectedSyncVersions.includes(planId);
-                                                        return (
-                                                            <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
-                                                                <input 
-                                                                    type="checkbox" 
-                                                                    checked={isChecked}
-                                                                    onChange={(e) => {
-                                                                        if (e.target.checked) {
-                                                                            setSelectedSyncVersions([...selectedSyncVersions, planId]);
-                                                                        } else {
-                                                                            setSelectedSyncVersions(selectedSyncVersions.filter(id => id !== planId));
-                                                                        }
-                                                                    }}
-                                                                    className="w-4 h-4 rounded"
-                                                                />
-                                                                <span className="text-sm text-slate-700">{v.name}</span>
-                                                            </label>
-                                                        );
-                                                    })}
-                                                </div>
-                                                {/* 신약일독 */}
-                                                <div className="bg-slate-50 p-3 rounded-lg">
-                                                    <p className="text-xs font-bold text-slate-500 mb-2">📗 신약일독</p>
-                                                    {BIBLE_VERSIONS['nt'].map(v => {
-                                                        const planId = `nt_${v.id}`;
-                                                        const isChecked = selectedSyncVersions.includes(planId);
-                                                        return (
-                                                            <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
-                                                                <input 
-                                                                    type="checkbox" 
-                                                                    checked={isChecked}
-                                                                    onChange={(e) => {
-                                                                        if (e.target.checked) {
-                                                                            setSelectedSyncVersions([...selectedSyncVersions, planId]);
-                                                                        } else {
-                                                                            setSelectedSyncVersions(selectedSyncVersions.filter(id => id !== planId));
-                                                                        }
-                                                                    }}
-                                                                    className="w-4 h-4 rounded"
-                                                                />
-                                                                <span className="text-sm text-slate-700">{v.name}</span>
-                                                            </label>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        {/* 선택 요약 */}
-                                        <div className="bg-green-50 p-3 rounded-lg border border-green-200">
-                                            <p className="text-sm text-green-700">
-                                                선택됨: <strong>{selectedSyncVersions.length}개</strong> 버전 
-                                                ({selectedSyncVersions.length * 365}개 문서, 약 {Math.ceil(selectedSyncVersions.length * 2)}분 소요)
-                                            </p>
-                                        </div>
-                                        
-                                        <button
-                                            onClick={async () => {
-                                                if (selectedSyncVersions.length === 0) {
-                                                    alert('동기화할 버전을 선택해주세요.');
-                                                    return;
-                                                }
-                                                const versionNames = selectedSyncVersions.join(', ');
-                                                if (!confirm(`${selectedSyncVersions.length}개 버전을 동기화합니다.\n\n${versionNames}\n\n약 ${Math.ceil(selectedSyncVersions.length * 3)}분 소요됩니다. 진행할까요?`)) return;
-                                                
-                                                const totalDays = selectedSyncVersions.length * 365;
-                                                setSyncProgress({ current: 0, total: totalDays, success: 0, error: 0, currentVersion: '', currentDay: 0 });
-                                                const result = await syncNotionToFirestore(selectedSyncVersions);
-                                                
-                                                // 실패 목록 상세 표시
-                                                let message = `동기화 완료!\n성공: ${result.success}개\n실패: ${result.error}개`;
-                                                if (result.failedItems && result.failedItems.length > 0) {
-                                                    message += `\n\n❌ 실패 목록 (최대 10개 표시):`;
-                                                    result.failedItems.slice(0, 10).forEach(item => {
-                                                        message += `\n• ${item.versionName} Day ${item.day} (${item.date})`;
-                                                    });
-                                                    if (result.failedItems.length > 10) {
-                                                        message += `\n... 외 ${result.failedItems.length - 10}개`;
-                                                    }
-                                                }
-                                                alert(message);
-                                                
-                                                // 동기화 정보 새로고침
-                                                const syncDoc = await db.collection('settings').doc('sync').get();
-                                                if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
-                                            }}
-                                            disabled={selectedSyncVersions.length === 0}
-                                            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                                        >
-                                            📥 선택한 버전 동기화 ({selectedSyncVersions.length * 365}개)
-                                        </button>
-                                        <p className="text-xs text-slate-500 text-center">
-                                            💡 노션 본문을 수정했을 때만 동기화하세요.
-                                        </p>
-                                    </div>
-                                )}
                             </div>
 
                             {/* 광고/공지 관리 */}
@@ -2577,7 +2581,9 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                     if (adminSortBy === 'name') {
                                                         return a.name.localeCompare(b.name);
                                                     } else if (adminSortBy === 'day') {
-                                                        return (b.currentDay || 0) - (a.currentDay || 0);
+                                                        const aTotalDays = ((a.readCount || 1) - 1) * 365 + (a.currentDay || 1);
+                                                        const bTotalDays = ((b.readCount || 1) - 1) * 365 + (b.currentDay || 1);
+                                                        return bTotalDays - aTotalDays;
                                                     } else if (adminSortBy === 'score') {
                                                         return (b.score || 0) - (a.score || 0);
 } else if (adminSortBy === 'subgroup') {
@@ -2597,11 +2603,23 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                 
                                                 return sorted.map((u, idx) => {
                                                 const readToday = u.lastReadDate === new Date().toDateString();
+                                                const readCount = u.readCount || 1;
+                                                const currentDay = u.currentDay || 1;
+                                                const totalDays = (readCount - 1) * 365 + currentDay;
                                                 return (
                                                     <tr key={idx} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
                                                         <td className="px-3 py-3 font-medium text-slate-900">{u.name}{readToday && <span className="ml-1 text-green-500">✓</span>}</td>
                                                         <td className="px-3 py-3"><span className="font-bold">{u.communityName}</span><span className="text-xs text-slate-400 block">{u.subgroupId}</span></td>
-                                                        <td className="px-3 py-3 text-center font-bold text-blue-600">{u.currentDay}</td>
+                                                        <td className="px-3 py-3 text-center">
+                                                            {readCount > 1 ? (
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                    <span className="font-bold text-blue-600">DAY {totalDays}</span>
+                                                                    <span className="px-1.5 py-0.5 bg-gradient-to-br from-purple-500 to-purple-700 text-white text-[10px] font-bold rounded-full">{readCount}독</span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="font-bold text-blue-600">DAY {currentDay}</span>
+                                                            )}
+                                                        </td>
                                                         <td className="px-3 py-3 text-center">{u.score}</td>
                                                         <td className="px-3 py-3 text-center text-xs text-slate-400">{u.lastReadDate ? new Date(u.lastReadDate).toLocaleDateString('ko-KR') : '-'}</td>
 <td className="px-3 py-3 text-center">
@@ -2618,6 +2636,189 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         </tbody>
                                     </table>
                                 </div>
+                            </div>
+
+                            {/* 노션 데이터 동기화 */}
+                            <div className="bg-white rounded-xl shadow-lg p-6">
+                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                    🔄 노션 데이터 동기화
+                                </h2>
+
+                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 mb-4">
+                                    <p className="text-sm text-blue-700">
+                                        노션의 성경 본문을 Firestore에 캐싱하여 <strong>로딩 속도를 10배 이상</strong> 향상시킵니다.<br/>
+                                        노션 본문을 수정했을 때만 동기화하면 됩니다.
+                                    </p>
+                                </div>
+
+                                {lastSyncInfo && (
+                                    <div className="bg-slate-50 p-3 rounded-lg mb-4 text-sm">
+                                        <p className="text-slate-600">
+                                            마지막 동기화: {lastSyncInfo.lastSyncAt?.toDate?.().toLocaleString('ko-KR') || '정보 없음'}
+                                        </p>
+                                        <p className="text-slate-500 text-xs">
+                                            성공: {lastSyncInfo.successCount || 0}개 / 실패: {lastSyncInfo.errorCount || 0}개
+                                        </p>
+                                        {lastSyncInfo.syncedVersions && (
+                                            <p className="text-slate-400 text-xs mt-1">
+                                                동기화된 버전: {lastSyncInfo.syncedVersions.join(', ')}
+                                            </p>
+                                        )}
+                                        {/* 실패 목록 표시 */}
+                                        {lastSyncInfo.failedItems && lastSyncInfo.failedItems.length > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-slate-200">
+                                                <p className="text-red-600 text-xs font-bold mb-2">
+                                                    ❌ 실패 목록 ({lastSyncInfo.failedItems.length}개):
+                                                </p>
+                                                <div className="max-h-32 overflow-y-auto bg-white rounded p-2 text-xs">
+                                                    {lastSyncInfo.failedItems.map((item, idx) => (
+                                                        <div key={idx} className="text-red-500 py-0.5">
+                                                            • {item.versionName} Day {item.day} ({item.date}) - {item.error}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {syncProgress ? (
+                                    <div className="space-y-3">
+                                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                                            <p className="text-sm font-bold text-amber-700 mb-2">
+                                                ⏳ 동기화 진행 중... ({syncProgress.current}/{syncProgress.total})
+                                            </p>
+                                            {syncProgress.status && (
+                                                <p className="text-xs text-amber-800 mb-2 font-medium">
+                                                    {syncProgress.status}
+                                                </p>
+                                            )}
+                                            {syncProgress.currentVersion && (
+                                                <p className="text-xs text-amber-600 mb-2">
+                                                    버전: {syncProgress.currentVersion} {syncProgress.currentDay > 0 && `- Day ${syncProgress.currentDay}`}
+                                                </p>
+                                            )}
+                                            <div className="w-full bg-amber-200 rounded-full h-3">
+                                                <div
+                                                    className="bg-amber-500 h-3 rounded-full transition-all"
+                                                    style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                            <p className="text-xs text-amber-600 mt-2">
+                                                ✅ 성공: {syncProgress.success}개 / ❌ 실패: {syncProgress.error}개
+                                            </p>
+                                        </div>
+                                        <p className="text-xs text-slate-500 text-center">
+                                            ⚠️ 창을 닫지 마세요. 약 2분 소요됩니다.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {/* 버전 선택 */}
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-700 mb-2">동기화할 버전 선택:</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {/* 일년일독 */}
+                                                <div className="bg-slate-50 p-3 rounded-lg">
+                                                    <p className="text-xs font-bold text-slate-500 mb-2">📖 일년일독</p>
+                                                    {BIBLE_VERSIONS['1year'].map(v => {
+                                                        const planId = `1year_${v.id}`;
+                                                        const isChecked = selectedSyncVersions.includes(planId);
+                                                        return (
+                                                            <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isChecked}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) {
+                                                                            setSelectedSyncVersions([...selectedSyncVersions, planId]);
+                                                                        } else {
+                                                                            setSelectedSyncVersions(selectedSyncVersions.filter(id => id !== planId));
+                                                                        }
+                                                                    }}
+                                                                    className="w-4 h-4 rounded"
+                                                                />
+                                                                <span className="text-sm text-slate-700">{v.name}</span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {/* 신약일독 */}
+                                                <div className="bg-slate-50 p-3 rounded-lg">
+                                                    <p className="text-xs font-bold text-slate-500 mb-2">📗 신약일독</p>
+                                                    {BIBLE_VERSIONS['nt'].map(v => {
+                                                        const planId = `nt_${v.id}`;
+                                                        const isChecked = selectedSyncVersions.includes(planId);
+                                                        return (
+                                                            <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isChecked}
+                                                                    onChange={(e) => {
+                                                                        if (e.target.checked) {
+                                                                            setSelectedSyncVersions([...selectedSyncVersions, planId]);
+                                                                        } else {
+                                                                            setSelectedSyncVersions(selectedSyncVersions.filter(id => id !== planId));
+                                                                        }
+                                                                    }}
+                                                                    className="w-4 h-4 rounded"
+                                                                />
+                                                                <span className="text-sm text-slate-700">{v.name}</span>
+                                                            </label>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 선택 요약 */}
+                                        <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                                            <p className="text-sm text-green-700">
+                                                선택됨: <strong>{selectedSyncVersions.length}개</strong> 버전
+                                                ({selectedSyncVersions.length * 365}개 문서, 약 {Math.ceil(selectedSyncVersions.length * 2)}분 소요)
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            onClick={async () => {
+                                                if (selectedSyncVersions.length === 0) {
+                                                    alert('동기화할 버전을 선택해주세요.');
+                                                    return;
+                                                }
+                                                const versionNames = selectedSyncVersions.join(', ');
+                                                if (!confirm(`${selectedSyncVersions.length}개 버전을 동기화합니다.\n\n${versionNames}\n\n약 ${Math.ceil(selectedSyncVersions.length * 3)}분 소요됩니다. 진행할까요?`)) return;
+
+                                                const totalDays = selectedSyncVersions.length * 365;
+                                                setSyncProgress({ current: 0, total: totalDays, success: 0, error: 0, currentVersion: '', currentDay: 0 });
+                                                const result = await syncNotionToFirestore(selectedSyncVersions);
+
+                                                // 실패 목록 상세 표시
+                                                let message = `동기화 완료!\n성공: ${result.success}개\n실패: ${result.error}개`;
+                                                if (result.failedItems && result.failedItems.length > 0) {
+                                                    message += `\n\n❌ 실패 목록 (최대 10개 표시):`;
+                                                    result.failedItems.slice(0, 10).forEach(item => {
+                                                        message += `\n• ${item.versionName} Day ${item.day} (${item.date})`;
+                                                    });
+                                                    if (result.failedItems.length > 10) {
+                                                        message += `\n... 외 ${result.failedItems.length - 10}개`;
+                                                    }
+                                                }
+                                                alert(message);
+
+                                                // 동기화 정보 새로고침
+                                                const syncDoc = await db.collection('settings').doc('sync').get();
+                                                if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
+                                            }}
+                                            disabled={selectedSyncVersions.length === 0}
+                                            className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-700 transition-colors text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            📥 선택한 버전 동기화 ({selectedSyncVersions.length * 365}개)
+                                        </button>
+                                        <p className="text-xs text-slate-500 text-center">
+                                            💡 노션 본문을 수정했을 때만 동기화하세요.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -2900,7 +3101,53 @@ const changePassword = async (uid, userName, currentPassword) => {
                 };
                 
                 const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
-                const racers = communityMembers.map(m => ({ ...m, day: m.currentDay, isMe: m.uid === currentUser.uid })).sort((a, b) => a.day - b.day);
+                // 레이서 목록 생성 (장년부 상위 20명 + 각 부서 상위 1,2 + 내 소그룹 전체, 2독 이상 반영)
+                const allRacers = allMembersForRace.map(m => {
+                    const readCount = m.readCount || 1;
+                    const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
+                    return { ...m, day: actualProgress, isMe: m.uid === currentUser.uid };
+                }).sort((a, b) => b.day - a.day); // 높은 순으로 정렬
+
+                // 1. 장년부 상위 20명
+                const seniorRacers = allRacers.filter(r => r.communityId === 'senior').slice(0, 20);
+
+                // 2. 각 부서(청년부, 중고등부, 유초등부, 유아유치부)별 상위 2명 (무조건 포함)
+                const otherDepartmentTopRacers = [];
+                const departmentChampions = {};
+
+                // 장년부 1위 저장
+                if (seniorRacers.length > 0) {
+                    departmentChampions[seniorRacers[0].uid] = '장년부';
+                }
+
+                ['youth', 'middlehigh', 'elementary', 'kinder'].forEach(commId => {
+                    const deptRacers = allRacers.filter(r => r.communityId === commId).slice(0, 2);
+                    if (deptRacers.length > 0) {
+                        // 각 부서의 1위(첫 번째 사람) 저장
+                        const commName = MOCK_COMMUNITIES.find(c => c.id === commId)?.name;
+                        departmentChampions[deptRacers[0].uid] = commName;
+                    }
+                    otherDepartmentTopRacers.push(...deptRacers);
+                });
+
+                // 3. 내 소그룹 전체 (이미 포함된 사람 제외)
+                const alreadyIncluded = [...seniorRacers, ...otherDepartmentTopRacers];
+                const mySubgroupMembers = allRacers.filter(r =>
+                    r.subgroupId === subgroupId && !alreadyIncluded.find(a => a.uid === r.uid)
+                );
+
+                // 4. 나 (이미 포함되지 않았으면 추가)
+                const myRacer = allRacers.find(r => r.isMe);
+                const allIncluded = [...alreadyIncluded, ...mySubgroupMembers];
+                const includeMe = myRacer && !allIncluded.find(a => a.uid === myRacer.uid);
+
+                // 합치기 - 각 부서 상위 2명은 무조건 포함되도록 순서 보장
+                const racers = [
+                    ...seniorRacers,
+                    ...otherDepartmentTopRacers,  // 각 부서 상위 2명 무조건 포함
+                    ...mySubgroupMembers,
+                    ...(includeMe ? [myRacer] : [])
+                ].sort((a, b) => a.day - b.day); // 낮은 순으로 재정렬 (트랙 배치용)
                 const subgroupRanking = getSubgroupRanking();
                 const progressRanking = getProgressRanking();
                 const topProgressGroups = progressRanking.slice(0, 3);
@@ -3021,6 +3268,17 @@ const changePassword = async (uid, userName, currentPassword) => {
                                         <h3 className="text-xl font-bold text-slate-800">📖 성경통독 114 가이드</h3>
                                         <button onClick={() => setShowReadingGuide(false)} className="text-slate-400"><Icon name="close"/></button>
                                     </div>
+
+                                    {/* 성경통독 114 설명 영상 버튼 */}
+                                    <a
+                                        href="https://www.bible114.net/8e616cd9-5ca0-4dd3-9e63-64280fc66f38"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block w-full mb-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-center py-3 rounded-xl font-bold shadow-md hover:from-blue-600 hover:to-blue-700 transition-all"
+                                    >
+                                        🎥 성경통독 114 설명 영상 보기
+                                    </a>
+
                                     <div className="space-y-3 overflow-y-auto max-h-[60vh] text-xs">
                                         <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                                             <h4 className="font-bold text-blue-700 mb-2">💡 성경통독 114란?</h4>
@@ -3472,10 +3730,30 @@ const changePassword = async (uid, userName, currentPassword) => {
                             <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setShowFullRanking(false)}>
                                 <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
                                     <div className="flex justify-between items-center mb-4 border-b pb-2">
-                                        <h3 className="text-xl font-bold text-slate-800">🏆 {communityName} 누적 랭킹</h3>
+                                        <h3 className="text-xl font-bold text-slate-800">🏆 소그룹 누적 랭킹</h3>
                                         <button onClick={() => setShowFullRanking(false)} className="text-slate-400"><Icon name="close"/></button>
                                     </div>
-                                    
+
+                                    {/* 대그룹 필터 */}
+                                    <div className="mb-3 flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => setRankingCommunityFilter('all')}
+                                            className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-colors ${rankingCommunityFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                        >
+                                            전체
+                                        </button>
+                                        {MOCK_COMMUNITIES.map(comm => (
+                                            <button
+                                                key={comm.id}
+                                                onClick={() => setRankingCommunityFilter(comm.id)}
+                                                className={`px-2.5 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-colors ${rankingCommunityFilter === comm.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                                            >
+                                                {comm.name}
+                                            </button>
+                                        ))}
+                                    </div>
+
+
                                     <div className="mb-3 bg-blue-50 p-3 rounded-xl border border-blue-100">
                                         <p className="text-xs text-blue-700">
                                             <strong>평균 진행률</strong> = 소그룹 평균 Day ÷ 365 × 100
@@ -3484,9 +3762,27 @@ const changePassword = async (uid, userName, currentPassword) => {
                                             💡 소그룹을 클릭하면 멤버별 진행 상황을 볼 수 있어요
                                         </p>
                                     </div>
-                                    
+
                                     <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                                        {progressRanking.map((group, idx) => {
+                                        {(() => {
+                                            // 대그룹 필터 적용
+                                            let filteredRanking = progressRanking;
+                                            if (rankingCommunityFilter !== 'all') {
+                                                const selectedComm = MOCK_COMMUNITIES.find(c => c.id === rankingCommunityFilter);
+                                                if (selectedComm) {
+                                                    filteredRanking = progressRanking.filter(g => selectedComm.subgroups.includes(g.name));
+                                                }
+                                            }
+
+                                            if (filteredRanking.length === 0) {
+                                                return (
+                                                    <div className="text-center py-8 text-slate-500">
+                                                        <p className="text-sm">해당 부서의 소그룹 데이터가 없습니다.</p>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return filteredRanking.map((group, idx) => {
                                             const isMyGroup = group.name === subgroupId;
                                             const rankColor = idx === 0 ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 
                                                             idx === 1 ? 'bg-slate-200 text-slate-700 border-slate-300' : 
@@ -3531,10 +3827,11 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                     </div>
                                                 </button>
                                             );
-                                        })}
+                                        });
+                                        })()}
                                     </div>
-                                    
-                                    <button 
+
+                                    <button
                                         onClick={() => setShowFullRanking(false)}
                                         className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600"
                                     >
@@ -3567,7 +3864,11 @@ const changePassword = async (uid, userName, currentPassword) => {
                                     {(() => {
                                         const members = communityMembers
                                             .filter(m => m.subgroupId === selectedSubgroupDetail)
-                                            .sort((a, b) => (b.currentDay || 0) - (a.currentDay || 0));
+                                            .sort((a, b) => {
+                                                const aTotalDays = ((a.readCount || 1) - 1) * 365 + (a.currentDay || 1);
+                                                const bTotalDays = ((b.readCount || 1) - 1) * 365 + (b.currentDay || 1);
+                                                return bTotalDays - aTotalDays;
+                                            });
                                         
                                         const todayStr = new Date().toDateString();
                                         const avgDay = members.length > 0 
@@ -3620,7 +3921,12 @@ const changePassword = async (uid, userName, currentPassword) => {
                                                                         {readToday && <span className="text-green-500 text-xs">✓</span>}
                                                                     </div>
                                                                     <div className="text-right">
-                                                                        <p className="text-sm font-bold text-slate-700">Day {member.currentDay || 1}</p>
+                                                                        {(() => {
+                                                                            const readCount = member.readCount || 1;
+                                                                            const currentDay = member.currentDay || 1;
+                                                                            const totalDays = (readCount - 1) * 365 + currentDay;
+                                                                            return <p className="text-sm font-bold text-slate-700">Day {totalDays}</p>;
+                                                                        })()}
                                                                         <p className="text-[10px] text-slate-400">{member.score || 0}점</p>
                                                                     </div>
                                                                 </div>
@@ -3739,7 +4045,7 @@ const changePassword = async (uid, userName, currentPassword) => {
                                 </div>
                             </div>
 
-                            <div className="relative w-full h-28 bg-map-texture overflow-hidden mt-0 border-t border-slate-200 bg-sky-texture">
+                            <div className="relative w-full h-48 bg-map-texture overflow-hidden mt-0 border-t border-slate-200 bg-sky-texture">
                                 <div className="mountain-back"></div>
                                 <div className="mountain-front"></div>
                                 <div className="absolute top-2 left-10 text-2xl opacity-80 animate-float">☁️</div>
@@ -3763,11 +4069,11 @@ const changePassword = async (uid, userName, currentPassword) => {
                                     };
                                     const position = getNonLinearPosition(day);
                                     return (
-                                        <div key={day} className="absolute top-0 bottom-0 flex items-center justify-center z-10" style={{ left: `${position}%`, transform: 'translateX(-50%)' }}>
-                                            <div className="absolute w-0.5 h-full bg-gradient-to-b from-transparent via-slate-300 to-transparent opacity-50"></div>
-                                            <div className="relative bg-white/95 px-2 py-0.5 rounded-full shadow-sm border border-slate-300">
-                                                <span className="text-[8px] font-bold text-slate-600">{day}</span>
+                                        <div key={day} className="absolute top-2 z-20 flex flex-col items-center" style={{ left: `${position}%`, transform: 'translateX(-50%)' }}>
+                                            <div className="bg-white/95 px-2 py-1 rounded-full shadow-md border-2 border-slate-400 flex items-center justify-center">
+                                                <span className="text-[10px] font-bold text-slate-700 leading-none">{day}</span>
                                             </div>
+                                            <div className="w-0.5 h-screen bg-gradient-to-b from-slate-400 via-slate-300 to-transparent opacity-40"></div>
                                         </div>
                                     );
                                 })}
@@ -3803,52 +4109,82 @@ const changePassword = async (uid, userName, currentPassword) => {
                                     visibleRacers.sort((a, b) => a.day - b.day);
                                     
                                     return visibleRacers.map((racer, idx) => {
+                                        const racerReadCount = racer.readCount || 1;
+                                        const is2ndRound = racerReadCount >= 2;
+
+                                        // 2독 이상: currentDay만 사용 (다시 처음부터 시작)
+                                        // 1독: 전체 진행도 사용
+                                        const displayDay = is2ndRound ? racer.currentDay : racer.day;
+
                                         // 비선형 스케일: 1-100일(50%), 101-200일(30%), 201-365일(20%)
                                         const getNonLinearPosition = (day) => {
-                                            if (day <= 100) {
-                                                return (day / 100) * 50;
-                                            } else if (day <= 200) {
-                                                return 50 + ((day - 100) / 100) * 30;
+                                            const actualDay = Math.min(day, 365); // 최대 365일
+                                            if (actualDay <= 100) {
+                                                return (actualDay / 100) * 50;
+                                            } else if (actualDay <= 200) {
+                                                return 50 + ((actualDay - 100) / 100) * 30;
                                             } else {
-                                                return 80 + ((day - 200) / 165) * 20;
+                                                return 80 + ((actualDay - 200) / 165) * 20;
                                             }
                                         };
-                                        const p = Math.min(getNonLinearPosition(racer.day), 100);
+                                        const p = Math.min(getNonLinearPosition(displayDay), 100);
                                         const isMe = racer.isMe;
                                         const racerLevel = getLevelInfo(racer.score || 0);
-                                        const racerReadCount = racer.readCount || 1;
                                         // 소그룹 표시 정보 가져오기
                                         const subgroupInfo = getSubgroupDisplay(racer.subgroupId);
+                                        // 부서별 1위인지 확인
+                                        const isDeptChampion = departmentChampions[racer.uid];
                                         // z-index: 진행도가 높을수록 낮은 z-index (뒤에 있는 사람이 가려지도록)
-                                        const zIndex = isMe ? 100 : (visibleRacers.length - idx + 20);
+                                        // 2독 이상은 항상 높은 z-index로 (가장 보이도록)
+                                        const zIndex = isMe ? 100 : is2ndRound ? 90 : (visibleRacers.length - idx + 20);
+                                        // 2독 이상은 맨 위에 표시, 일반 사용자는 10개 행으로 넓게 분산
+                                        const topPosition = isMe ? '50%' : is2ndRound ? '8%' : `${15+(idx%10)*8}%`;
                                         return (
-                                            <div key={racer.uid || idx} className="absolute transition-all duration-1000 ease-out flex flex-col items-center"
-                                                style={{ left: `calc(${p}% - 16px)`, top: isMe ? '50%' : `${35+(idx%4)*12}%`, zIndex }}>
-                                                <div className={`text-[9px] px-1.5 py-0.5 rounded-full mb-0.5 shadow-sm font-bold whitespace-nowrap ${isMe ? 'bg-blue-600 text-white' : 'bg-white/90 text-slate-500'}`}>{racer.name}</div>
-                                                <div className="relative">
-                                                    <div className={`px-2 py-1 rounded-md flex items-center justify-center gap-0.5 text-[6px] font-bold shadow-md border text-white ${subgroupInfo.bgColor} ${isMe ? 'border-yellow-300 ring-1 ring-yellow-400 shadow-yellow-400/40' : 'border-white/60 shadow-slate-500/20'}`}
-                                                         style={{textShadow: '0 0.5px 1px rgba(0,0,0,0.3)'}}>
-                                                        {subgroupInfo.lines.map((line, i) => (
-                                                            <span key={i}>{line}</span>
-                                                        ))}
-                                                    </div>
+                                            <div key={racer.uid || idx} className="absolute transition-all duration-1000 ease-out"
+                                                style={{ left: `calc(${p}% - 16px)`, top: topPosition, zIndex }}>
+                                                <div className="relative flex items-center">
                                                     {racerReadCount > 1 && (
-                                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-purple-600 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                                                            <span className="text-[8px] font-bold text-white">{racerReadCount}</span>
+                                                        <div className="absolute -left-2 -top-1 w-4 h-4 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center border-2 border-white shadow-md z-10">
+                                                            <span className="text-[7px] font-bold text-white">{racerReadCount}</span>
                                                         </div>
                                                     )}
+                                                    <div className={`flex items-stretch rounded-full shadow-md overflow-hidden ${isMe ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}>
+                                                        <div className={`text-[9px] pl-2 pr-1 py-0.5 font-bold whitespace-nowrap flex items-center gap-0.5 ${isMe ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' : 'bg-white/95 text-slate-700'}`}>
+                                                            {isDeptChampion && (
+                                                                <span className="text-[11px]" title={`${isDeptChampion} 1위`}>👑</span>
+                                                            )}
+                                                            {racer.name}
+                                                        </div>
+                                                        <div className={`text-[9px] pl-1 pr-1.5 py-0.5 font-bold whitespace-nowrap text-white flex items-center ${subgroupInfo.bgColor} border-l border-white/30`}>
+                                                            {racer.subgroupId}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
                                     });
                                 })()}
-                                <div className="absolute top-1 left-2 text-[11px] text-slate-600 bg-white/90 px-3 py-1 rounded-full shadow-sm z-30 font-bold">전체 {racers.length}명 참가중</div>
+                                <div className="absolute bottom-2 right-2 text-[11px] text-slate-600 bg-white/90 px-3 py-1 rounded-full shadow-sm z-30 font-bold">전체 {allMembersForRace.length}명 읽는 중</div>
                             </div>
-                            
-                            <div className="bg-white border-b border-slate-100 py-1 text-center">
-                                <button onClick={() => setShowScoreInfo(true)} className="text-xs text-slate-500 flex items-center justify-center gap-1 mx-auto hover:text-blue-600">
-                                    현재 나의 등급: <span className="font-bold text-slate-800">{myLevel.emoji} {myLevel.title}</span> (클릭하여 확인)
-                                </button>
+
+                            <div className="bg-white border-b border-slate-100 py-1.5">
+                                <div className="flex items-center justify-center gap-6 px-4">
+                                    <button onClick={() => setShowScoreInfo(true)} className="text-xs text-slate-500 flex items-center gap-1 hover:text-blue-600">
+                                        현재 나의 등급: <span className="font-bold text-slate-800">{myLevel.emoji} {myLevel.title}</span> (클릭하여 확인)
+                                    </button>
+                                    <div className="text-[10px] text-slate-400 flex items-center gap-3">
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-xs">👑</span>
+                                            <span>각 부서 1등</span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-3.5 h-3.5 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center border border-white shadow-sm">
+                                                <span className="text-[6px] font-bold text-white">2</span>
+                                            </div>
+                                            <span>2독 이상</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </header>
 
@@ -4070,78 +4406,110 @@ const changePassword = async (uid, userName, currentPassword) => {
                             {(() => {
                                 const mvp = getWeeklyMVP();
                                 if (!mvp || !mvp.streakMVP) return null;
+
+                                const now = new Date();
+                                const weekStart = new Date(now);
+                                weekStart.setDate(now.getDate() - now.getDay());
+                                weekStart.setHours(0, 0, 0, 0);
+
                                 return (
                                     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border border-blue-200 p-5 shadow-sm">
                                         <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-bold text-blue-700 flex items-center">⭐ 이번 주 MVP</h3>
-                                            <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-1 rounded-full font-bold">주간</span>
+                                            <h3 className="font-bold text-blue-700 flex items-center">🏆 읽기왕</h3>
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3">
+
+                                        {/* 1위 표시 */}
+                                        <div className="grid grid-cols-2 gap-3 mb-4">
                                             <div className="bg-white p-3 rounded-xl border border-blue-100 text-center">
                                                 <div className="text-2xl mb-1">🔥</div>
-                                                <p className="text-[10px] text-slate-500 mb-1">연속 읽기왕</p>
+                                                <p className="text-[10px] text-slate-500 mb-1">주간 읽기왕</p>
                                                 <p className="font-bold text-slate-800">{mvp.streakMVP.name}</p>
-                                                <p className="text-xs text-orange-500">{mvp.streakMVP.streak || 0}일 연속</p>
+                                                <p className="text-xs text-orange-500 mb-2">
+                                                    {(() => {
+                                                        const weeklyCount = (mvp.streakMVP.readHistory || []).reduce((total, item) => {
+                                                            try {
+                                                                const date = typeof item === 'string' ? item : item.date;
+                                                                const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
+                                                                const readDate = new Date(date);
+                                                                if (readDate >= weekStart) {
+                                                                    return total + daysRead;
+                                                                }
+                                                                return total;
+                                                            } catch (e) {
+                                                                return total;
+                                                            }
+                                                        }, 0);
+                                                        return `이번 주 ${weeklyCount}일`;
+                                                    })()}
+                                                </p>
+                                                <p className="text-[9px] text-slate-400 mt-2 pt-2 border-t border-slate-100">이번 주 가장 많이 읽은 사람</p>
                                             </div>
                                             <div className="bg-white p-3 rounded-xl border border-blue-100 text-center">
-                                                <div className="text-2xl mb-1">🏃</div>
-                                                <p className="text-[10px] text-slate-500 mb-1">진행왕</p>
+                                                <div className="text-2xl mb-1">🏆</div>
+                                                <p className="text-[10px] text-slate-500 mb-1">누적 읽기왕</p>
                                                 <p className="font-bold text-slate-800">{mvp.progressMVP.name}</p>
-                                                <p className="text-xs text-blue-500">DAY {mvp.progressMVP.currentDay || 1}</p>
+                                                <p className="text-xs text-blue-500 mb-2">
+                                                    {(() => {
+                                                        const readCount = mvp.progressMVP.readCount || 1;
+                                                        const currentDay = mvp.progressMVP.currentDay || 0;
+                                                        const totalDays = (readCount - 1) * 365 + currentDay;
+                                                        if (readCount > 1) {
+                                                            return `총 ${totalDays}일 (${readCount}독 ${currentDay}일)`;
+                                                        }
+                                                        return `총 ${totalDays}일`;
+                                                    })()}
+                                                </p>
+                                                <p className="text-[9px] text-slate-400 mt-2 pt-2 border-t border-slate-100">전체 누적 읽기 1위</p>
                                             </div>
                                         </div>
-                                        <div className="mt-3 text-center">
-                                            <p className="text-[10px] text-slate-400">🏆 연속 읽기: 매일 꾸준히 읽은 사람 | 진행왕: 가장 앞서가는 사람</p>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
 
-                            {/* 월간 소그룹 대항전 */}
-                            {(() => {
-                                const contest = getMonthlyContest();
-                                if (!contest || contest.length === 0) return null;
-                                const monthName = new Date().toLocaleDateString('ko-KR', { month: 'long' });
-                                const daysPassed = new Date().getDate();
-                                return (
-                                    <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-2xl border border-red-200 p-5 shadow-sm">
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-bold text-red-700 flex items-center">🏆 {monthName} 소그룹 대항전</h3>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-full font-bold">월간 누적</span>
-                                                <button
-                                                    onClick={() => setShowMonthlyContestInfo(true)}
-                                                    className="w-5 h-5 rounded-full bg-red-200 text-red-700 flex items-center justify-center text-xs font-bold hover:bg-red-300 transition-colors"
-                                                >
-                                                    ?
-                                                </button>
+                                        {/* 2-10위 표시 */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {/* 주간 2-10위 */}
+                                            <div className="bg-white p-3 rounded-xl border border-blue-100">
+                                                <p className="text-[10px] text-slate-500 font-bold mb-2 text-center">주간 2-10위</p>
+                                                <div className="space-y-1">
+                                                    {mvp.weeklyTop10.slice(1, 10).map((member, idx) => {
+                                                        const weeklyCount = (member.readHistory || []).reduce((total, item) => {
+                                                            try {
+                                                                const date = typeof item === 'string' ? item : item.date;
+                                                                const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
+                                                                const readDate = new Date(date);
+                                                                if (readDate >= weekStart) {
+                                                                    return total + daysRead;
+                                                                }
+                                                                return total;
+                                                            } catch (e) {
+                                                                return total;
+                                                            }
+                                                        }, 0);
+                                                        return (
+                                                            <div key={member.uid} className="flex justify-between items-center text-[10px]">
+                                                                <span className="text-slate-600">{idx + 2}위. {member.name}</span>
+                                                                <span className="text-orange-500 font-bold">{weeklyCount}일</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {contest.slice(0, 3).map((group, idx) => {
-                                                const isMyGroup = group.name === subgroupId;
-                                                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
-                                                return (
-                                                    <div key={group.name} className={`flex items-center gap-3 p-2 rounded-lg ${isMyGroup ? 'bg-red-100 border border-red-200' : 'bg-white'}`}>
-                                                        <span className="text-xl">{medal}</span>
-                                                        <div className="flex-1">
-                                                            <div className="flex justify-between items-center mb-1">
-                                                                <span className={`text-sm font-bold ${isMyGroup ? 'text-red-700' : 'text-slate-700'}`}>{group.name} {isMyGroup && '(우리팀)'}</span>
-                                                                <span className="text-sm font-bold text-slate-500">{group.rate}%</span>
+
+                                            {/* 누적 2-10위 */}
+                                            <div className="bg-white p-3 rounded-xl border border-blue-100">
+                                                <p className="text-[10px] text-slate-500 font-bold mb-2 text-center">누적 2-10위</p>
+                                                <div className="space-y-1">
+                                                    {mvp.totalTop10.slice(1, 10).map((member, idx) => {
+                                                        const readCount = member.readCount || 1;
+                                                        const currentDay = member.currentDay || 0;
+                                                        const totalDays = (readCount - 1) * 365 + currentDay;
+                                                        return (
+                                                            <div key={member.uid} className="flex justify-between items-center text-[10px]">
+                                                                <span className="text-slate-600">{idx + 2}위. {member.name}</span>
+                                                                <span className="text-blue-500 font-bold">{totalDays}일</span>
                                                             </div>
-                                                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden mb-1">
-                                                                <div className={`h-full rounded-full ${idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : 'bg-orange-400'}`} style={{ width: `${group.rate}%` }}></div>
-                                                            </div>
-                                                            <div className="text-[9px] text-slate-400">
-                                                                {group.totalReads}회 / {group.maxPossible}회 ({group.totalCount}명 × {daysPassed}일)
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                        <div className="mt-3 text-center">
-                                            <p className="text-[10px] text-slate-500 font-medium">이번 달 누적 참여율 기준 (한 달 전체 꾸준함 반영)</p>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 );
