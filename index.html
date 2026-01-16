@@ -27,133 +27,122 @@
      [섹션 M] 대시보드 화면 UI (2400-3290줄)
      ============================================================================ -->
 <html lang="ko">
-
-<head>
-    <!-- ========== [섹션 A] HTML 헤드 & 라이브러리 로드 ========== -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>천로역정 성경 레이스</title>
-
-    <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- React 18 - UI 라이브러리 -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
-    <!-- Babel - JSX를 JavaScript로 변환 -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Firebase - 인증 및 데이터베이스 -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-    <!-- PDF/이미지 생성 (현재 미사용) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-    <!-- ========== [섹션 B] CSS 스타일 ========== -->
-    <style>
-        /* 기본 폰트 설정 */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-
-        /* 배경 텍스처 */
-        .bg-sky-texture {
-            background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%);
-        }
-
-        /* 하늘색 그라데이션 */
-        .bg-map-texture {
-            background-color: #f0fdf4;
-            background-image: radial-gradient(#86efac 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        /* 점 패턴 */
-
-        /* 애니메이션: 흔들림 효과 */
-        @keyframes wiggle {
-
-            0%,
-            100% {
-                transform: rotate(-3deg) scale(1.1);
+    <head>
+        <!-- ========== [섹션 A] HTML 헤드 & 라이브러리 로드 ========== -->
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>천로역정 성경 레이스</title>
+        <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- React 18 - UI 라이브러리 -->
+        <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+        <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+        <!-- Babel - JSX를 JavaScript로 변환 -->
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+        <!-- Firebase - 인증 및 데이터베이스 -->
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+        <!-- PDF/이미지 생성 (현재 미사용) -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        <!-- ========== [섹션 B] CSS 스타일 ========== -->
+        <style>
+            /* 기본 폰트 설정 */
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             }
 
-            50% {
-                transform: rotate(3deg) scale(1.1);
-            }
-        }
-
-        .animate-wiggle {
-            animation: wiggle 0.3s ease-in-out infinite;
-        }
-
-        /* 애니메이션: 떠다니는 효과 (구름용) */
-        .animate-float {
-            animation: float 6s ease-in-out infinite;
-        }
-
-        .animate-float-slow {
-            animation: float 10s ease-in-out infinite;
-        }
-
-        @keyframes float {
-            0% {
-                transform: translateX(0px);
+            /* 배경 텍스처 */
+            .bg-sky-texture {
+                background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%);
             }
 
-            50% {
-                transform: translateX(10px);
+            /* 하늘색 그라데이션 */
+            .bg-map-texture {
+                background-color: #f0fdf4;
+                background-image: radial-gradient(#86efac 1px, transparent 1px);
+                background-size: 20px 20px;
             }
 
-            100% {
-                transform: translateX(0px);
+            /* 점 패턴 */
+            /* 애니메이션: 흔들림 효과 */
+            @keyframes wiggle {
+                0%, 100% {
+                    transform: rotate(-3deg) scale(1.1);
+                }
+
+                50% {
+                    transform: rotate(3deg) scale(1.1);
+                }
             }
-        }
 
-        /* 스크롤바 숨김 */
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
+            .animate-wiggle {
+                animation: wiggle 0.3s ease-in-out infinite;
+            }
 
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+            /* 애니메이션: 떠다니는 효과 (구름용) */
+            .animate-float {
+                animation: float 6s ease-in-out infinite;
+            }
 
-        /* 산 배경 그래픽 (clip-path로 산 모양 표현) */
-        .mountain-back {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 60%;
-            background: #86efac;
-            clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%);
-            z-index: 1;
-            opacity: 0.8;
-        }
+            .animate-float-slow {
+                animation: float 10s ease-in-out infinite;
+            }
 
-        .mountain-front {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 45%;
-            background: #4ade80;
-            clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%);
-            z-index: 2;
-        }
-    </style>
-</head>
+            @keyframes float {
+                0% {
+                    transform: translateX(0px);
+                }
 
-<body class="bg-slate-50 text-slate-800">
-    <div id="root"></div>
+                50% {
+                    transform: translateX(10px);
+                }
 
-    <script type="text/babel">
+                100% {
+                    transform: translateX(0px);
+                }
+            }
+
+            /* 스크롤바 숨김 */
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+
+            /* 산 배경 그래픽 (clip-path로 산 모양 표현) */
+            .mountain-back {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 60%;
+                background: #86efac;
+                clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%);
+                z-index: 1;
+                opacity: 0.8;
+            }
+
+            .mountain-front {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 45%;
+                background: #4ade80;
+                clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%);
+                z-index: 2;
+            }
+        </style>
+    </head>
+    <body class="bg-slate-50 text-slate-800">
+        <div id="root"></div>
+        <script type="text/babel">
+            
         // ============================================================================
         // [섹션 C] 설정 및 상수
         // ============================================================================
@@ -1707,32 +1696,12 @@
                             loading: false
                         });
 
-
-                        // 오디오 URL 결정 로직 (하이브리드)
-                        let finalAudioUrl = notionData.audioUrl || null;
-
-                        // 노션에 오디오가 없고, 기본 URL이 설정되어 있으면 자동 매핑 시도
-                        if (!finalAudioUrl && AUDIO_BASE_URL && AUDIO_BASE_URL.startsWith('http')) {
-                            // URL 끝에 /가 있으면 제거
-                            const baseUrl = AUDIO_BASE_URL.replace(/\/$/, '');
-                            // 경로: {기본주소}/{플랜ID}/{날짜}.mp3
-                            finalAudioUrl = `${baseUrl}/${planId}/${actualDay}.mp3`;
-                            console.log(`🎵 오디오 자동 매핑: ${finalAudioUrl}`);
-                        }
-
-                        if (finalAudioUrl) {
-                            setVerseData(prev => ({ ...prev, audioUrl: finalAudioUrl }));
-                        } else {
-                            // 예전 방식: pageId로 별도 조회 (Notion Proxy 경유)
-                            // 노션 속성이나 자동 매핑으로 해결되면 이 로직은 거의 안 쓰임
-                            /*
-                            const pageId = notionData.pageId; 
-                            if (pageId) {
-                                fetchAudioOnly(pageId).then(url => {
-                                    if (url) setVerseData(prev => ({ ...prev, audioUrl: url }));
-                                });
+                        // ★ 오디오 실시간 로드 (pageId가 있으면)
+                        if (notionData.pageId) {
+                            const audioUrl = await fetchAudioOnly(notionData.pageId);
+                            if (audioUrl) {
+                                setVerseData(prev => ({ ...prev, audioUrl }));
                             }
-                            */
                         }
                     } else {
                         const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
@@ -4678,7 +4647,7 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-    </script>
-</body>
-
+    
+        </script>
+    </body>
 </html>
