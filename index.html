@@ -390,7 +390,7 @@
         for (var i = 1; i <= 14; i++) { seniorSubgroups.push(i + "구역"); }
         seniorSubgroups = seniorSubgroups.concat(['여성실버1', '여성실버2', '남성실버', '젊은부부', '1남선교회', '2남선교회', '3남선교회', '4남선교회', '5남선교회', '소속없음']);
         const youthSubgroups = ['현준 목장', '지훈 목장', '아영 목장', '유리 목장', '채현 목장'];
-        const middleHighSubgroups = ['1목장', '2목장', '3목장', '4목장'];
+        const middleHighSubgroups = ['남학생', '여학생'];
         const elementarySubgroups = ['1학년', '2학년', '3학년', '4학년', '5학년', '6학년'];
         const kindergartenSubgroups = ['소망반', '빌립반', '믿음반'];
 
@@ -836,7 +836,17 @@
                 // 초기 로드
                 loadVoices();
 
+                // 초기 로드
+                loadVoices();
+
+                // 인앱 브라우저면 이벤트 리스너 등록도 하지 않음
+                const ua = navigator.userAgent;
+                if (ua.indexOf('NAVER') > -1 || ua.indexOf('KAKAOTALK') > -1) {
+                    return;
+                }
+
                 if (window.speechSynthesis.addEventListener) {
+
                     window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
                     return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
                 } else {
