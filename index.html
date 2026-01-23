@@ -23,15 +23,31 @@
     <head>
         <!-- ========== [섹션 A] HTML 헤드 & 라이브러리 로드 ========== -->
         <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>천로역정 성경 레이스</title>
+        <!-- 구형 기기 호환성을 위한 폴리필 (Core-js & Regenerator) -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/core-js/3.32.2/minified.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/regenerator-runtime/0.14.0/runtime.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/fetch/3.6.18/fetch.min.js"></script>
         <!-- PWA & Mobile Icons -->
         <link rel="icon" type="image/jpeg" href="icon.jpg">
         <link rel="apple-touch-icon" href="icon.jpg">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-        <meta name="apple-mobile-web-app-title" content="성경레이스">
+        <!-- Global Error Handler for Debugging on Older Devices -->
+        <script>
+            window.onerror = function(msg, url, lineNo, columnNo, error) {
+                var message = ['Message: ' + msg, 'URL: ' + url, 'Line: ' + lineNo, 'Column: ' + columnNo, 'Error object: ' + JSON.stringify(error)].join(' - ');
+                console.log("Global Error: " + message);
+                // Optionally show on screen if it's a blank page
+                if (document.getElementById('root')) {// document.getElementById('root').innerHTML = '<div style="padding:20px; color:red; font-size:12px;">오류가 발생했습니다: ' + msg + '</div>';
+                }
+                return false;
+            }
+            ;
+        </script>
         <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
         <script src="https://cdn.tailwindcss.com"></script>
         <!-- React 18 - UI 라이브러리 -->
@@ -46,11 +62,48 @@
         <!-- PDF/이미지 생성 (현재 미사용) -->
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        <!-- Browser Compatibility Check -->
+        <script>
+            (function() {
+                var isCompatible = true;
+                var reason = "";
+
+                // Check for Proxy (Required for Firebase v9)
+                if (typeof Proxy === "undefined") {
+                    isCompatible = false;
+                    reason = "Proxy 지원 안 함";
+                }
+
+                // Check for Promise
+                if (typeof Promise === "undefined") {
+                    isCompatible = false;
+                    reason = "Promise 지원 안 함";
+                }
+
+                if (!isCompatible) {
+                    window.onload = function() {
+                        var root = document.getElementById('root');
+                        if (root) {
+                            root.innerHTML = '<div style="padding:40px; text-align:center; font-family:sans-serif;">' + '<h2 style="color:#e11d48;">지우지 못하는 벽에 부딪혔습니다</h2>' + '<p style="color:#475569; line-height:1.6;">현재 사용 중인 브라우저가 너무 오래되어 앱을 실행할 수 없습니다.<br>' + '안드로이드 Play 스토어에서 <b>Google Chrome</b>을 설치하거나 업데이트한 후 다시 접속해 보세요.</p>' + '<p style="font-size:12px; color:#94a3b8;">(원인: ' + reason + ')</p>' + '</div>';
+                        }
+                    }
+                    ;
+                }
+            }
+            )();
+        </script>
         <!-- ========== [섹션 B] CSS 스타일 ========== -->
         <style>
             /* 기본 폰트 설정 */
             body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                background-color: #f8fafc;
+                color: #1e293b;
+            }
+
+            /* Tailwind 로드 전 기본 레이아웃 유지용 */
+            #root {
+                min-height: 100vh;
             }
 
             /* 배경 텍스처 */
@@ -141,8 +194,12 @@
     </head>
     <body class="bg-slate-50 text-slate-800">
         <div id="root"></div>
-        <script type="text/babel">
+        <script type="text/babel" data-presets="env,react">
             
+        (function () {
+            // Babel env preset will use this to target browsers
+            window.process = { env: { NODE_ENV: 'production' } };
+        })();
         // ============================================================================
         // [섹션 C] 설정 및 상수
         // ============================================================================
@@ -307,8 +364,9 @@
         // --------------------------------------------------------------------------
 
         // 각 부서별 소그룹 목록
-        const seniorSubgroups = Array.from({ length: 14 }, (_, i) => `${i + 1}구역`)  // 1구역~14구역
-            .concat(['여성실버1', '여성실버2', '남성실버', '젊은부부', '1남선교회', '2남선교회', '3남선교회', '4남선교회', '5남선교회', '소속없음']);
+        var seniorSubgroups = [];
+        for (var i = 1; i <= 14; i++) { seniorSubgroups.push(i + "구역"); }
+        seniorSubgroups = seniorSubgroups.concat(['여성실버1', '여성실버2', '남성실버', '젊은부부', '1남선교회', '2남선교회', '3남선교회', '4남선교회', '5남선교회', '소속없음']);
         const youthSubgroups = ['현준 목장', '지훈 목장', '아영 목장', '유리 목장', '채현 목장'];
         const middleHighSubgroups = ['1목장', '2목장', '3목장', '4목장'];
         const elementarySubgroups = ['1학년', '2학년', '3학년', '4학년', '5학년', '6학년'];
@@ -487,7 +545,7 @@
 
                 // 문장 부호 기준으로 세부 분할 (handleSpeak와 동일한 정규식 및 로직)
                 const segments = processedText.split(/([.?!])/g).reduce((acc, part) => {
-                    if (['.', '?', '!'].includes(part)) {
+                    if (['.', '?', '!'].indexOf(part) !== -1) {
                         if (acc.length > 0) acc[acc.length - 1] += part;
                         return acc;
                     }
@@ -701,17 +759,20 @@
                 const maxRetries = 5;
 
                 const loadVoices = () => {
-                    const voices = window.speechSynthesis.getVoices();
-                    console.log(`🔊 Mouth loading... count: ${voices.length}`);
+                    if (!window.speechSynthesis) return;
+                    var voices = window.speechSynthesis.getVoices() || [];
+                    console.log("🔊 Voices loading... count: " + voices.length);
 
                     if (voices.length === 0 && retryCount < maxRetries) {
                         retryCount++;
-                        setTimeout(loadVoices, 200 * retryCount); // 점진적 지연 재시도
+                        setTimeout(loadVoices, 200 * retryCount);
                         return;
                     }
 
-                    // 한국어 목소리만 필터링
-                    const koVoices = voices.filter(v => v.lang.includes('ko') || v.lang.includes('KO'));
+                    // 한국어 목소리만 필터링 (.includes 대신 .indexOf 사용)
+                    var koVoices = voices.filter(function (v) {
+                        return v.lang.indexOf('ko') !== -1 || v.lang.indexOf('KO') !== -1;
+                    });
                     setAvailableVoices(koVoices);
 
                     // 저장된 목소리가 없거나 현재 목록에 없으면 첫 번째 한국어 목소리 자동 선택
@@ -886,7 +947,7 @@
 
                     // 문장 부호 기준으로 세부 분할
                     const subChunks = processedText.split(/([.?!])/g).reduce((acc, part) => {
-                        if (['.', '?', '!'].includes(part)) {
+                        if (['.', '?', '!'].indexOf(part) !== -1) {
                             if (acc.length > 0) acc[acc.length - 1] += part;
                             return acc;
                         }
@@ -1286,9 +1347,7 @@
             // 업적 체크 및 알림
             const checkAchievements = (user, userMemos) => {
                 if (!user) return;
-                const earned = ACHIEVEMENTS.filter(a => a.condition(user, userMemos));
-                const savedAchievements = user.achievements || [];
-                const newOnes = earned.filter(a => !savedAchievements.includes(a.id));
+                const newOnes = earned.filter(a => savedAchievements.indexOf(a.id) === -1);
 
                 if (newOnes.length > 0) {
                     // 새 업적 토스트 표시
@@ -1308,7 +1367,7 @@
             // HTML 파일 생성 함수 (개인용) - 50대 친화적 디자인
             const generateMemosHTML = (userName, userMemos, userStats = {}) => {
                 const memoCount = Object.keys(userMemos).length;
-                const sortedMemos = Object.entries(userMemos).sort(([a], [b]) => Number(a) - Number(b));
+                const sortedMemos = Object.keys(userMemos).map(function (key) { return [key, userMemos[key]]; }).sort(function (a, b) { return Number(a[0]) - Number(b[0]); });
 
                 // 묵상 항목들 HTML 생성
                 let memosHTML = '';
@@ -1443,7 +1502,8 @@
                         const subgroup = data.subgroupId || '-';
                         const memos = data.memos || {};
 
-                        Object.entries(memos).forEach(([day, memo]) => {
+                        Object.keys(memos).forEach(function (day) {
+                            var memo = memos[day];
                             const dateStr = memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : '';
                             const title = (memo.title || '').replace(/,/g, ';').replace(/\n/g, ' ');
                             const text = (memo.text || '').replace(/,/g, ';').replace(/\n/g, ' ');
@@ -2250,32 +2310,38 @@
 
             const getSubgroupRanking = () => {
                 if (!currentUser || !subgroupStats || Object.keys(subgroupStats).length === 0) return [];
-                return Object.entries(subgroupStats)
-                    .map(([name, data]) => ({
-                        name,
-                        rate: data.rate || 0,
-                        readCount: data.readCount || 0,
-                        totalCount: data.totalCount || 0,
-                        progressRate: data.progressRate || 0,
-                        avgDay: data.avgDay || 0,
-                        totalScore: data.totalScore || 0
-                    }))
-                    .sort((a, b) => b.rate - a.rate);
+                return Object.keys(subgroupStats)
+                    .map(function (name) {
+                        var data = subgroupStats[name];
+                        return {
+                            name: name,
+                            rate: data.rate || 0,
+                            readCount: data.readCount || 0,
+                            totalCount: data.totalCount || 0,
+                            progressRate: data.progressRate || 0,
+                            avgDay: data.avgDay || 0,
+                            totalScore: data.totalScore || 0
+                        };
+                    })
+                    .sort(function (a, b) { return b.rate - a.rate; });
             };
 
             // 누적 진행률 기준 랭킹
             const getProgressRanking = () => {
                 if (!currentUser || !subgroupStats || Object.keys(subgroupStats).length === 0) return [];
-                return Object.entries(subgroupStats)
-                    .map(([name, data]) => ({
-                        name,
-                        progressRate: data.progressRate || 0,
-                        avgDay: data.avgDay || 0,
-                        totalScore: data.totalScore || 0,
-                        totalCount: data.totalCount || 0
-                    }))
-                    .filter(g => g.totalCount > 0)
-                    .sort((a, b) => b.progressRate - a.progressRate);
+                return Object.keys(subgroupStats)
+                    .map(function (name) {
+                        var data = subgroupStats[name];
+                        return {
+                            name: name,
+                            progressRate: data.progressRate || 0,
+                            avgDay: data.avgDay || 0,
+                            totalScore: data.totalScore || 0,
+                            totalCount: data.totalCount || 0
+                        };
+                    })
+                    .filter(function (g) { return g.totalCount > 0; })
+                    .sort(function (a, b) { return b.progressRate - a.progressRate; });
             };
 
             // 주간 MVP 계산
@@ -2394,16 +2460,18 @@
                 });
 
                 // 각 소그룹별 월간 누적 참여율 계산
-                const contest = Object.entries(groupedBySubgroup)
-                    .map(([subgroupName, members]) => {
+                const contest = Object.keys(groupedBySubgroup)
+                    .map(function (subgroupName) {
+                        var members = groupedBySubgroup[subgroupName];
                         const totalCount = members.length;
                         if (totalCount === 0) return null;
 
-                        // 이번 달 총 읽은 횟수 계산
-                        const totalReads = members.reduce((sum, member) => {
+                        // 이번 달 총 읽은 횟수 계산 (객체/문자열 병행 지원)
+                        const totalReads = members.reduce(function (sum, member) {
                             if (!member.readHistory || !Array.isArray(member.readHistory)) return sum;
 
-                            const monthlyReads = member.readHistory.filter(dateStr => {
+                            const monthlyReads = member.readHistory.filter(function (item) {
+                                var dateStr = typeof item === 'string' ? item : item.date;
                                 const readDate = new Date(dateStr);
                                 return readDate >= monthStart && readDate <= now;
                             }).length;
@@ -2501,15 +2569,18 @@
                                 </div>
                                 <h3 className="font-bold text-slate-700 mb-2">📌 공동체별 오늘 현황</h3>
                                 <div className="space-y-2">
-                                    {Object.entries(adminStats.communityStats).map(([id, stat]) => (
-                                        <div key={id} className="flex items-center gap-3">
-                                            <div className="w-20 text-sm font-bold text-slate-600">{stat.name}</div>
-                                            <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
-                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${stat.rate}%` }}></div>
+                                    {Object.keys(adminStats.communityStats).map(function (id) {
+                                        var stat = adminStats.communityStats[id];
+                                        return (
+                                            <div key={id} className="flex items-center gap-3">
+                                                <div className="w-20 text-sm font-bold text-slate-600">{stat.name}</div>
+                                                <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-blue-500 rounded-full" style={{ width: stat.rate + "%" }}></div>
+                                                </div>
+                                                <div className="text-sm text-slate-500 w-28 text-right">{stat.readToday}/{stat.total}명 ({stat.rate}%)</div>
                                             </div>
-                                            <div className="text-sm text-slate-500 w-28 text-right">{stat.readToday}/{stat.total}명 ({stat.rate}%)</div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -2590,7 +2661,8 @@
                                                 }
                                             });
                                             // 미배정 추가
-                                            Object.entries(groupedByCommunity).forEach(([commId, subgroups]) => {
+                                            Object.keys(groupedByCommunity).forEach(function (commId) {
+                                                var subgroups = groupedByCommunity[commId];
                                                 if (subgroups['미배정']) {
                                                     sortedGroups.push(['미배정', subgroups['미배정']]);
                                                 }
@@ -3226,7 +3298,7 @@
                                                     <p className="text-xs font-bold text-slate-500 mb-2">📖 일년일독</p>
                                                     {BIBLE_VERSIONS['1year'].map(v => {
                                                         const planId = `1year_${v.id}`;
-                                                        const isChecked = selectedSyncVersions.includes(planId);
+                                                        const isChecked = selectedSyncVersions.indexOf(planId) !== -1;
                                                         return (
                                                             <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
                                                                 <input
@@ -3251,7 +3323,7 @@
                                                     <p className="text-xs font-bold text-slate-500 mb-2">📗 신약일독</p>
                                                     {BIBLE_VERSIONS['nt'].map(v => {
                                                         const planId = `nt_${v.id}`;
-                                                        const isChecked = selectedSyncVersions.includes(planId);
+                                                        const isChecked = selectedSyncVersions.indexOf(planId) !== -1;
                                                         return (
                                                             <label key={planId} className="flex items-center gap-2 py-1 cursor-pointer">
                                                                 <input
@@ -3898,30 +3970,39 @@
 
                                     <div className="space-y-3 overflow-y-auto max-h-[45vh]">
                                         {Object.keys(memos).length > 0 ? (
-                                            Object.entries(memos)
-                                                .sort(([a], [b]) => Number(b) - Number(a))
-                                                .map(([day, memo]) => (
-                                                    <div key={day} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <span className="text-xs font-bold text-blue-600">
-                                                                DAY {day}
-                                                                {(memo.texts && memo.texts.length || 0) > 1 && (
-                                                                    <span className="ml-1 text-purple-500">({memo.texts.length}개)</span>
-                                                                )}
-                                                            </span>
-                                                            <span className="text-[10px] text-slate-400">{new Date(memo.date).toLocaleDateString('ko-KR')}</span>
-                                                        </div>
-                                                        <p className="text-xs text-slate-500 mb-1">{memo.title}</p>
-                                                        {(memo.texts || [memo.text]).map((text, idx) => (
-                                                            <div key={idx} className={`text-sm text-slate-700 leading-relaxed whitespace-pre-wrap ${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200' : ''}`}>
-                                                                {(memo.texts && memo.texts.length || 0) > 1 && (
-                                                                    <span className="text-[10px] text-purple-400 font-bold">#{idx + 1} </span>
-                                                                )}
-                                                                {text}
+                                            Object.keys(memos)
+                                                .map(function (day) {
+                                                    return [day, memos[day]];
+                                                })
+                                                .sort(function (a, b) { return Number(b[0]) - Number(a[0]); })
+                                                .map(function (pair) {
+                                                    var day = pair[0];
+                                                    var memo = pair[1];
+                                                    return (
+                                                        <div key={day} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="text-xs font-bold text-blue-600">
+                                                                    DAY {day}
+                                                                    {(memo.texts && memo.texts.length || 0) > 1 && (
+                                                                        <span className="ml-1 text-purple-500">({memo.texts.length}개)</span>
+                                                                    )}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-400">{new Date(memo.date).toLocaleDateString('ko-KR')}</span>
                                                             </div>
-                                                        ))}
-                                                    </div>
-                                                ))
+                                                            <p className="text-xs text-slate-500 mb-1">{memo.title}</p>
+                                                            {(memo.texts || [memo.text]).map(function (text, idx) {
+                                                                return (
+                                                                    <div key={idx} className={"text-sm text-slate-700 leading-relaxed whitespace-pre-wrap " + (idx > 0 ? 'mt-2 pt-2 border-t border-slate-200' : '')}>
+                                                                        {(memo.texts && memo.texts.length || 0) > 1 && (
+                                                                            <span className="text-[10px] text-purple-400 font-bold">#{idx + 1} </span>
+                                                                        )}
+                                                                        {text}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    );
+                                                })
                                         ) : (
                                             <div className="text-center py-8 text-slate-400">
                                                 <div className="text-4xl mb-2">📖</div>
@@ -4160,7 +4241,7 @@
                                     </div>
                                     <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[60vh]">
                                         {ACHIEVEMENTS.map((achievement) => {
-                                            const earned = (currentUser && currentUser.achievements) ? currentUser.achievements.includes(achievement.id) : false;
+                                            const earned = (currentUser && currentUser.achievements) ? currentUser.achievements.indexOf(achievement.id) !== -1 : false;
                                             return (
                                                 <div key={achievement.id} className={`p-3 rounded-xl text-center border ${earned ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
                                                     <div className={`text-2xl mb-1 ${earned ? '' : 'grayscale'}`}>{achievement.emoji}</div>
@@ -4239,7 +4320,7 @@
                                                     {days.map((day, idx) => {
                                                         if (!day) return <div key={idx}></div>;
                                                         const isToday = isCurrentMonth && day === today.getDate();
-                                                        const didRead = readDaysThisMonth.includes(day);
+                                                        const didRead = readDaysThisMonth.indexOf(day) !== -1;
                                                         const dayOfWeek = new Date(year, month, day).getDay();
                                                         return (
                                                             <button key={idx}
@@ -4337,7 +4418,7 @@
                                             if (rankingCommunityFilter !== 'all') {
                                                 const selectedComm = MOCK_COMMUNITIES.find(c => c.id === rankingCommunityFilter);
                                                 if (selectedComm) {
-                                                    filteredRanking = progressRanking.filter(g => selectedComm.subgroups.includes(g.name));
+                                                    filteredRanking = progressRanking.filter(g => selectedComm.subgroups.indexOf(g.name) !== -1);
                                                 }
                                             }
 
@@ -4884,7 +4965,7 @@
                                                         >
                                                             {availableVoices.map(voice => (
                                                                 <option key={voice.voiceURI} value={voice.voiceURI} title={voice.name}>
-                                                                    {voice.name.includes('Korean') ? voice.name.replace(/Korean|Google|Samsung|Microsoft/g, '').trim() : voice.name}
+                                                                    {voice.name.indexOf('Korean') !== -1 ? voice.name.replace(/Korean|Google|Samsung|Microsoft/g, '').trim() : voice.name}
                                                                 </option>
                                                             ))}
                                                         </select>
@@ -5165,8 +5246,20 @@
             return null;
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        try {
+            const rootElement = document.getElementById('root');
+            if (ReactDOM.createRoot) {
+                const root = ReactDOM.createRoot(rootElement);
+                root.render(<App />);
+            } else {
+                ReactDOM.render(<App />, rootElement);
+            }
+        } catch (e) {
+            console.error('React mounting failed:', e);
+            // If even this fails, the compatibility check above should have caught it, 
+            // but as a last resort:
+            document.body.innerHTML += '<div style="background:red; color:white; padding:10px;">앱 실행 중 오류가 발생했습니다. 브라우저 업데이트가 필요할 수 있습니다.</div>';
+        }
     
         </script>
     </body>
