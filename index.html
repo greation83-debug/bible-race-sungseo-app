@@ -59,23 +59,23 @@
     </script>
 
     <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.tailwindcss.com" defer></script>
 
     <!-- React 18 - UI 라이브러리 -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js" defer></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" defer></script>
 
     <!-- Babel - JSX를 JavaScript로 변환 -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <!-- Firebase - 인증 및 데이터베이스 -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js" defer></script>
 
-    <!-- PDF/이미지 생성 (현재 미사용) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- PDF/이미지 생성 (현재 미사용) - 지연 로딩 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
     <!-- Browser Compatibility Check -->
     <script>
         (function () {
@@ -794,11 +794,22 @@
 
                 const loadVoices = () => {
                     if (!window.speechSynthesis) return;
+
+                    // 인앱 브라우저에서는 목소리 로딩조차 시도하지 않음 (성능 최적화)
+                    // setIsInAppBrowser가 비동기라 여기서 직접 체크하거나, 
+                    // 아래 Hook에서 이미 isInAppBrowser가 설정되었다고 가정 (순서상 UA 체크가 빠름)
+                    const ua = navigator.userAgent;
+                    if (ua.indexOf('NAVER') > -1 || ua.indexOf('KAKAOTALK') > -1) {
+                        return;
+                    }
+
                     var voices = window.speechSynthesis.getVoices() || [];
                     console.log("🔊 Voices loading... count: " + voices.length);
 
                     if (voices.length === 0 && retryCount < maxRetries) {
                         retryCount++;
+                        // 네이버 브라우저 등에서 무한 대기 방지 (최대 2초까지만 시도)
+                        if (retryCount * 200 > 2000) return;
                         setTimeout(loadVoices, 200 * retryCount);
                         return;
                     }
@@ -825,7 +836,6 @@
                 // 초기 로드
                 loadVoices();
 
-                // 목소리 변경 이벤트 리스너 등록 (표준 방식)
                 if (window.speechSynthesis.addEventListener) {
                     window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
                     return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
@@ -835,6 +845,15 @@
                     return () => { window.speechSynthesis.onvoiceschanged = null; };
                 }
             }, []); // selectedVoiceURI 종속성 제거 (무한 루프 방지)
+
+            // 인앱 브라우저 감지 (네이버 등)
+            const [isInAppBrowser, setIsInAppBrowser] = React.useState(false);
+            React.useEffect(() => {
+                const ua = navigator.userAgent;
+                if (ua.indexOf('NAVER') > -1 || ua.indexOf('KAKAOTALK') > -1) {
+                    setIsInAppBrowser(true);
+                }
+            }, []);
 
             // 숫자를 한자어 수사(일, 이, 삼...)로 변환 (안드로이드 '세 장' 방지용)
             const toSinoKorean = (numStr) => {
@@ -970,6 +989,12 @@
 
             // TTS 시작 함수
             const handleSpeak = (text, startFromIndex = 0, overrideSpeed = null) => {
+                // 네이버/카카오 인앱 브라우저 강제 차단
+                if (isInAppBrowser) {
+                    alert("네이버/카카오 앱에서는 읽기 기능이 지원되지 않습니다.\n\n화면 하단의 '외부 브라우저 열기'를 통해\n크롬이나 사파리로 접속해주세요.");
+                    return;
+                }
+
                 if (!window.speechSynthesis) {
                     alert("이 브라우저는 음성 듣기를 지원하지 않습니다.");
                     return;
@@ -1978,10 +2003,10 @@
                     });
                     if (!response.ok) return null;
                     const data = await response.json();
-                    console.log(`🎧 오디오 로드: ${data.audioUrl ? 'SUCCESS' : 'NOT FOUND'}`);
+
                     return data.audioUrl || null;
                 } catch (e) {
-                    console.error("오디오 로드 실패:", e);
+
                     return null;
                 }
             };
