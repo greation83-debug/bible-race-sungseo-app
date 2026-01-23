@@ -423,7 +423,7 @@
         // 마크다운 문법을 HTML로 변환하여 렌더링
         // 지원: # 제목, - 리스트, > 인용문, <details> 토글, 빈 줄
         // --------------------------------------------------------------------------
-        const MarkdownRenderer = ({ content, fontSize = 16 }) => {
+        const MarkdownRenderer = ({ content, fontSize = 16, activeChunkIndex = -1, onSegmentClick = null }) => {
             if (!content) return null;
 
             // 제목은 본문보다 크게
@@ -465,40 +465,122 @@
                 return parts.length > 0 ? parts : [{ type: 'text', content: text }];
             };
 
+            // 자동 스크롤 기능 (부드러움 개선: 필요할 때만 스크롤)
+            React.useEffect(() => {
+                if (activeChunkIndex >= 0) {
+                    const activeElement = document.getElementById(`tts-segment-${activeChunkIndex}`);
+                    if (activeElement) {
+                        const rect = activeElement.getBoundingClientRect();
+                        const viewHeight = window.innerHeight;
+
+                        // 현재 구절이 화면의 적절한 위치(상단 30% ~ 하단 70%)에 이미 있다면 스크롤하지 않음
+                        // 이렇게 하면 매 문장마다 화면이 덜컥거리는 현상을 방지하고 훨씬 부드럽게 느껴집니다.
+                        const isWellVisible = (rect.top > viewHeight * 0.3) && (rect.bottom < viewHeight * 0.7);
+
+                        if (!isWellVisible) {
+                            activeElement.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center'
+                            });
+                        }
+                    }
+                }
+            }, [activeChunkIndex]);
+
+            // 전체 세그먼트 카운터 (한 번의 렌더링 동안 유지)
+            let segmentCounter = 0;
+
+            const renderInteractiveText = (text) => {
+                if (!onSegmentClick) return text;
+
+                const parts = text.split(/([.?!])/g);
+                const segments = [];
+                for (let i = 0; i < parts.length; i += 2) {
+                    const seg = parts[i] + (parts[i + 1] || '');
+                    if (seg.trim().length > 0) segments.push(seg);
+                }
+
+                if (segments.length === 0) return text;
+
+                return segments.map((seg, idx) => {
+                    const currentIndex = segmentCounter++;
+                    const isActive = activeChunkIndex === currentIndex;
+                    return (
+                        <span
+                            key={currentIndex}
+                            id={`tts-segment-${currentIndex}`}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onSegmentClick(currentIndex);
+                            }}
+                            className={`cursor-pointer transition-all duration-200 rounded px-0.5 ${isActive ? 'bg-yellow-300 text-slate-900 font-bold shadow-md ring-2 ring-yellow-400' : 'hover:bg-slate-100'}`}
+                        >
+                            {seg}
+                        </span>
+                    );
+                });
+            };
+
             // 한 줄 렌더링
             const renderLine = (line, isFirstLine, key) => {
                 const trimmed = line.trim();
-                // ### 제목 레벨 3 → <h3>
-                if (trimmed.startsWith('### ')) return <h3 key={key} className={`font-bold text-slate-800 ${isFirstLine ? 'mt-0' : 'mt-10'} mb-2 border-b border-slate-200 pb-1`} style={{ fontSize: `${h3Size}px` }}>{trimmed.slice(4)}</h3>;
-                // ## 제목 레벨 2 → <h2>
-                if (trimmed.startsWith('## ')) return <h2 key={key} className={`font-bold text-slate-800 ${isFirstLine ? 'mt-0' : 'mt-12'} mb-2`} style={{ fontSize: `${h2Size}px` }}>{trimmed.slice(3)}</h2>;
-                // # 제목 레벨 1 → <h1>
-                if (trimmed.startsWith('# ')) return <h1 key={key} className={`font-bold text-slate-800 ${isFirstLine ? 'mt-0' : 'mt-14'} mb-4`} style={{ fontSize: `${h1Size}px` }}>{trimmed.slice(2)}</h1>;
-                // • 또는 - 로 시작 → 불릿 리스트
-                if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={key} className="list-disc list-outside ml-6 text-slate-700 leading-relaxed" style={{ fontSize: `${fontSize}px` }}>{trimmed.slice(2)}</li>;
-                // 숫자. 로 시작 → 번호 리스트
-                if (/^\d+\.\s/.test(trimmed)) return <li key={key} className="list-decimal list-outside ml-6 text-slate-700 leading-relaxed" style={{ fontSize: `${fontSize}px` }}>{trimmed.replace(/^\d+\.\s/, '')}</li>;
-                // > 로 시작 → 인용문
-                if (trimmed.startsWith('> ')) return <blockquote key={key} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded" style={{ fontSize: `${fontSize}px` }}>{trimmed.slice(2)}</blockquote>;
-                // 빈 줄 → 간격
+
+                // 제목은 통째로 하나의 세그먼트
+                if (trimmed.startsWith('### ')) {
+                    const idx = segmentCounter++;
+                    return <h3 key={key} id={`tts-segment-${idx}`} onClick={() => onSegmentClick && onSegmentClick(idx)} className={`font-bold text-slate-800 ${isFirstLine ? 'mt-0' : 'mt-4'} mb-1 border-b border-slate-200 pb-1 cursor-pointer ${activeChunkIndex === idx ? 'bg-yellow-200' : ''}`} style={{ fontSize: `${h3Size}px` }}>{trimmed.slice(4)}</h3>;
+                }
+                if (trimmed.startsWith('## ')) {
+                    const idx = segmentCounter++;
+                    return <h2 key={key} id={`tts-segment-${idx}`} onClick={() => onSegmentClick && onSegmentClick(idx)} className={`font-bold text-slate-800 ${isFirstLine ? 'mt-0' : 'mt-6'} mb-2 cursor-pointer ${activeChunkIndex === idx ? 'bg-yellow-200' : ''}`} style={{ fontSize: `${h2Size}px` }}>{trimmed.slice(3)}</h2>;
+                }
+                if (trimmed.startsWith('# ')) {
+                    const idx = segmentCounter++;
+                    return <h1 key={key} id={`tts-segment-${idx}`} onClick={() => onSegmentClick && onSegmentClick(idx)} className={`font-bold text-slate-800 ${isFirstLine ? 'mt-0' : 'mt-8'} mb-3 cursor-pointer ${activeChunkIndex === idx ? 'bg-yellow-200' : ''}`} style={{ fontSize: `${h1Size}px` }}>{trimmed.slice(2)}</h1>;
+                }
+
+                // 리스트
+                if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={key} className="list-disc list-outside ml-6 text-slate-700 leading-relaxed mb-1" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.slice(2))}</li>;
+                if (/^\d+\.\s/.test(trimmed)) return <li key={key} className="list-decimal list-outside ml-6 text-slate-700 leading-relaxed mb-1" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.replace(/^\d+\.\s/, ''))}</li>;
+
+                // 인용문
+                if (trimmed.startsWith('> ')) return <blockquote key={key} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.slice(2))}</blockquote>;
+
+                // 성경 절 번호 형태 (예: "1 태초에")
+                if (/^\d+\s/.test(trimmed)) {
+                    const match = trimmed.match(/^(\d+)\s(.*)/);
+                    if (match) {
+                        return (
+                            <p key={key} className="text-slate-700 leading-relaxed mb-3 flex items-start gap-2" style={{ fontSize: `${fontSize}px`, textAlign: 'justify' }}>
+                                <span className="font-bold text-blue-500 shrink-0 mt-1" style={{ fontSize: `${Math.max(10, fontSize - 4)}px` }}>{match[1]}</span>
+                                <span>{renderInteractiveText(match[2])}</span>
+                            </p>
+                        );
+                    }
+                }
+
+                // 빈 줄
                 if (trimmed === '') return <div key={key} className="h-1"></div>;
-                // 일반 텍스트 → <p>
-                return <p key={key} className="text-slate-700 leading-relaxed" style={{ fontSize: `${fontSize}px` }}>{line}</p>;
+
+                // 일반 텍스트
+                return (
+                    <p key={key} className="text-slate-700 leading-relaxed mb-3" style={{ fontSize: `${fontSize}px`, textAlign: 'justify' }}>
+                        {renderInteractiveText(line)}
+                    </p>
+                );
             };
 
             const parts = parseDetails(content);
-
             return (
-                <div className="space-y-1">
+                <div className="markdown-body">
                     {parts.map((part, partIdx) => {
                         if (part.type === 'details') {
-                            // <details> 토글 렌더링
                             return (
-                                <details key={`details-${partIdx}`} className="my-2 border border-amber-200 rounded-lg bg-amber-50/50">
-                                    <summary className="cursor-pointer px-3 py-2 font-medium text-slate-700 hover:bg-amber-100 rounded-lg transition-colors" style={{ fontSize: `${fontSize}px` }}>
+                                <details key={`details-${partIdx}`} className="my-2 border border-slate-200 rounded-xl bg-slate-50 overflow-hidden shadow-sm">
+                                    <summary className="cursor-pointer px-4 py-3 font-bold text-slate-700 hover:bg-slate-100 transition-colors" style={{ fontSize: `${fontSize}px` }}>
                                         {part.summary}
                                     </summary>
-                                    <div className="px-3 py-2 space-y-1 border-t border-amber-200">
+                                    <div className="px-4 py-3 space-y-1 border-t border-slate-100 bg-white">
                                         {part.body.split('\n').map((line, lineIdx) =>
                                             renderLine(line, false, `details-${partIdx}-line-${lineIdx}`)
                                         )}
@@ -506,7 +588,6 @@
                                 </details>
                             );
                         } else {
-                            // 일반 텍스트 렌더링
                             return part.content.split('\n').map((line, lineIdx) =>
                                 renderLine(line, partIdx === 0 && lineIdx === 0, `text-${partIdx}-line-${lineIdx}`)
                             );
@@ -591,6 +672,181 @@
             const [lastSyncInfo, setLastSyncInfo] = React.useState(null); // 마지막 동기화 정보
             const [selectedSyncVersions, setSelectedSyncVersions] = React.useState(['1year_revised']); // 동기화할 버전들
             const [authLoading, setAuthLoading] = React.useState(true); // 인증 상태 로딩 중
+
+            // --- TTS(음성 듣기) 상태 ---
+            const [isSpeaking, setIsSpeaking] = React.useState(false);
+            const [isPaused, setIsPaused] = React.useState(false);
+            const isPausedRef = React.useRef(false);
+            const [ttsSpeed, setTtsSpeed] = React.useState(() => {
+                const saved = localStorage.getItem('bible_ttsSpeed');
+                return saved ? parseFloat(saved) : 1.0; // 기본값 1.0x
+            });
+            const [activeChunkIndex, setActiveChunkIndex] = React.useState(-1); // 현재 재생 중인 인덱스 (UI 강조용)
+            const speechRef = React.useRef(null); // SpeechSynthesisUtterance 객체 참조
+            const speakQueueRef = React.useRef([]); // 분할된 텍스트 큐
+            const currentChunkIndexRef = React.useRef(0); // 현재 읽고 있는 인덱스
+
+            // 속도 조절 함수 (실시간 반영)
+            const handleSpeedChange = (delta) => {
+                setTtsSpeed(prev => {
+                    const newSpeed = parseFloat((prev + delta).toFixed(1));
+                    const safeSpeed = Math.max(0.6, Math.min(2.0, newSpeed));
+                    localStorage.setItem('bible_ttsSpeed', safeSpeed);
+
+                    // 재생 중이면 현재 위치부터 다시 시작하여 속도 즉시 반영
+                    if (isSpeaking && speakQueueRef.current.length > 0) {
+                        setTimeout(() => {
+                            const currentIndex = currentChunkIndexRef.current;
+                            handleStop(); // 기존 재생 완전 중지
+
+                            // 큐 복구 및 해당 인덱스부터 다시 재생
+                            setTimeout(() => {
+                                handleSpeak(verseData.text, currentIndex, safeSpeed);
+                            }, 50);
+                        }, 0);
+                    }
+                    return safeSpeed;
+                });
+            };
+
+            // TTS 일시정지/재개 토글 함수
+            const handleTogglePause = () => {
+                if (isPaused) {
+                    setIsPaused(false);
+                    isPausedRef.current = false;
+                    playNextChunk();
+                } else {
+                    setIsPaused(true);
+                    isPausedRef.current = true;
+                    if (window.speechSynthesis) {
+                        window.speechSynthesis.cancel();
+                    }
+                }
+            };
+
+            // TTS 재생 중지 함수 (완전 종료)
+            const handleStop = () => {
+                if (window.speechSynthesis) {
+                    window.speechSynthesis.cancel();
+                }
+                setIsSpeaking(false);
+                setIsPaused(false);
+                isPausedRef.current = false;
+                setActiveChunkIndex(-1);
+                speakQueueRef.current = [];
+                currentChunkIndexRef.current = 0;
+            };
+
+            // 다음 문장 재생 함수
+            const playNextChunk = (forcedSpeed = null) => {
+                if (!window.speechSynthesis) return;
+
+                if (currentChunkIndexRef.current >= speakQueueRef.current.length) {
+                    setIsSpeaking(false);
+                    setActiveChunkIndex(-1);
+                    return;
+                }
+
+                setActiveChunkIndex(currentChunkIndexRef.current);
+                const text = speakQueueRef.current[currentChunkIndexRef.current];
+                if (!text || text.trim().length === 0) {
+                    currentChunkIndexRef.current++;
+                    playNextChunk(forcedSpeed);
+                    return;
+                }
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR';
+                utterance.rate = forcedSpeed !== null ? forcedSpeed : ttsSpeed;
+                utterance.pitch = 1.0;
+
+                utterance.onend = () => {
+                    if (isPausedRef.current) return; // 일시정지 상태면 다음 구절로 넘어가지 않음
+                    currentChunkIndexRef.current++;
+                    playNextChunk(forcedSpeed);
+                };
+
+                utterance.onerror = (event) => {
+                    // 일시정지 시 cancel()로 인해 발생하는 에러는 무시 (버튼 사라짐 방지)
+                    if (isPausedRef.current || event.error === 'interrupted' || event.error === 'canceled') {
+                        return;
+                    }
+                    console.error("TTS Error:", event);
+                    handleStop();
+                };
+
+                speechRef.current = utterance;
+                window.speechSynthesis.speak(utterance);
+            };
+
+            // 특정 위치부터 TTS 시작
+            const jumpToChunk = (index) => {
+                handleSpeak(verseData.text, index);
+            };
+
+            // TTS 시작 함수
+            const handleSpeak = (text, startFromIndex = 0, overrideSpeed = null) => {
+                if (!window.speechSynthesis) {
+                    alert("이 브라우저는 음성 듣기를 지원하지 않습니다.");
+                    return;
+                }
+
+                const currentSpeed = overrideSpeed !== null ? overrideSpeed : ttsSpeed;
+
+                // 기존 재생 중지 (handleStop은 큐를 비우므로 cancel만 수행)
+                if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+                    window.speechSynthesis.cancel();
+                }
+
+                // 텍스트 정제 (대제목 # 의 숫자는 남기고, 소제목 ### 및 본문 숫자는 제거)
+                const lines = text.split('\n');
+                const processedLines = lines.map(line => {
+                    const trimmed = line.trim();
+                    if (trimmed.startsWith('# ')) {
+                        // 대제목(# )은 마크다운 표시만 제거하고 숫자 보존
+                        return trimmed.replace(/^#\s*/, '');
+                    }
+                    // 소제목(##, ### 등) 및 일반 본문은 숫자 제거
+                    let cleaned = trimmed.replace(/^#+\s*/, ''); // 마크다운 표시 제거
+                    return cleaned.replace(/[0-9]/g, ''); // 숫자 제거
+                });
+
+                const cleanText = processedLines.join('\n');
+
+                // 문장 단위로 분할 (마침표, 물음표, 느낌표, 줄바꿈 기준)
+                const chunks = cleanText.split(/([.?!]|\n)/g).reduce((acc, part) => {
+                    if (part === '\n') return acc;
+                    if (['.', '?', '!'].includes(part)) {
+                        if (acc.length > 0) acc[acc.length - 1] += part;
+                        return acc;
+                    }
+                    if (part.trim().length > 0) {
+                        acc.push(part.trim());
+                    }
+                    return acc;
+                }, []);
+
+                if (chunks.length === 0) return;
+
+                speakQueueRef.current = chunks;
+                currentChunkIndexRef.current = startFromIndex;
+                setIsSpeaking(true);
+                setIsPaused(false);
+                isPausedRef.current = false;
+
+                // cancel 후 즉시 speak 시 가끔 불안정한 문제 대응
+                setTimeout(() => {
+                    playNextChunk(currentSpeed);
+                }, 50);
+            };
+
+
+            // 컴포넌트 언마운트 시(또는 페이지 이동 시) 음성 중지
+            React.useEffect(() => {
+                return () => {
+                    window.speechSynthesis.cancel();
+                };
+            }, []);
 
             // ★ 앱 시작 시 Firebase 인증 상태 확인 (로그인 유지)
             React.useEffect(() => {
@@ -3239,53 +3495,80 @@
                 };
 
                 const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
-                // 레이서 목록 생성 (장년부 상위 20명 + 각 부서 상위 1,2 + 내 소그룹 전체, 2독 이상 반영)
-                const allRacers = allMembersForRace.map(m => {
+                // 레이서 목록 생성 (전체 상위 20명 + 각 부서 1위 + 진도 비슷한 동료 10명)
+                const allRacersSorted = allMembersForRace.map(m => {
                     const readCount = m.readCount || 1;
                     const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
                     return { ...m, day: actualProgress, isMe: m.uid === currentUser.uid };
                 }).sort((a, b) => b.day - a.day); // 높은 순으로 정렬
 
-                // 1. 장년부 상위 20명
-                const seniorRacers = allRacers.filter(r => r.communityId === 'senior').slice(0, 20);
+                // 1. 전체 랭킹 1-20위 (무조건 포함)
+                const top20Overall = allRacersSorted.slice(0, 20);
 
-                // 2. 각 부서(청년부, 중고등부, 유초등부, 유아유치부)별 상위 2명 (무조건 포함)
-                const otherDepartmentTopRacers = [];
+                // 2. 각 부서(대그룹)별 1위 추출 및 왕관 표시 대상 설정
                 const departmentChampions = {};
+                const deptChampionsList = [];
+                const communityIds = ['senior', 'youth', 'middlehigh', 'elementary', 'kinder'];
 
-                // 장년부 1위 저장
-                if (seniorRacers.length > 0) {
-                    departmentChampions[seniorRacers[0].uid] = '장년부';
-                }
-
-                ['youth', 'middlehigh', 'elementary', 'kinder'].forEach(commId => {
-                    const deptRacers = allRacers.filter(r => r.communityId === commId).slice(0, 2);
-                    if (deptRacers.length > 0) {
-                        // 각 부서의 1위(첫 번째 사람) 저장
-                        const commName = MOCK_COMMUNITIES.find(c => c.id === commId)?.name;
-                        departmentChampions[deptRacers[0].uid] = commName;
+                communityIds.forEach(commId => {
+                    const commName = MOCK_COMMUNITIES.find(c => c.id === commId)?.name;
+                    // id 또는 name으로 유연하게 매칭
+                    const deptTop = allRacersSorted.find(r =>
+                        r.communityId === commId || (commName && r.communityName === commName)
+                    );
+                    if (deptTop) {
+                        departmentChampions[deptTop.uid] = commName || (commId === 'senior' ? '장년부' : commId);
+                        deptChampionsList.push(deptTop);
                     }
-                    otherDepartmentTopRacers.push(...deptRacers);
                 });
 
-                // 3. 내 소그룹 전체 (이미 포함된 사람 제외)
-                const alreadyIncluded = [...seniorRacers, ...otherDepartmentTopRacers];
-                const mySubgroupMembers = allRacers.filter(r =>
-                    r.subgroupId === subgroupId && !alreadyIncluded.find(a => a.uid === r.uid)
-                );
+                // 3. 나와 같은 공동체 내에서 비슷한 진도의 동료 10명 매칭 (혼자라는 느낌 방지)
+                const me = allRacersSorted.find(r => r.isMe);
+                let nearbyRacers = [];
+                if (me) {
+                    const myCommId = me.communityId;
+                    const myCommName = me.communityName;
 
-                // 4. 나 (이미 포함되지 않았으면 추가)
-                const myRacer = allRacers.find(r => r.isMe);
-                const allIncluded = [...alreadyIncluded, ...mySubgroupMembers];
-                const includeMe = myRacer && !allIncluded.find(a => a.uid === myRacer.uid);
+                    nearbyRacers = allRacersSorted
+                        .filter(r => {
+                            // 같은 공동체 멤버이거나, 내가 공동체 정보가 없으면 전체에서 찾음
+                            const isSameComm = (myCommId && r.communityId === myCommId) ||
+                                (myCommName && r.communityName === myCommName);
+                            // 내 정보가 아예 없으면 그냥 전체에서 진도 비슷한 사람
+                            const isCandidate = !myCommId && !myCommName ? true : isSameComm;
 
-                // 합치기 - 각 부서 상위 2명은 무조건 포함되도록 순서 보장
-                const racers = [
-                    ...seniorRacers,
-                    ...otherDepartmentTopRacers,  // 각 부서 상위 2명 무조건 포함
-                    ...mySubgroupMembers,
-                    ...(includeMe ? [myRacer] : [])
-                ].sort((a, b) => a.day - b.day); // 낮은 순으로 재정렬 (트랙 배치용)
+                            return isCandidate &&
+                                !r.isMe &&
+                                !top20Overall.find(t => t.uid === r.uid) &&
+                                !deptChampionsList.find(d => d.uid === r.uid);
+                        })
+                        .sort((a, b) => Math.abs(a.day - me.day) - Math.abs(b.day - me.day))
+                        .slice(0, 10);
+                }
+
+                // 모든 그룹 합치기 (중복 제거)
+                const combinedRacers = [...top20Overall];
+
+                // 부서 1위들 중 20위에 없는 경우 추가
+                deptChampionsList.forEach(champion => {
+                    if (!combinedRacers.find(r => r.uid === champion.uid)) {
+                        combinedRacers.push(champion);
+                    }
+                });
+
+                // 나 추가
+                if (me && !combinedRacers.find(r => r.uid === me.uid)) {
+                    combinedRacers.push(me);
+                }
+
+                // 주변 동료들 추가
+                nearbyRacers.forEach(nearby => {
+                    if (!combinedRacers.find(r => r.uid === nearby.uid)) {
+                        combinedRacers.push(nearby);
+                    }
+                });
+
+                const racers = combinedRacers.sort((a, b) => a.day - b.day); // 낮은 순 재정렬
                 const subgroupRanking = getSubgroupRanking();
                 const progressRanking = getProgressRanking();
                 const topProgressGroups = progressRanking.slice(0, 3);
@@ -4261,25 +4544,11 @@
                                 </div>
 
                                 {(() => {
-                                    // 1. 전체 1-20등 추출
-                                    const top20 = racers
-                                        .sort((a, b) => b.day - a.day)
-                                        .slice(0, 20);
+                                    // 이미 위에서 계산된 racers 변수를 그대로 사용합니다.
+                                    // (전체 20위 + 부서별 1위 + 주변 동료 10명 + 나)
+                                    const visibleRacers = [...racers];
 
-                                    // 2. 같은 소그룹 멤버 추출
-                                    const sameSubgroup = racers.filter(r =>
-                                        r.subgroupId === currentUser.subgroupId
-                                    );
-
-                                    // 3. 합치기 (중복 제거)
-                                    const visibleRacers = [...top20];
-                                    sameSubgroup.forEach(racer => {
-                                        if (!visibleRacers.find(r => r.uid === racer.uid)) {
-                                            visibleRacers.push(racer);
-                                        }
-                                    });
-
-                                    // 4. 진행도 순으로 정렬 (화면 배치용)
+                                    // 진행도 순으로 정렬 (화면 배치용 - 낮은 순)
                                     visibleRacers.sort((a, b) => a.day - b.day);
 
                                     return visibleRacers.map((racer, idx) => {
@@ -4403,46 +4672,86 @@
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
                                         </button>
                                     </div>
-                                    <p className="opacity-90 text-sm font-bold text-white/90 mb-2">{verseData.subtitle}</p>
-
-                                    {/* 오디오 플레이어 (제목 바로 아래) */}
-                                    {verseData.audioUrl && (
-                                        <div className="mt-2 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <span className="text-base">🎧</span>
-                                                <span className="text-xs font-bold text-white/90">오디오로 듣기</span>
+                                    <div className="flex justify-between items-end mb-2">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="opacity-90 text-sm font-bold text-white/90 mb-1">{verseData.subtitle}</p>
+                                            <p className="opacity-80 text-xs">{getEncouragementMessage()}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 bg-white/20 backdrop-blur-md rounded-full px-2 py-1 shadow-sm shrink-0 ml-4">
+                                            <button
+                                                onClick={() => {
+                                                    const newSize = Math.max(12, fontSize - 2);
+                                                    setFontSize(newSize);
+                                                    localStorage.setItem('bible_fontSize', newSize);
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-white/30 hover:bg-white/50 flex items-center justify-center text-white font-bold"
+                                            >
+                                                −
+                                            </button>
+                                            <div className="flex flex-col items-center px-1">
+                                                <span className="text-white/60 text-[7px] font-bold leading-none">SIZE</span>
+                                                <span className="text-white text-xs font-bold leading-none">{fontSize}</span>
                                             </div>
-                                            <audio controls className="w-full h-9" style={{ borderRadius: '8px' }}>
-                                                <source src={verseData.audioUrl} type="audio/mpeg" />
-                                                브라우저가 오디오를 지원하지 않습니다.
-                                            </audio>
+                                            <button
+                                                onClick={() => {
+                                                    const newSize = Math.min(28, fontSize + 2);
+                                                    setFontSize(newSize);
+                                                    localStorage.setItem('bible_fontSize', newSize);
+                                                }}
+                                                className="w-7 h-7 rounded-full bg-white/30 hover:bg-white/50 flex items-center justify-center text-white font-bold"
+                                            >
+                                                +
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* TTS 성경 읽어주기 (UI 개선) */}
+                                    {verseData.text && verseData.text.length > 20 && !verseData.loading && (
+                                        <div className="mt-3 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-base">{isSpeaking ? '🔊' : '🔈'}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-bold text-white/70 leading-tight">성경 읽어주기</span>
+                                                        <span className="text-[9px] text-white/50 leading-tight">{isSpeaking ? "낭독 중..." : "대기 중"}</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    {/* 배속 조절 버튼 (버튼 옆으로 이동) */}
+                                                    <div className="flex items-center bg-black/20 rounded-lg px-1 py-0.5">
+                                                        <button
+                                                            onClick={() => handleSpeedChange(-0.1)}
+                                                            disabled={ttsSpeed <= 0.6}
+                                                            className="w-5 h-5 flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30"
+                                                        >
+                                                            -
+                                                        </button>
+                                                        <span className="text-[10px] font-bold text-white min-w-[24px] text-center">
+                                                            {ttsSpeed.toFixed(1)}x
+                                                        </span>
+                                                        <button
+                                                            onClick={() => handleSpeedChange(0.1)}
+                                                            disabled={ttsSpeed >= 2.0}
+                                                            className="w-5 h-5 flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
+
+                                                    <button
+                                                        onClick={() => isSpeaking ? handleStop() : handleSpeak(verseData.text)}
+                                                        className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${isSpeaking
+                                                            ? "bg-red-500 text-white hover:bg-red-600 ring-2 ring-red-400/50"
+                                                            : "bg-white text-indigo-600 hover:bg-indigo-50"
+                                                            }`}
+                                                    >
+                                                        {isSpeaking ? "중지 ⏹️" : "듣기 ▶️"}
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
-
-                                    <p className="opacity-80 text-xs mt-2">{getEncouragementMessage()}</p>
-                                    <div className="absolute bottom-3 right-4 flex items-center gap-1 bg-white/20 backdrop-blur-md rounded-full px-2 py-1">
-                                        <button
-                                            onClick={() => {
-                                                const newSize = Math.max(12, fontSize - 2);
-                                                setFontSize(newSize);
-                                                localStorage.setItem('bible_fontSize', newSize);
-                                            }}
-                                            className="w-7 h-7 rounded-full bg-white/30 hover:bg-white/50 flex items-center justify-center text-white font-bold text-lg"
-                                        >
-                                            −
-                                        </button>
-                                        <span className="text-white text-xs font-bold px-1">{fontSize}</span>
-                                        <button
-                                            onClick={() => {
-                                                const newSize = Math.min(28, fontSize + 2);
-                                                setFontSize(newSize);
-                                                localStorage.setItem('bible_fontSize', newSize);
-                                            }}
-                                            className="w-7 h-7 rounded-full bg-white/30 hover:bg-white/50 flex items-center justify-center text-white font-bold text-lg"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
                                 </div>
                                 <div className="p-6">
                                     {/* 오디오 플레이어 - 오디오가 있을 때만 표시 */}
@@ -4462,8 +4771,15 @@
                                             </audio>
                                         </div>
                                     )}
-                                    <div className={`mb-4 min-h-[100px] ${verseData.loading ? 'animate-pulse bg-slate-100 rounded' : ''}`} style={{ fontSize: `${fontSize}px` }}>
-                                        {verseData.loading ? '' : <MarkdownRenderer content={verseData.text} fontSize={fontSize} />}
+                                    <div className={`mb-4 min-h-[200px] p-2 rounded-2xl transition-all ${isSpeaking ? 'bg-slate-50/50 ring-1 ring-slate-100' : ''} ${verseData.loading ? 'animate-pulse bg-slate-100' : ''}`} style={{ fontSize: `${fontSize}px` }}>
+                                        {verseData.loading ? '' : (
+                                            <MarkdownRenderer
+                                                content={verseData.text}
+                                                fontSize={fontSize}
+                                                activeChunkIndex={activeChunkIndex}
+                                                onSegmentClick={jumpToChunk}
+                                            />
+                                        )}
                                     </div>
 
                                     <button onClick={handleRead} disabled={verseData.loading} className="w-full text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50 bg-slate-900 shadow-blue-200">
@@ -4688,6 +5004,18 @@
                                     </div>
                                 );
                             })()}
+                            {/* TTS 플로팅 중지/재개 버튼 (화면 왼쪽 하단 고정) */}
+                            {isSpeaking && (
+                                <div className="fixed bottom-10 left-6 z-[100] flex items-center gap-2">
+                                    <button
+                                        onClick={handleTogglePause}
+                                        className={`flex items-center justify-center gap-2 px-5 py-3 rounded-full shadow-2xl transition-all active:scale-95 ${isPaused ? 'bg-indigo-600 shadow-indigo-200' : 'bg-orange-500 shadow-orange-200'} text-white`}
+                                    >
+                                        <span className="text-sm font-bold">{isPaused ? '다시 읽기' : '잠시 멈춤'}</span>
+                                        <span className="text-xl">{isPaused ? '▶️' : '⏸️'}</span>
+                                    </button>
+                                </div>
+                            )}
                         </main>
                     </div>
                 );
