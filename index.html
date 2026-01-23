@@ -1,30 +1,23 @@
 <!DOCTYPE html>
 <!-- ============================================================================
-     천로역정 성경 레이스 - 성경 통독 앱
+     천로역정 성경 레이스 - 성경 통독 웹 애플리케이션
      ============================================================================
      
-     📋 코드 구조 (총 3295줄)
+     📋 [파일 구조 가이드]
      
-     [섹션 A] HTML 헤드 & 라이브러리 로드 (1-16줄)
-     [섹션 B] CSS 스타일 (17-30줄)
-     [섹션 C] 설정 및 상수 (36-164줄)
-             - C-1: Firebase/Supabase 설정 (36-52)
-             - C-2: 유틸리티 함수 (54-69)
-             - C-3: SVG 아이콘 (71-91)
-             - C-4: 레벨/계급 시스템 (93-104) ★ 레벨 이름 변경
-             - C-5: 읽기 플랜 설정 (106-122) ★ 성경 버전 추가
-             - C-6: 공동체/소그룹 (124-136) ★ 소그룹 추가
-             - C-7: 업적 시스템 (141-157) ★ 새 업적 추가
-     [섹션 D] 유틸리티 컴포넌트 (165-183줄) - MarkdownRenderer
-     [섹션 E] 상태 관리 State (186-360줄)
-     [섹션 F] 데이터 처리 함수 (361-673줄)
-     [섹션 G] 인증 시스템 (778-966줄)
-     [섹션 H] 데이터 페칭 (968-1246줄)
-     [섹션 I] 읽기 완료 처리 (1248-1324줄) ★ 점수 계산 변경
-     [섹션 J] 통계/랭킹 계산 (1334-1420줄)
-     [섹션 K] 관리자 화면 UI (1420-2130줄)
-     [섹션 L] 로그인/회원가입 화면 UI (2132-2400줄)
-     [섹션 M] 대시보드 화면 UI (2400-3290줄)
+     1. HTML Head & External Libraries (Line 30-55)
+     2. Global CSS Styles (Line 57-150)
+     3. JavaScript Constants & Config (Line 158-450)
+        - DB/Auth Config, Level System, Bible Data, Achievements
+     4. Utility Components (Line 460-600)
+        - MarkdownRenderer, Icon
+     5. Main App Component (Line 608-End)
+        - 5.1 Hooks: State & Refs (Line 610-740)
+        - 5.2 Effects: Lifecycle Logic (Line 742-920)
+        - 5.3 Logic: Auth & User Management (Line 922-1200)
+        - 5.4 Logic: Data Processing & Stats (Line 1202-1500)
+        - 5.5 Logic: TTS & Accessibility (Line 1502-1700)
+        - 5.6 View: Dashboard & Racing Logic (Line 1702-End)
      ============================================================================ -->
 <html lang="ko">
     <head>
@@ -190,20 +183,20 @@
                 name: d.name,                         // 이름
                 password: d.password,                 // 비밀번호 (평문 저장 - 개선 필요)
                 startDate: d.startDate,               // 시작 날짜
-                currentDay: d.currentDay ?? 1,        // 현재 진행 Day (1-365)
-                streak: d.streak ?? 0,                // 연속 읽기 일수
-                score: d.score ?? 0,                  // 총 점수
-                lastReadDate: d.lastReadDate ?? null, // 마지막 읽은 날짜
-                gender: d.gender ?? "male",           // 성별
-                communityId: d.communityId ?? null,   // 소속 부서 ID (senior, youth 등)
-                communityName: d.communityName ?? null, // 소속 부서 이름
-                subgroupId: d.subgroupId ?? null,     // 소그룹 ID (1구역, 현준 목장 등)
-                planId: d.planId ?? "1year_revised",  // 읽기 플랜 ID (플랜타입_버전)
-                achievements: d.achievements ?? [],   // 획득한 업적 ID 배열
-                memos: d.memos ?? {},                 // 묵상 메모 {day: {text, date, title}}
-                dayOffset: d.dayOffset ?? 0,          // 시작 날짜 오프셋 (4월 시작 = 90)
-                readCount: d.readCount ?? 1,          // N독 중인지 (1독, 2독, 3독...)
-                readHistory: d.readHistory ?? [],     // 읽기 기록 (날짜 배열) - 월간 대항전 계산에 필요
+                currentDay: (d.currentDay !== undefined && d.currentDay !== null) ? d.currentDay : 1,
+                streak: (d.streak !== undefined && d.streak !== null) ? d.streak : 0,
+                score: (d.score !== undefined && d.score !== null) ? d.score : 0,
+                lastReadDate: (d.lastReadDate !== undefined && d.lastReadDate !== null) ? d.lastReadDate : null,
+                gender: (d.gender !== undefined && d.gender !== null) ? d.gender : "male",
+                communityId: (d.communityId !== undefined && d.communityId !== null) ? d.communityId : null,
+                communityName: (d.communityName !== undefined && d.communityName !== null) ? d.communityName : null,
+                subgroupId: (d.subgroupId !== undefined && d.subgroupId !== null) ? d.subgroupId : null,
+                planId: (d.planId !== undefined && d.planId !== null) ? d.planId : "1year_revised",
+                achievements: (d.achievements !== undefined && d.achievements !== null) ? d.achievements : [],
+                memos: (d.memos !== undefined && d.memos !== null) ? d.memos : {},
+                dayOffset: (d.dayOffset !== undefined && d.dayOffset !== null) ? d.dayOffset : 0,
+                readCount: (d.readCount !== undefined && d.readCount !== null) ? d.readCount : 1,
+                readHistory: (d.readHistory !== undefined && d.readHistory !== null) ? d.readHistory : [],
             };
         };
 
@@ -591,15 +584,21 @@
             );
         };
 
-        // ============================================================================
-        // [섹션 E~M] App 컴포넌트 - 메인 애플리케이션
-        // ============================================================================
+        /*
+         ============================================================================
+         [5] MAIN APPLICATION: App Component
+         ============================================================================
+         앱의 전체 상태와 주요 비즈니스 로직을 담당하는 메인 컴포넌트입니다.
+        */
         const App = () => {
-            // ----------------------------------------------------------------------
-            // [섹션 E] 상태 관리 (State)
-            // ----------------------------------------------------------------------
+            /*
+             ============================================================================
+             5.1 [Hooks] State, Refs & Effects
+             ============================================================================
+             컴포넌트의 상태와 생명주기를 관리하는 섹션입니다.
+            */
 
-            // --- 화면 및 인증 상태 ---
+            // --- [A] 화면 및 인증 상태 ---
             const [view, setView] = React.useState('login');  // 현재 화면: 'login', 'dashboard', 'admin' 등
             const [loginTab, setLoginTab] = React.useState('login'); // 로그인/회원가입 탭 ('login' or 'signup')
             const [signupName, setSignupName] = React.useState('');   // 회원가입: 이름
@@ -680,11 +679,16 @@
             const [selectedVoiceURI, setSelectedVoiceURI] = React.useState(() => {
                 return localStorage.getItem('bible_selectedVoiceURI') || '';
             });
+            // --- [E] 기타 Refs ---
             const speechRef = React.useRef(null); // SpeechSynthesisUtterance 객체 참조
             const speakQueueRef = React.useRef([]); // 분할된 텍스트 큐
             const currentChunkIndexRef = React.useRef(0); // 현재 읽고 있는 인덱스
 
-            // 사용 가능한 목소리 목록 로드
+            /* ----------------------------------------------------------------------
+               5.2 [Effects] Lifecycle Logic
+               ---------------------------------------------------------------------- */
+
+            // 1. 목소리 목록 로드 모니터링
             React.useEffect(() => {
                 const loadVoices = () => {
                     const voices = window.speechSynthesis.getVoices();
@@ -705,6 +709,13 @@
                     window.speechSynthesis.onvoiceschanged = loadVoices;
                 }
             }, [selectedVoiceURI]);
+
+            /*
+             ============================================================================
+             5.5 [Logic] TTS & Accessibility
+             ============================================================================
+             텍스트 읽어주기(TTS) 및 사용자 편의를 위한 음성 지원 로직입니다.
+            */
 
             // 속도 조절 함수 (실시간 반영)
             const handleSpeedChange = (delta) => {
@@ -895,7 +906,7 @@
                 }
 
                 const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
-                    console.log('🔐 Auth state changed:', firebaseUser?.uid);
+                    console.log('🔐 Auth state changed:', firebaseUser ? firebaseUser.uid : null);
 
                     if (firebaseUser) {
                         try {
@@ -1065,7 +1076,7 @@
 
             // 오늘 날짜 설정 (설정한 날짜가 현재 Day의 날짜가 됨)
             const changeStartDate = async (targetOffset) => {
-                const uid = auth.currentUser?.uid;
+                const uid = auth.currentUser ? auth.currentUser.uid : null;
                 if (!uid || !currentUser) return;
 
                 try {
@@ -1091,7 +1102,7 @@
 
             // 소그룹 변경
             const changeSubgroup = async (newSubgroup) => {
-                const uid = auth.currentUser?.uid;
+                const uid = auth.currentUser ? auth.currentUser.uid : null;
                 if (!uid) return;
 
                 try {
@@ -1148,7 +1159,7 @@
 
             // 재시작 함수 (뒤쳐진 사람용)
             const handleRestart = async () => {
-                const uid = auth.currentUser?.uid;
+                const uid = auth.currentUser ? auth.currentUser.uid : null;
                 if (!uid) return;
 
                 try {
@@ -1202,7 +1213,7 @@
 
             // 묵상 메모 저장
             const saveMemo = async (day, memoText) => {
-                const uid = auth.currentUser?.uid;
+                const uid = auth.currentUser ? auth.currentUser.uid : null;
                 if (!uid || !memoText.trim()) return;
 
                 // 기존 메모 가져오기 (여러 개 저장 지원)
@@ -1254,7 +1265,7 @@
                     setTimeout(() => setNewAchievement(null), 4000);
 
                     // Firestore에 저장
-                    const uid = auth.currentUser?.uid;
+                    const uid = auth.currentUser ? auth.currentUser.uid : null;
                     if (uid) {
                         const allEarned = earned.map(a => a.id);
                         db.collection('users').doc(uid).set({ achievements: allEarned }, { merge: true });
@@ -1441,6 +1452,13 @@
                 } catch (e) { console.error(e); return []; }
             };
 
+            /*
+             ============================================================================
+             5.4 [Logic] Data Processing & Stats
+             ============================================================================
+             공동체 통계 계산, 멤버 로딩, 데이터 변환 등 데이터 중심의 로직입니다.
+            */
+
             const calculateSubgroupStats = (members) => {
                 const todayStr = new Date().toDateString();
                 const stats = {};
@@ -1543,11 +1561,14 @@
                 } catch (e) { console.error(e); alert("수정 실패"); }
             };
 
-            // ----------------------------------------------------------------------
-            // [섹션 G] 인증 시스템 - handleLogin
-            // 로그인/회원가입 폼 제출 시 실행
-            // ★ 변경: 관리자 비밀번호는 '08283' 부분 수정
-            // ----------------------------------------------------------------------
+            /*
+             ============================================================================
+             5.3 [Logic] Auth & User Management
+             ============================================================================
+             회원가입, 로그인, 로그아웃 등 사용자 인증 관련 비즈니스 로직입니다.
+            */
+
+            // 로그인/회원가입 폼 제출 핸들러 (관리자 비밀번호: '08283')
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setErrorMsg('');
@@ -1621,7 +1642,7 @@
                         console.log('로그인 실패:', err.code, err.message);
 
                         // 사용자가 없으면 회원가입 진행 (회원가입 탭에서만)
-                        if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-login-credentials' || err?.code === 'auth/invalid-credential') {
+                        if ((err && err.code === 'auth/user-not-found') || (err && err.code === 'auth/invalid-login-credentials') || (err && err.code === 'auth/invalid-credential')) {
                             // 로그인 탭에서는 회원가입 불가
                             if (loginTab === 'login') {
                                 setErrorMsg("등록되지 않은 사용자입니다. 회원가입 탭에서 가입해주세요.");
@@ -1635,24 +1656,24 @@
                                 console.log('회원가입 성공!');
                             } catch (signupErr) {
                                 console.error("회원가입 상세 에러:", signupErr);
-                                console.error("에러 코드:", signupErr?.code);
-                                console.error("에러 메시지:", signupErr?.message);
+                                console.error("에러 코드:", signupErr ? signupErr.code : null);
+                                console.error("에러 메시지:", signupErr ? signupErr.message : null);
 
-                                if (signupErr?.code === 'auth/email-already-in-use') {
+                                if (signupErr && signupErr.code === 'auth/email-already-in-use') {
                                     setErrorMsg("이미 사용 중인 이름입니다. 로그인 탭에서 로그인하거나 다른 이름을 사용해주세요.");
                                 }
-                                else if (signupErr?.code === 'auth/weak-password') {
+                                else if (signupErr && signupErr.code === 'auth/weak-password') {
                                     setErrorMsg("암호는 6자리 이상이어야 합니다.");
                                 }
-                                else if (signupErr?.code === 'auth/invalid-email') {
+                                else if (signupErr && signupErr.code === 'auth/invalid-email') {
                                     setErrorMsg("이름에 특수문자를 사용할 수 없습니다.");
                                 }
                                 else {
-                                    setErrorMsg(`회원가입 실패: ${signupErr?.message || '잠시 후 다시 시도해주세요'}`);
+                                    setErrorMsg(`회원가입 실패: ${(signupErr && signupErr.message) || '잠시 후 다시 시도해주세요'}`);
                                 }
                                 return;
                             }
-                        } else if (err?.code === 'auth/wrong-password') {
+                        } else if (err && err.code === 'auth/wrong-password') {
                             setErrorMsg("암호가 틀렸습니다.");
                             return;
                         }
@@ -1723,7 +1744,7 @@
                     const updatedUser = { ...currentUser, planId: fullPlanId };
                     setCurrentUser(updatedUser);
                     try {
-                        const uid = auth.currentUser?.uid;
+                        const uid = auth.currentUser ? auth.currentUser.uid : null;
                         if (uid) await db.collection('users').doc(uid).set({ planId: fullPlanId, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                     } catch (e) { console.error(e); }
                     setView('dashboard');
@@ -1737,7 +1758,7 @@
                 const finalUser = { ...tempUser, subgroupId: subgroup };
                 setCurrentUser(finalUser); setTempUser(null); setView('dashboard');
                 try {
-                    const uid = auth.currentUser?.uid || finalUser.uid;
+                    const uid = (auth.currentUser ? auth.currentUser.uid : null) || finalUser.uid;
                     if (uid) await db.collection('users').doc(uid).set({ ...finalUser, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                 } catch (e) { console.error(e); alert("서버 저장 실패"); }
             };
@@ -1763,7 +1784,7 @@
             const fetchFromNotion = async (planId, currentDay) => {
                 if (!SUPABASE_FUNCTION_URL) return { title: null, text: "서버 연결 설정이 필요합니다." };
                 const [planType, version] = (planId || '1year_revised').split('_');
-                const targetTag = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.tagName || '개역개정 일년일독';
+                const targetTag = (BIBLE_VERSIONS[planType] && BIBLE_VERSIONS[planType].find(v => v.id === version)) ? BIBLE_VERSIONS[planType].find(v => v.id === version).tagName : '개역개정 일년일독';
                 const targetDate = new Date(2025, 0, currentDay);
                 const mm = String(targetDate.getMonth() + 1).padStart(2, '0');
                 const dd = String(targetDate.getDate()).padStart(2, '0');
@@ -1830,9 +1851,9 @@
 
                 for (const planId of planIds) {
                     const [planType, version] = planId.split('_');
-                    const versionInfo = BIBLE_VERSIONS[planType]?.find(v => v.id === version);
-                    const targetTag = versionInfo?.tagName || '개역개정 일년일독';
-                    const versionName = versionInfo?.name || planId;
+                    const versionInfo = BIBLE_VERSIONS[planType] ? BIBLE_VERSIONS[planType].find(v => v.id === version) : null;
+                    const targetTag = (versionInfo && versionInfo.tagName) || '개역개정 일년일독';
+                    const versionName = (versionInfo && versionInfo.name) || planId;
 
                     setSyncProgress({
                         current: 0,
@@ -1987,7 +2008,8 @@
                     // viewingDay는 항상 설정되어 있음 (위에서 null 체크 후 return)
                     const dayToShow = viewingDay;
                     const [planType, version] = (planId || '1year_revised').split('_');
-                    const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
+                    const planTypeData = PLAN_TYPES.find(p => p.id === planType);
+                    const planTypeName = planTypeData ? planTypeData.title : '성경 통독';
 
                     // 실제 본문 Day 계산 (오프셋 적용) - viewingDay 사용
                     const actualDay = getActualDay(dayToShow, dayOffset);
@@ -1996,7 +2018,7 @@
                     // 타이틀에 2독/3독 표시
                     const readCountBadge = readCount > 1 ? ` (${readCount}독)` : '';
 
-                    if (notionData?.text && !notionData.text.startsWith('[오류]')) {
+                    if (notionData && notionData.text && !notionData.text.startsWith('[오류]')) {
                         // ★ 먼저 본문 표시 (오디오 없이)
                         setVerseData({
                             title: `${planTypeName} DAY ${dayToShow}일${readCountBadge}`,
@@ -2034,8 +2056,9 @@
                             */
                         }
                     } else {
-                        const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '기본';
-                        const displayText = actualDay === 1 ? GENESIS_1 : (notionData?.text || `데이터를 불러올 수 없습니다.`);
+                        const versionInBibles = BIBLE_VERSIONS[planType] ? BIBLE_VERSIONS[planType].find(v => v.id === version) : null;
+                        const versionName = (versionInBibles && versionInBibles.name) || '기본';
+                        const displayText = actualDay === 1 ? GENESIS_1 : ((notionData && notionData.text) || `데이터를 불러올 수 없습니다.`);
                         setVerseData({ title: `${planTypeName} DAY ${currentDay}일${readCountBadge}`, subtitle: `${versionName} 읽기`, text: displayText, audioUrl: null, loading: false });
                     }
 
@@ -2043,7 +2066,7 @@
                     const allMembers = await loadAllMembers();
                     setAllMembersForRace(allMembers);
 
-                    if (allMembers?.length > 0) {
+                    if (allMembers && allMembers.length > 0) {
                         // 모든 부서의 소그룹 통계 계산
                         setSubgroupStats(calculateSubgroupStats(allMembers));
 
@@ -2055,14 +2078,14 @@
                     }
 
                     // 메모 불러오기
-                    const uid = auth.currentUser?.uid;
+                    const uid = auth.currentUser ? auth.currentUser.uid : null;
                     if (uid) await loadMemos(uid);
 
                     // 광고 불러오기
                     await loadAnnouncement();
                 };
                 loadData();
-            }, [view, currentUser?.currentDay, currentUser?.planId, currentUser?.communityId, currentUser?.dayOffset, currentUser?.readCount, viewingDay]);
+            }, [view, (currentUser && currentUser.currentDay), (currentUser && currentUser.planId), (currentUser && currentUser.communityId), (currentUser && currentUser.dayOffset), (currentUser && currentUser.readCount), viewingDay]);
 
             // ----------------------------------------------------------------------
             // [섹션 I] 읽기 완료 처리 - handleRead
@@ -2126,7 +2149,7 @@
 
                 // 7. Firestore에 저장
                 try {
-                    const uid = auth.currentUser?.uid;
+                    const uid = auth.currentUser ? auth.currentUser.uid : null;
                     if (uid) {
                         // 읽기 기록에 오늘 추가 (새로운 형식: {date, daysRead})
                         const todayISO = new Date().toISOString().split('T')[0];
@@ -2259,7 +2282,7 @@
                     .map(m => ({
                         ...m,
                         weeklyCount: getWeeklyReadCount(m),
-                        totalCount: (m.readHistory?.length || 0)
+                        totalCount: (m.readHistory ? m.readHistory.length : 0)
                     }))
                     .filter(m => m.weeklyCount > 0) // 이번 주에 읽은 사람만
                     .sort((a, b) => {
@@ -2320,7 +2343,7 @@
 
             // 월간 소그룹 대항전 계산 - 월간 누적 참여율 기준
             const getMonthlyContest = () => {
-                if (!currentUser?.communityId) return [];
+                if (!currentUser || !currentUser.communityId) return [];
 
                 const now = new Date();
                 const year = now.getFullYear();
@@ -2393,9 +2416,14 @@
                 return { totalUsers, readToday, readRate, communityStats };
             };
 
-            // ========== [섹션 K~M] VIEWS - 화면 렌더링 ==========
+            /*
+             ============================================================================
+             5.6 [View] Rendering Screens
+             ============================================================================
+             현재 상태에 따라 서로 다른 화면(로그인, 대시보드, 관리자 등)을 렌더링합니다.
+            */
 
-            // ★ 인증 상태 확인 중일 때 로딩 화면
+            // 인증 상태 확인 중일 때 로딩 화면
             if (authLoading) {
                 return (
                     <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -2904,7 +2932,10 @@
                                         <div>
                                             <label className="block text-xs font-bold text-slate-500 mb-1">소그룹</label>
                                             <select value={editingUser.subgroupId} onChange={e => setEditingUser({ ...editingUser, subgroupId: e.target.value })} className="w-full border rounded p-2 text-sm">
-                                                {MOCK_COMMUNITIES.find(c => c.id === editingUser.communityId)?.subgroups.map(s => <option key={s} value={s}>{s}</option>)}
+                                                {(() => {
+                                                    const comm = MOCK_COMMUNITIES.find(c => c.id === editingUser.communityId);
+                                                    return comm ? comm.subgroups.map(s => <option key={s} value={s}>{s}</option>) : null;
+                                                })()}
                                             </select>
                                         </div>
                                         <div className="flex gap-2 pt-4">
@@ -3090,7 +3121,7 @@
                                 {lastSyncInfo && (
                                     <div className="bg-slate-50 p-3 rounded-lg mb-4 text-sm">
                                         <p className="text-slate-600">
-                                            마지막 동기화: {lastSyncInfo.lastSyncAt?.toDate?.().toLocaleString('ko-KR') || '정보 없음'}
+                                            마지막 동기화: {(lastSyncInfo.lastSyncAt && lastSyncInfo.lastSyncAt.toDate) ? lastSyncInfo.lastSyncAt.toDate().toLocaleString('ko-KR') : '정보 없음'}
                                         </p>
                                         <p className="text-slate-500 text-xs">
                                             성공: {lastSyncInfo.successCount || 0}개 / 실패: {lastSyncInfo.errorCount || 0}개
@@ -3404,7 +3435,7 @@
                             {currentUser && !tempUser && (
                                 <button onClick={() => setView('dashboard')} className="text-sm text-slate-400 flex items-center hover:text-slate-600 mb-4"><Icon name="back" size={16} className="mr-1" /> 대시보드로 돌아가기</button>
                             )}
-                            <h2 className="text-xl font-bold text-slate-800 text-center">{currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${tempUser?.name || ''}님!`}</h2>
+                            <h2 className="text-xl font-bold text-slate-800 text-center">{currentUser && !tempUser ? "읽는 버전 바꾸기" : `환영합니다, ${(tempUser && tempUser.name) || ''}님!`}</h2>
                             <p className="text-slate-500 text-sm text-center mt-1">어떤 계획으로 읽으시겠습니까?</p>
                         </div>
                         <div className="w-full max-w-md space-y-3">
@@ -3421,7 +3452,8 @@
 
             if (view === 'bible_version_select') {
                 const versions = BIBLE_VERSIONS[selectedPlanType];
-                const planTitle = PLAN_TYPES.find(t => t.id === selectedPlanType)?.title;
+                const planTypeData = PLAN_TYPES.find(t => t.id === selectedPlanType);
+                const planTitle = planTypeData ? planTypeData.title : null;
                 return (
                     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
                         <div className="w-full max-w-md">
@@ -3464,7 +3496,7 @@
             }
 
             if (view === 'subgroup_select') {
-                const selectedComm = MOCK_COMMUNITIES.find(c => c.id === tempUser?.communityId);
+                const selectedComm = MOCK_COMMUNITIES.find(c => c.id === (tempUser ? tempUser.communityId : null));
                 return (
                     <div className="min-h-screen bg-slate-50 p-6 flex flex-col items-center justify-center">
                         <div className="w-full max-w-md mb-4">
@@ -3472,10 +3504,10 @@
                         </div>
                         <div className="text-center mb-6">
                             <h2 className="text-xl font-bold text-slate-800">소그룹 선택</h2>
-                            <p className="text-slate-500 text-sm">{tempUser?.communityName} 내의 소그룹을 선택해주세요.</p>
+                            <p className="text-slate-500 text-sm">{(tempUser ? tempUser.communityName : '')} 내의 소그룹을 선택해주세요.</p>
                         </div>
                         <div className="w-full max-w-md grid grid-cols-2 gap-3 h-[50vh] overflow-y-auto content-start">
-                            {selectedComm?.subgroups.map((sub, idx) => (
+                            {selectedComm && selectedComm.subgroups.map((sub, idx) => (
                                 <button key={idx} onClick={() => handleSubgroupSelect(sub)} className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all text-center flex flex-col items-center justify-center aspect-video">
                                     <span className="text-2xl mb-2 opacity-80">🏕️</span>
                                     <span className="font-bold text-slate-700 text-sm">{sub}</span>
@@ -3489,8 +3521,10 @@
             if (view === 'dashboard' && currentUser) {
                 const { currentDay, score, subgroupId, communityName, planId, streak } = currentUser;
                 const [planType, version] = (planId || '1year_revised').split('_');
-                const planTypeName = PLAN_TYPES.find(p => p.id === planType)?.title || '성경 통독';
-                const versionName = BIBLE_VERSIONS[planType]?.find(v => v.id === version)?.name || '';
+                const planTypeDataDashboard = PLAN_TYPES.find(p => p.id === planType);
+                const planTypeName = planTypeDataDashboard ? planTypeDataDashboard.title : '성경 통독';
+                const versionData = BIBLE_VERSIONS[planType] ? BIBLE_VERSIONS[planType].find(v => v.id === version) : null;
+                const versionName = versionData ? versionData.name : '';
                 const myLevel = getLevelInfo(score || 0);
 
                 // ★ 함께 달리는 사람 수 계산 (±1일 이내)
@@ -3550,7 +3584,8 @@
                 const communityIds = ['senior', 'youth', 'middlehigh', 'elementary', 'kinder'];
 
                 communityIds.forEach(commId => {
-                    const commName = MOCK_COMMUNITIES.find(c => c.id === commId)?.name;
+                    const communityEntry = MOCK_COMMUNITIES.find(c => c.id === commId);
+                    const commName = communityEntry ? communityEntry.name : null;
                     // id 또는 name으로 유연하게 매칭
                     const deptTop = allRacersSorted.find(r =>
                         r.communityId === commId || (commName && r.communityName === commName)
@@ -3834,7 +3869,7 @@
                                                         <div className="flex justify-between items-center mb-2">
                                                             <span className="text-xs font-bold text-blue-600">
                                                                 DAY {day}
-                                                                {(memo.texts?.length || 0) > 1 && (
+                                                                {(memo.texts && memo.texts.length || 0) > 1 && (
                                                                     <span className="ml-1 text-purple-500">({memo.texts.length}개)</span>
                                                                 )}
                                                             </span>
@@ -3843,7 +3878,7 @@
                                                         <p className="text-xs text-slate-500 mb-1">{memo.title}</p>
                                                         {(memo.texts || [memo.text]).map((text, idx) => (
                                                             <div key={idx} className={`text-sm text-slate-700 leading-relaxed whitespace-pre-wrap ${idx > 0 ? 'mt-2 pt-2 border-t border-slate-200' : ''}`}>
-                                                                {(memo.texts?.length || 0) > 1 && (
+                                                                {(memo.texts && memo.texts.length || 0) > 1 && (
                                                                     <span className="text-[10px] text-purple-400 font-bold">#{idx + 1} </span>
                                                                 )}
                                                                 {text}
@@ -4000,7 +4035,7 @@
                                         for (let i = 0; i < firstDay; i++) days.push(null);
                                         for (let i = 1; i <= lastDate; i++) days.push(i);
 
-                                        const planData = SCHEDULE_DATA ? SCHEDULE_DATA[currentUser?.planId] : null;
+                                        const planData = SCHEDULE_DATA ? SCHEDULE_DATA[currentUser ? currentUser.planId : null] : null;
 
                                         return (
                                             <div className="space-y-4">
@@ -4089,7 +4124,7 @@
                                     </div>
                                     <div className="grid grid-cols-3 gap-3 overflow-y-auto max-h-[60vh]">
                                         {ACHIEVEMENTS.map((achievement) => {
-                                            const earned = currentUser?.achievements?.includes(achievement.id);
+                                            const earned = (currentUser && currentUser.achievements) ? currentUser.achievements.includes(achievement.id) : false;
                                             return (
                                                 <div key={achievement.id} className={`p-3 rounded-xl text-center border ${earned ? 'bg-yellow-50 border-yellow-200' : 'bg-slate-50 border-slate-100 opacity-40'}`}>
                                                     <div className={`text-2xl mb-1 ${earned ? '' : 'grayscale'}`}>{achievement.emoji}</div>
@@ -4100,7 +4135,7 @@
                                     </div>
                                     <div className="mt-4 bg-blue-50 p-3 rounded-xl border border-blue-100">
                                         <p className="text-xs text-blue-700 text-center">
-                                            획득한 업적: <strong>{currentUser?.achievements?.length || 0}</strong> / {ACHIEVEMENTS.length}
+                                            획득한 업적: <strong>{(currentUser && currentUser.achievements ? currentUser.achievements.length : 0)}</strong> / {ACHIEVEMENTS.length}
                                         </p>
                                     </div>
                                     <button onClick={() => setShowAchievements(false)} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-4 text-slate-600">닫기</button>
@@ -4186,7 +4221,7 @@
                                                                 <span className="text-xs font-bold">{day}</span>
                                                                 {(() => {
                                                                     const offset = dateToOffset(month + 1, day);
-                                                                    const planData = SCHEDULE_DATA ? SCHEDULE_DATA[currentUser?.planId] : null;
+                                                                    const planData = SCHEDULE_DATA ? SCHEDULE_DATA[currentUser ? currentUser.planId : null] : null;
                                                                     const schedule = planData && planData[offset] ? planData[offset] : null;
                                                                     if (!schedule) return null;
                                                                     return (
@@ -4879,11 +4914,11 @@
                                         {memos[currentDay - 1] && (
                                             <div className="mt-3 p-3 bg-white rounded-lg border border-purple-100 max-h-40 overflow-y-auto">
                                                 <p className="text-[10px] text-purple-500 mb-2 font-bold">
-                                                    이전에 저장한 묵상 ({memos[currentDay - 1].texts?.length || 1}개):
+                                                    이전에 저장한 묵상 ({(memos[currentDay - 1] && memos[currentDay - 1].texts ? memos[currentDay - 1].texts.length : 1)}개):
                                                 </p>
                                                 {(memos[currentDay - 1].texts || [memos[currentDay - 1].text]).map((text, idx) => (
                                                     <div key={idx} className={`text-sm text-slate-600 whitespace-pre-wrap leading-relaxed ${idx > 0 ? 'mt-3 pt-3 border-t border-purple-100' : ''}`}>
-                                                        {(memos[currentDay - 1].texts?.length || 0) > 1 && (
+                                                        {(memos[currentDay - 1] && memos[currentDay - 1].texts ? memos[currentDay - 1].texts.length : 0) > 1 && (
                                                             <span className="text-[10px] text-purple-400 font-bold">#{idx + 1} </span>
                                                         )}
                                                         {text}
