@@ -23,8 +23,15 @@
     <head>
         <!-- ========== [섹션 A] HTML 헤드 & 라이브러리 로드 ========== -->
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>천로역정 성경 레이스</title>
+        <!-- PWA & Mobile Icons -->
+        <link rel="icon" type="image/jpeg" href="icon.jpg">
+        <link rel="apple-touch-icon" href="icon.jpg">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+        <meta name="apple-mobile-web-app-title" content="성경레이스">
         <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
         <script src="https://cdn.tailwindcss.com"></script>
         <!-- React 18 - UI 라이브러리 -->
@@ -688,27 +695,51 @@
                5.2 [Effects] Lifecycle Logic
                ---------------------------------------------------------------------- */
 
-            // 1. 목소리 목록 로드 모니터링
+            // 1. 목소리 목록 로드 모니터링 (개선된 로직)
             React.useEffect(() => {
+                let retryCount = 0;
+                const maxRetries = 5;
+
                 const loadVoices = () => {
                     const voices = window.speechSynthesis.getVoices();
+                    console.log(`🔊 Mouth loading... count: ${voices.length}`);
+
+                    if (voices.length === 0 && retryCount < maxRetries) {
+                        retryCount++;
+                        setTimeout(loadVoices, 200 * retryCount); // 점진적 지연 재시도
+                        return;
+                    }
+
                     // 한국어 목소리만 필터링
                     const koVoices = voices.filter(v => v.lang.includes('ko') || v.lang.includes('KO'));
                     setAvailableVoices(koVoices);
 
-                    // 저장된 목소리가 없으면 첫 번째 한국어 목소리 자동 선택
-                    if (koVoices.length > 0 && !selectedVoiceURI) {
+                    // 저장된 목소리가 없거나 현재 목록에 없으면 첫 번째 한국어 목소리 자동 선택
+                    const savedURI = localStorage.getItem('bible_selectedVoiceURI');
+                    const voiceExists = savedURI && koVoices.some(v => v.voiceURI === savedURI);
+
+                    if (koVoices.length > 0 && (!savedURI || !voiceExists)) {
                         const firstVoice = koVoices[0].voiceURI;
                         setSelectedVoiceURI(firstVoice);
                         localStorage.setItem('bible_selectedVoiceURI', firstVoice);
+                    } else if (voiceExists && !selectedVoiceURI) {
+                        setSelectedVoiceURI(savedURI);
                     }
                 };
 
+                // 초기 로드
                 loadVoices();
-                if (window.speechSynthesis.onvoiceschanged !== undefined) {
+
+                // 목소리 변경 이벤트 리스너 등록 (표준 방식)
+                if (window.speechSynthesis.addEventListener) {
+                    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+                    return () => window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+                } else {
+                    // 구형 브라우저 대응
                     window.speechSynthesis.onvoiceschanged = loadVoices;
+                    return () => { window.speechSynthesis.onvoiceschanged = null; };
                 }
-            }, [selectedVoiceURI]);
+            }, []); // selectedVoiceURI 종속성 제거 (무한 루프 방지)
 
             /*
              ============================================================================
@@ -2580,11 +2611,12 @@
                                                                     <span className="text-red-500">{users.length}명</span>
                                                                 </div>
                                                                 <div className="flex flex-wrap gap-1">
-                                                                    {users.map(u => {
+                                                                    {users.map((u, idx) => {
                                                                         const lastRead = u.lastReadDate ? new Date(u.lastReadDate) : null;
                                                                         const daysSince = lastRead ? Math.floor((today - lastRead) / (1000 * 60 * 60 * 24)) : 999;
                                                                         return (
                                                                             <span key={u.uid} className={`text-xs px-2 py-1 rounded-full border ${daysSince >= 7 ? 'bg-red-100 text-red-700 border-red-200' : daysSince >= 3 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-yellow-50 text-yellow-700 border-yellow-200'}`}>
+                                                                                <span className="font-mono text-[10px] opacity-60 mr-1">{idx + 1}.</span>
                                                                                 {u.name} {daysSince > 0 && <span className="opacity-70">({daysSince}일)</span>}
                                                                             </span>
                                                                         );
@@ -2662,6 +2694,7 @@
                                                         <table className="w-full text-sm">
                                                             <thead className="bg-slate-100">
                                                                 <tr>
+                                                                    <th className="px-3 py-2 text-center text-xs font-bold text-slate-600 w-10">#</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">이름</th>
                                                                     <th className="px-3 py-2 text-left text-xs font-bold text-slate-600">소그룹</th>
                                                                     <th className="px-3 py-2 text-center text-xs font-bold text-slate-600">안 읽은 날</th>
@@ -2671,6 +2704,7 @@
                                                             <tbody>
                                                                 {usersWithDays.slice(0, 50).map((u, idx) => (
                                                                     <tr key={u.uid} className={`border-b ${u.daysSince >= 14 ? 'bg-red-50' : u.daysSince >= 7 ? 'bg-orange-50' : ''}`}>
+                                                                        <td className="px-3 py-2 text-center text-xs text-slate-400 font-mono">{idx + 1}</td>
                                                                         <td className="px-3 py-2 font-bold text-slate-800">{u.name}</td>
                                                                         <td className="px-3 py-2 text-slate-500 text-xs">{u.subgroupId || '-'}</td>
                                                                         <td className="px-3 py-2 text-center">
@@ -3033,6 +3067,7 @@
                                     <table className="w-full text-sm text-left text-slate-600">
                                         <thead className="text-xs text-slate-700 uppercase bg-slate-50">
                                             <tr>
+                                                <th className="px-3 py-3 text-center w-10">#</th>
                                                 <th className="px-3 py-3">이름</th>
                                                 <th className="px-3 py-3">부서/소그룹</th>
                                                 <th className="px-3 py-3 text-center">Day</th>
@@ -3075,6 +3110,7 @@
                                                     const totalDays = (readCount - 1) * 365 + currentDay;
                                                     return (
                                                         <tr key={idx} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
+                                                            <td className="px-3 py-3 text-center text-xs text-slate-400 font-mono italic">{idx + 1}</td>
                                                             <td className="px-3 py-3 font-medium text-slate-900">{u.name}{readToday && <span className="ml-1 text-green-500">✓</span>}</td>
                                                             <td className="px-3 py-3"><span className="font-bold">{u.communityName}</span><span className="text-xs text-slate-400 block">{u.subgroupId}</span></td>
                                                             <td className="px-3 py-3 text-center">
