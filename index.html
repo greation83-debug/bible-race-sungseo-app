@@ -27,133 +27,122 @@
      [섹션 M] 대시보드 화면 UI (2400-3290줄)
      ============================================================================ -->
 <html lang="ko">
-
-<head>
-    <!-- ========== [섹션 A] HTML 헤드 & 라이브러리 로드 ========== -->
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>천로역정 성경 레이스</title>
-
-    <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- React 18 - UI 라이브러리 -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
-    <!-- Babel - JSX를 JavaScript로 변환 -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Firebase - 인증 및 데이터베이스 -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-    <!-- PDF/이미지 생성 (현재 미사용) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-
-    <!-- ========== [섹션 B] CSS 스타일 ========== -->
-    <style>
-        /* 기본 폰트 설정 */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-
-        /* 배경 텍스처 */
-        .bg-sky-texture {
-            background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%);
-        }
-
-        /* 하늘색 그라데이션 */
-        .bg-map-texture {
-            background-color: #f0fdf4;
-            background-image: radial-gradient(#86efac 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        /* 점 패턴 */
-
-        /* 애니메이션: 흔들림 효과 */
-        @keyframes wiggle {
-
-            0%,
-            100% {
-                transform: rotate(-3deg) scale(1.1);
+    <head>
+        <!-- ========== [섹션 A] HTML 헤드 & 라이브러리 로드 ========== -->
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>천로역정 성경 레이스</title>
+        <!-- Tailwind CSS - 유틸리티 기반 CSS 프레임워크 -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- React 18 - UI 라이브러리 -->
+        <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+        <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+        <!-- Babel - JSX를 JavaScript로 변환 -->
+        <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+        <!-- Firebase - 인증 및 데이터베이스 -->
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+        <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+        <!-- PDF/이미지 생성 (현재 미사용) -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        <!-- ========== [섹션 B] CSS 스타일 ========== -->
+        <style>
+            /* 기본 폰트 설정 */
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             }
 
-            50% {
-                transform: rotate(3deg) scale(1.1);
-            }
-        }
-
-        .animate-wiggle {
-            animation: wiggle 0.3s ease-in-out infinite;
-        }
-
-        /* 애니메이션: 떠다니는 효과 (구름용) */
-        .animate-float {
-            animation: float 6s ease-in-out infinite;
-        }
-
-        .animate-float-slow {
-            animation: float 10s ease-in-out infinite;
-        }
-
-        @keyframes float {
-            0% {
-                transform: translateX(0px);
+            /* 배경 텍스처 */
+            .bg-sky-texture {
+                background: linear-gradient(to bottom, #bae6fd 0%, #f0f9ff 100%);
             }
 
-            50% {
-                transform: translateX(10px);
+            /* 하늘색 그라데이션 */
+            .bg-map-texture {
+                background-color: #f0fdf4;
+                background-image: radial-gradient(#86efac 1px, transparent 1px);
+                background-size: 20px 20px;
             }
 
-            100% {
-                transform: translateX(0px);
+            /* 점 패턴 */
+            /* 애니메이션: 흔들림 효과 */
+            @keyframes wiggle {
+                0%, 100% {
+                    transform: rotate(-3deg) scale(1.1);
+                }
+
+                50% {
+                    transform: rotate(3deg) scale(1.1);
+                }
             }
-        }
 
-        /* 스크롤바 숨김 */
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-        }
+            .animate-wiggle {
+                animation: wiggle 0.3s ease-in-out infinite;
+            }
 
-        .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+            /* 애니메이션: 떠다니는 효과 (구름용) */
+            .animate-float {
+                animation: float 6s ease-in-out infinite;
+            }
 
-        /* 산 배경 그래픽 (clip-path로 산 모양 표현) */
-        .mountain-back {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 60%;
-            background: #86efac;
-            clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%);
-            z-index: 1;
-            opacity: 0.8;
-        }
+            .animate-float-slow {
+                animation: float 10s ease-in-out infinite;
+            }
 
-        .mountain-front {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 45%;
-            background: #4ade80;
-            clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%);
-            z-index: 2;
-        }
-    </style>
-</head>
+            @keyframes float {
+                0% {
+                    transform: translateX(0px);
+                }
 
-<body class="bg-slate-50 text-slate-800">
-    <div id="root"></div>
+                50% {
+                    transform: translateX(10px);
+                }
 
-    <script type="text/babel">
+                100% {
+                    transform: translateX(0px);
+                }
+            }
+
+            /* 스크롤바 숨김 */
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+
+            /* 산 배경 그래픽 (clip-path로 산 모양 표현) */
+            .mountain-back {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 60%;
+                background: #86efac;
+                clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%);
+                z-index: 1;
+                opacity: 0.8;
+            }
+
+            .mountain-front {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                height: 45%;
+                background: #4ade80;
+                clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%);
+                z-index: 2;
+            }
+        </style>
+    </head>
+    <body class="bg-slate-50 text-slate-800">
+        <div id="root"></div>
+        <script type="text/babel">
+            
         // ============================================================================
         // [섹션 C] 설정 및 상수
         // ============================================================================
@@ -490,32 +479,37 @@
             // 전체 세그먼트 카운터 (한 번의 렌더링 동안 유지)
             let segmentCounter = 0;
 
-            const renderInteractiveText = (text) => {
+            const renderInteractiveText = (text, removeNumbers = false) => {
                 if (!onSegmentClick) return text;
 
-                const parts = text.split(/([.?!])/g);
-                const segments = [];
-                for (let i = 0; i < parts.length; i += 2) {
-                    const seg = parts[i] + (parts[i + 1] || '');
-                    if (seg.trim().length > 0) segments.push(seg);
-                }
+                // handleSpeak와 동일하게 텍스트 정제 (헤더 제외 본문은 숫자 제거)
+                const processedText = removeNumbers ? text.replace(/[0-9]/g, '') : text;
 
-                if (segments.length === 0) return text;
+                // 문장 부호 기준으로 세부 분할 (handleSpeak와 동일한 정규식 및 로직)
+                const segments = processedText.split(/([.?!])/g).reduce((acc, part) => {
+                    if (['.', '?', '!'].includes(part)) {
+                        if (acc.length > 0) acc[acc.length - 1] += part;
+                        return acc;
+                    }
+                    if (part.trim().length > 0) {
+                        acc.push(part.trim());
+                    }
+                    return acc;
+                }, []);
 
-                return segments.map((seg, idx) => {
-                    const currentIndex = segmentCounter++;
-                    const isActive = activeChunkIndex === currentIndex;
+                return segments.map((seg, i) => {
+                    const idx = segmentCounter++;
+                    const isActive = activeChunkIndex === idx;
                     return (
                         <span
-                            key={currentIndex}
-                            id={`tts-segment-${currentIndex}`}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onSegmentClick(currentIndex);
-                            }}
-                            className={`cursor-pointer transition-all duration-200 rounded px-0.5 ${isActive ? 'bg-yellow-300 text-slate-900 font-bold shadow-md ring-2 ring-yellow-400' : 'hover:bg-slate-100'}`}
+                            key={idx}
+                            id={`tts-segment-${idx}`}
+                            onClick={() => onSegmentClick(idx)}
+                            className={`transition-all duration-300 cursor-pointer rounded px-0.5 ${isActive ? 'bg-yellow-300 text-slate-900 font-bold shadow-sm' : 'hover:bg-slate-100'}`}
+                            title="클릭하면 여기부터 읽어줍니다"
                         >
                             {seg}
+                            {i < segments.length - 1 && ' '}
                         </span>
                     );
                 });
@@ -540,8 +534,8 @@
                 }
 
                 // 리스트
-                if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={key} className="list-disc list-outside ml-6 text-slate-700 leading-relaxed mb-1" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.slice(2))}</li>;
-                if (/^\d+\.\s/.test(trimmed)) return <li key={key} className="list-decimal list-outside ml-6 text-slate-700 leading-relaxed mb-1" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.replace(/^\d+\.\s/, ''))}</li>;
+                if (trimmed.startsWith('• ') || trimmed.startsWith('- ')) return <li key={key} className="list-disc list-outside ml-6 text-slate-700 leading-relaxed mb-1" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.slice(2), true)}</li>;
+                if (/^\d+\.\s/.test(trimmed)) return <li key={key} className="list-decimal list-outside ml-6 text-slate-700 leading-relaxed mb-1" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.replace(/^\d+\.\s/, ''), true)}</li>;
 
                 // 인용문
                 if (trimmed.startsWith('> ')) return <blockquote key={key} className="border-l-4 border-blue-300 pl-3 italic text-slate-600 my-2 bg-slate-50 p-2 rounded" style={{ fontSize: `${fontSize}px` }}>{renderInteractiveText(trimmed.slice(2))}</blockquote>;
@@ -553,7 +547,7 @@
                         return (
                             <p key={key} className="text-slate-700 leading-relaxed mb-3 flex items-start gap-2" style={{ fontSize: `${fontSize}px`, textAlign: 'justify' }}>
                                 <span className="font-bold text-blue-500 shrink-0 mt-1" style={{ fontSize: `${Math.max(10, fontSize - 4)}px` }}>{match[1]}</span>
-                                <span>{renderInteractiveText(match[2])}</span>
+                                <span>{renderInteractiveText(match[2], false)}</span>
                             </p>
                         );
                     }
@@ -565,7 +559,7 @@
                 // 일반 텍스트
                 return (
                     <p key={key} className="text-slate-700 leading-relaxed mb-3" style={{ fontSize: `${fontSize}px`, textAlign: 'justify' }}>
-                        {renderInteractiveText(line)}
+                        {renderInteractiveText(line, false)}
                     </p>
                 );
             };
@@ -682,9 +676,35 @@
                 return saved ? parseFloat(saved) : 1.0; // 기본값 1.0x
             });
             const [activeChunkIndex, setActiveChunkIndex] = React.useState(-1); // 현재 재생 중인 인덱스 (UI 강조용)
+            const [availableVoices, setAvailableVoices] = React.useState([]); // 사용 가능한 목소리 목록
+            const [selectedVoiceURI, setSelectedVoiceURI] = React.useState(() => {
+                return localStorage.getItem('bible_selectedVoiceURI') || '';
+            });
             const speechRef = React.useRef(null); // SpeechSynthesisUtterance 객체 참조
             const speakQueueRef = React.useRef([]); // 분할된 텍스트 큐
             const currentChunkIndexRef = React.useRef(0); // 현재 읽고 있는 인덱스
+
+            // 사용 가능한 목소리 목록 로드
+            React.useEffect(() => {
+                const loadVoices = () => {
+                    const voices = window.speechSynthesis.getVoices();
+                    // 한국어 목소리만 필터링
+                    const koVoices = voices.filter(v => v.lang.includes('ko') || v.lang.includes('KO'));
+                    setAvailableVoices(koVoices);
+
+                    // 저장된 목소리가 없으면 첫 번째 한국어 목소리 자동 선택
+                    if (koVoices.length > 0 && !selectedVoiceURI) {
+                        const firstVoice = koVoices[0].voiceURI;
+                        setSelectedVoiceURI(firstVoice);
+                        localStorage.setItem('bible_selectedVoiceURI', firstVoice);
+                    }
+                };
+
+                loadVoices();
+                if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                    window.speechSynthesis.onvoiceschanged = loadVoices;
+                }
+            }, [selectedVoiceURI]);
 
             // 속도 조절 함수 (실시간 반영)
             const handleSpeedChange = (delta) => {
@@ -693,8 +713,8 @@
                     const safeSpeed = Math.max(0.6, Math.min(2.0, newSpeed));
                     localStorage.setItem('bible_ttsSpeed', safeSpeed);
 
-                    // 재생 중이면 현재 위치부터 다시 시작하여 속도 즉시 반영
-                    if (isSpeaking && speakQueueRef.current.length > 0) {
+                    // 재생 중이며 일시정지 상태가 아닐 때만 즉시 반영 (재시작)
+                    if (isSpeaking && !isPaused && speakQueueRef.current.length > 0) {
                         setTimeout(() => {
                             const currentIndex = currentChunkIndexRef.current;
                             handleStop(); // 기존 재생 완전 중지
@@ -756,6 +776,13 @@
                 }
 
                 const utterance = new SpeechSynthesisUtterance(text);
+
+                // 선택된 목소리 적용
+                if (selectedVoiceURI) {
+                    const voice = availableVoices.find(v => v.voiceURI === selectedVoiceURI);
+                    if (voice) utterance.voice = voice;
+                }
+
                 utterance.lang = 'ko-KR';
                 utterance.rate = forcedSpeed !== null ? forcedSpeed : ttsSpeed;
                 utterance.pitch = 1.0;
@@ -798,33 +825,37 @@
                     window.speechSynthesis.cancel();
                 }
 
-                // 텍스트 정제 (대제목 # 의 숫자는 남기고, 소제목 ### 및 본문 숫자는 제거)
+                // 텍스트 정제 및 문장 단위 분할
                 const lines = text.split('\n');
-                const processedLines = lines.map(line => {
+                const chunks = [];
+
+                lines.forEach(line => {
                     const trimmed = line.trim();
+                    if (!trimmed) return;
+
+                    let processedText = trimmed;
                     if (trimmed.startsWith('# ')) {
                         // 대제목(# )은 마크다운 표시만 제거하고 숫자 보존
-                        return trimmed.replace(/^#\s*/, '');
+                        processedText = trimmed.replace(/^#\s*/, '');
+                    } else {
+                        // 소제목 및 일반 본문은 숫자 제거
+                        processedText = trimmed.replace(/^#+\s*/, '').replace(/[0-9]/g, '');
                     }
-                    // 소제목(##, ### 등) 및 일반 본문은 숫자 제거
-                    let cleaned = trimmed.replace(/^#+\s*/, ''); // 마크다운 표시 제거
-                    return cleaned.replace(/[0-9]/g, ''); // 숫자 제거
-                });
 
-                const cleanText = processedLines.join('\n');
-
-                // 문장 단위로 분할 (마침표, 물음표, 느낌표, 줄바꿈 기준)
-                const chunks = cleanText.split(/([.?!]|\n)/g).reduce((acc, part) => {
-                    if (part === '\n') return acc;
-                    if (['.', '?', '!'].includes(part)) {
-                        if (acc.length > 0) acc[acc.length - 1] += part;
+                    // 문장 부호 기준으로 세부 분할
+                    const subChunks = processedText.split(/([.?!])/g).reduce((acc, part) => {
+                        if (['.', '?', '!'].includes(part)) {
+                            if (acc.length > 0) acc[acc.length - 1] += part;
+                            return acc;
+                        }
+                        if (part.trim().length > 0) {
+                            acc.push(part.trim());
+                        }
                         return acc;
-                    }
-                    if (part.trim().length > 0) {
-                        acc.push(part.trim());
-                    }
-                    return acc;
-                }, []);
+                    }, []);
+
+                    chunks.push(...subChunks);
+                });
 
                 if (chunks.length === 0) return;
 
@@ -833,6 +864,7 @@
                 setIsSpeaking(true);
                 setIsPaused(false);
                 isPausedRef.current = false;
+                setActiveChunkIndex(startFromIndex);
 
                 // cancel 후 즉시 speak 시 가끔 불안정한 문제 대응
                 setTimeout(() => {
@@ -840,6 +872,13 @@
                 }, 50);
             };
 
+
+            // 본문이 변경되면(페이지 이동 등) TTS 자동 종료 및 초기화
+            React.useEffect(() => {
+                if (verseData.text) {
+                    handleStop();
+                }
+            }, [verseData.text]);
 
             // 컴포넌트 언마운트 시(또는 페이지 이동 시) 음성 중지
             React.useEffect(() => {
@@ -4708,47 +4747,78 @@
                                     {/* TTS 성경 읽어주기 (UI 개선) */}
                                     {verseData.text && verseData.text.length > 20 && !verseData.loading && (
                                         <div className="mt-3 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-base">{isSpeaking ? '🔊' : '🔈'}</span>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] font-bold text-white/70 leading-tight">성경 읽어주기</span>
-                                                        <span className="text-[9px] text-white/50 leading-tight">{isSpeaking ? "낭독 중..." : "대기 중"}</span>
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-base">{isSpeaking ? '🔊' : '🔈'}</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] font-bold text-white/70 leading-tight">성경 읽어주기</span>
+                                                            <span className="text-[9px] text-white/50 leading-tight">{isSpeaking ? "낭독 중..." : "대기 중"}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-2">
+                                                        {/* 배속 조절 버튼 */}
+                                                        <div className="flex items-center bg-black/20 rounded-lg px-1 py-0.5">
+                                                            <button
+                                                                onClick={() => handleSpeedChange(-0.1)}
+                                                                disabled={ttsSpeed <= 0.6}
+                                                                className="w-5 h-5 flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30"
+                                                            >
+                                                                -
+                                                            </button>
+                                                            <span className="text-[10px] font-bold text-white min-w-[24px] text-center">
+                                                                {ttsSpeed.toFixed(1)}x
+                                                            </span>
+                                                            <button
+                                                                onClick={() => handleSpeedChange(0.1)}
+                                                                disabled={ttsSpeed >= 2.0}
+                                                                className="w-5 h-5 flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30"
+                                                            >
+                                                                +
+                                                            </button>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={() => isSpeaking ? handleStop() : handleSpeak(verseData.text)}
+                                                            className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${isSpeaking
+                                                                ? "bg-red-500 text-white hover:bg-red-600 ring-2 ring-red-400/50"
+                                                                : "bg-white text-indigo-600 hover:bg-indigo-50"
+                                                                }`}
+                                                        >
+                                                            {isSpeaking ? "중지 ⏹️" : "듣기 ▶️"}
+                                                        </button>
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-2">
-                                                    {/* 배속 조절 버튼 (버튼 옆으로 이동) */}
-                                                    <div className="flex items-center bg-black/20 rounded-lg px-1 py-0.5">
-                                                        <button
-                                                            onClick={() => handleSpeedChange(-0.1)}
-                                                            disabled={ttsSpeed <= 0.6}
-                                                            className="w-5 h-5 flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30"
+                                                {/* 목소리 선택 드롭다운 (신규 추가) */}
+                                                {availableVoices.length > 0 && (
+                                                    <div className="flex items-center gap-2 pt-1 border-t border-white/10">
+                                                        <span className="text-[9px] text-white/50 shrink-0">목소리:</span>
+                                                        <select
+                                                            value={selectedVoiceURI}
+                                                            onChange={(e) => {
+                                                                const newVoiceURI = e.target.value;
+                                                                setSelectedVoiceURI(newVoiceURI);
+                                                                localStorage.setItem('bible_selectedVoiceURI', newVoiceURI);
+                                                                if (isSpeaking) {
+                                                                    const currentIndex = currentChunkIndexRef.current;
+                                                                    handleStop();
+                                                                    setTimeout(() => {
+                                                                        handleSpeak(verseData.text, currentIndex);
+                                                                    }, 100);
+                                                                }
+                                                            }}
+                                                            className="flex-1 bg-black/30 text-white text-[9px] py-1 px-2 rounded border border-white/10 focus:outline-none focus:ring-1 focus:ring-white/30 truncate"
                                                         >
-                                                            -
-                                                        </button>
-                                                        <span className="text-[10px] font-bold text-white min-w-[24px] text-center">
-                                                            {ttsSpeed.toFixed(1)}x
-                                                        </span>
-                                                        <button
-                                                            onClick={() => handleSpeedChange(0.1)}
-                                                            disabled={ttsSpeed >= 2.0}
-                                                            className="w-5 h-5 flex items-center justify-center text-white/80 hover:text-white disabled:opacity-30"
-                                                        >
-                                                            +
-                                                        </button>
+                                                            {availableVoices.map(voice => (
+                                                                <option key={voice.voiceURI} value={voice.voiceURI} title={voice.name}>
+                                                                    {voice.name.includes('Korean') ? voice.name.replace(/Korean|Google|Samsung|Microsoft/g, '').trim() : voice.name}
+                                                                </option>
+                                                            ))}
+                                                        </select>
                                                     </div>
-
-                                                    <button
-                                                        onClick={() => isSpeaking ? handleStop() : handleSpeak(verseData.text)}
-                                                        className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${isSpeaking
-                                                            ? "bg-red-500 text-white hover:bg-red-600 ring-2 ring-red-400/50"
-                                                            : "bg-white text-indigo-600 hover:bg-indigo-50"
-                                                            }`}
-                                                    >
-                                                        {isSpeaking ? "중지 ⏹️" : "듣기 ▶️"}
-                                                    </button>
-                                                </div>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -5026,7 +5096,7 @@
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
-    </script>
-</body>
-
+    
+        </script>
+    </body>
 </html>
