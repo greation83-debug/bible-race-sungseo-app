@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sophisticated Icon Builder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+
+        .bg-sky-texture {
+            background: linear-gradient(135deg, #bae6fd 0%, #e0f2fe 50%, #f0f9ff 100%);
+        }
+
+        .mountain-back {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 60%;
+            background: #86efac;
+            clip-path: polygon(0% 100%, 0% 40%, 15% 70%, 30% 20%, 50% 60%, 70% 30%, 85% 50%, 100% 20%, 100% 100%);
+            z-index: 1;
+            opacity: 0.6;
+        }
+
+        .mountain-front {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 45%;
+            background: #4ade80;
+            clip-path: polygon(0% 100%, 0% 80%, 20% 50%, 40% 90%, 60% 60%, 80% 80%, 100% 50%, 100% 100%);
+            z-index: 2;
+        }
+
+        .glass-bible {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .text-glow {
+            text-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 flex items-center justify-center min-h-screen">
+    <div id="icon-container"
+        class="w-[1024px] h-[1024px] bg-sky-texture relative overflow-hidden rounded-[200px] shadow-2xl">
+        <!-- Background Elements -->
+        <div class="mountain-back"></div>
+        <div class="mountain-front"></div>
+
+        <!-- Decoration -->
+        <div class="absolute top-[150px] left-[100px] text-[100px] opacity-40">☁️</div>
+        <div class="absolute top-[250px] right-[150px] text-[80px] opacity-30">☁️</div>
+
+        <!-- Heaven Castle (Faded in distance) -->
+        <div class="absolute right-[50px] top-[100px] text-[180px] z-[3] drop-shadow-2xl opacity-90 animate-pulse">🏰
+        </div>
+
+        <!-- Race Track -->
+        <div class="absolute bottom-0 left-0 w-full h-[600px] z-[5]">
+            <svg viewBox="0 0 1000 600" class="w-full h-full drop-shadow-lg">
+                <path d="M -100 600 Q 200 100 500 400 T 1100 100" fill="none" stroke="#eab308" stroke-width="120"
+                    stroke-linecap="round" />
+                <path d="M -100 600 Q 200 100 500 400 T 1100 100" fill="none" stroke="white" stroke-width="6"
+                    stroke-dasharray="30,30" stroke-opacity="0.8" />
+            </svg>
+        </div>
+
+        <!-- Main Character (Sophisticated 3D-like runner reading Bible) -->
+        <div class="absolute top-[420px] left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-20">
+            <div class="relative scale-[6.5]">
+                <!-- Runner -->
+                <div class="text-[100px] filter drop-shadow-lg">🏃‍♂️</div>
+                <!-- Bible (Held in hand area) -->
+                <div
+                    class="absolute top-[15px] left-[45px] text-[45px] transform rotate-[-15deg] filter drop-shadow-2xl">
+                    📖</div>
+            </div>
+        </div>
+
+        <!-- Sophisticated Typography -->
+        <div class="absolute bottom-[100px] left-0 w-full text-center z-30">
+            <h1
+                class="text-[130px] font-[900] text-slate-800 tracking-tight leading-none drop-shadow-xl text-glow bg-clip-text">
+                천로역정
+            </h1>
+            <div class="mt-4 flex items-center justify-center gap-6">
+                <div class="h-1 w-20 bg-blue-600 rounded-full"></div>
+                <h2 class="text-[90px] font-bold text-blue-700 tracking-widest drop-shadow-md">
+                    성경 레이스
+                </h2>
+                <div class="h-1 w-20 bg-blue-600 rounded-full"></div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

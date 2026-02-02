@@ -1,0 +1,29 @@
+# Standard
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+
+# Tools & Scripts (Keep config files)
+*.py
+*.xlsx
+*.zip
+backup/
+백업용/
+analyze_excel.py
+convert_excel_to_json.py
+inject_schedule.py
+refactor_dashboard.py
+vite_dev.log
+
+# IDE
+.vscode
+.idea
+
+# Keep necessary JS configs at root
+!vite.config.js
+!tailwind.config.js
+!postcss.config.js
+!jsconfig.json
+
