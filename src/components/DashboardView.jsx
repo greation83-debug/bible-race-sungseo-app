@@ -88,7 +88,8 @@ const DashboardView = ({
     getProgressRanking,
     getSubgroupDisplay,
     generateMemosHTML,
-    getWeeklyMVP
+    getWeeklyMVP,
+    setView // 추가
 }) => {
     if (!currentUser) return null;
 
@@ -297,6 +298,7 @@ const DashboardView = ({
                 planTypeName={planTypeName}
                 versionName={versionName}
                 handleChangeVersionStart={handleChangeVersionStart}
+                setView={setView}
             />
 
             <div className="max-w-5xl mx-auto w-full pb-10 mt-8">

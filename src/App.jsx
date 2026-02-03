@@ -17,6 +17,7 @@ import LoginView from './components/LoginView';
 import AdminView from './components/AdminView';
 import PlanSelectionView from './components/PlanSelectionView';
 import DashboardView from './components/DashboardView';
+import MiniRoomPage from './components/miniroom/MiniRoomPage';
 import { TOTAL_DAYS, PANIC_DISTANCE, AUDIO_BASE_URL, GENESIS_1, SUPABASE_FUNCTION_URL } from './data/constants';
 import { useTTS } from './hooks/useTTS';
 
@@ -831,6 +832,17 @@ const App = () => {
                 getSubgroupDisplay={getSubgroupDisplay}
                 generateMemosHTML={generateMemosHTML}
                 getWeeklyMVP={() => getWeeklyMVP(communityMembers)}
+                setView={setView}
+            />
+        );
+    }
+
+    if (view === 'mini_room' && currentUser) {
+        return (
+            <MiniRoomPage
+                currentUser={currentUser}
+                setCurrentUser={setCurrentUser}
+                setView={setView}
             />
         );
     }

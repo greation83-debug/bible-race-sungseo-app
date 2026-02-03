@@ -2,6 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Cyworld UI Tokens */
+:root {
+    --cy-orange: #ff6e00;
+    --cy-blue: #0080ff;
+    --cy-gray-bg: #e5e5e5;
+    --cy-frame-border: #999;
+    --cy-white: #ffffff;
+}
+
+.cy-pixel-font {
+    font-family: 'DungGeunMo', 'Galmuri9', monospace;
+    image-rendering: pixelated;
+}
+
+.cy-frame-container {
+    background-color: #8cbbd3;
+    /* Classic background blue-gray */
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #7ea6bd;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.cy-inner-frame {
+    background-color: var(--cy-white);
+    border-radius: 8px;
+    border: 1px solid var(--cy-frame-border);
+    padding: 10px;
+    position: relative;
+}
+
+.cy-side-tab {
+    width: 60px;
+    height: 35px;
+    background-color: var(--cy-blue);
+    color: white;
+    border: 1px solid #0066cc;
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    font-size: 11px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 3px;
+}
+
+.cy-side-tab:not(.active) {
+    background-color: #fff;
+    color: #0080ff;
+    width: 55px;
+}
+
+.cy-miniroom-box {
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+    position: relative;
+    overflow: hidden;
+}
+
+.cy-dotori-badge {
+    background: white;
+    border: 1px solid #ddd;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #666;
+}
+
+/* Isometric Tile Enhancements */
+.iso-tile-shadow {
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
 /* 기본 폰트 설정 */
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

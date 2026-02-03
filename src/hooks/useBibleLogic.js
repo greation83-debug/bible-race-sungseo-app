@@ -30,7 +30,8 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
     } = useUserBibleActions(
         currentUser, setCurrentUser,
         setAllMembersForRace, setCommunityMembers, setSubgroupStats,
-        loadAllMembers
+        loadAllMembers,
+        setViewingDay
     );
 
     // 4. Memos Hook

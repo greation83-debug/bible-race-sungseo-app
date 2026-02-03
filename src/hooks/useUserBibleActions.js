@@ -9,7 +9,8 @@ export const useUserBibleActions = (
     setAllMembersForRace,
     setCommunityMembers,
     setSubgroupStats,
-    loadAllMembers
+    loadAllMembers,
+    setViewingDay
 ) => {
     const [readHistory, setReadHistory] = useState([]);
     const [hasReadToday, setHasReadToday] = useState(false);
@@ -84,6 +85,7 @@ export const useUserBibleActions = (
 
             const updatedUser = { ...currentUser, ...updateData };
             setCurrentUser(updatedUser);
+            setViewingDay(newDay);
             setHasReadToday(true);
             setReadHistory(prev => [historyItem, ...prev]);
 
