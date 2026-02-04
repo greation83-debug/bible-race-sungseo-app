@@ -183,14 +183,17 @@ export const useTTS = (verseText) => {
             if (!cleanLine) return;
 
             let processedText = cleanLine;
+
+            // 괄호 및 대괄호 내용 제거 (TTS에서 부가 정보/주석을 읽지 않도록)
+            processedText = processedText.replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '');
+
             if (cleanLine.indexOf('#') === 0) {
-                processedText = cleanLine.replace(/\([^)]*\)/g, '').replace(/[0-9]+/g, m => toSinoKorean(m));
-            } else {
-                // 일반 본문의 숫자는 읽어줌 (단, 절 표시용 [[VERSE:n]]은 이미 비어있음)
-                processedText = cleanLine;
+                // 제목은 숫자를 한글 숫자로 변환 (예: 1 -> 일)
+                processedText = processedText.replace(/[0-9]+/g, m => toSinoKorean(m));
             }
+
             processedText = processedText.replace(/^#+\s*/, '');
-            // 따옴표 및 어퍼스트로피 제거 (TTS에서 "어퍼스트로피"라고 읽는 문제 해결)
+            // 따옴표 및 어퍼스트로피 제거
             processedText = processedText.replace(/['"‘’“”「」『』]/g, ' ');
 
             // 제목(#)은 문장 부호로 나누지 않고 통째로 한 구절로 처리 (UI와 싱크를 맞춤)
