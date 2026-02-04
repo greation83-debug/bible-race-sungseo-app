@@ -10,7 +10,8 @@ export const useUserBibleActions = (
     setCommunityMembers,
     setSubgroupStats,
     loadAllMembers,
-    setViewingDay
+    setViewingDay,
+    viewingDay
 ) => {
     const [readHistory, setReadHistory] = useState([]);
     const [hasReadToday, setHasReadToday] = useState(false);
@@ -44,7 +45,8 @@ export const useUserBibleActions = (
         const uid = currentUser.uid;
         const todayStr = new Date().toDateString();
 
-        const currentDay = currentUser.currentDay || 1;
+        const currentProgressDay = currentUser.currentDay || 1;
+        const vDay = viewingDay || currentProgressDay; // 현재 보고 있는 날짜
         const oldScore = currentUser.score || 0;
         const oldLevel = Math.floor(oldScore / 100);
 
@@ -53,9 +55,19 @@ export const useUserBibleActions = (
         const newScore = oldScore + addedScore;
         const newLevel = Math.floor(newScore / 100);
 
-        const newDay = currentDay >= 365 ? 1 : currentDay + 1;
-        const newReadCount = currentDay >= 365 ? (currentUser.readCount || 1) + 1 : (currentUser.readCount || 1);
-        const completedRound = currentDay >= 365;
+        // 다음으로 이동할 날짜 (무조건 현재 보고 있는 날짜의 다음 날짜)
+        const nextViewingDay = vDay >= 365 ? 1 : vDay + 1;
+
+        // 진도 업데이트 (현재 진도와 일치할 때만 진도 상승)
+        let newProgressDay = currentProgressDay;
+        let newReadCount = currentUser.readCount || 1;
+        let completedRound = false;
+
+        if (vDay === currentProgressDay) {
+            newProgressDay = currentProgressDay >= 365 ? 1 : currentProgressDay + 1;
+            newReadCount = currentProgressDay >= 365 ? (currentUser.readCount || 1) + 1 : (currentUser.readCount || 1);
+            completedRound = currentProgressDay >= 365;
+        }
 
         // 연속 읽기 계산
         let newStreak = 1;
@@ -69,7 +81,7 @@ export const useUserBibleActions = (
         }
 
         const updateData = {
-            currentDay: newDay,
+            currentDay: newProgressDay,
             readCount: newReadCount,
             score: newScore,
             streak: newStreak,
@@ -77,7 +89,7 @@ export const useUserBibleActions = (
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
-        const historyItem = { date: todayStr, day: currentDay, score: addedScore };
+        const historyItem = { date: todayStr, day: vDay, score: addedScore };
 
         try {
             await db.collection('users').doc(uid).set(updateData, { merge: true });
@@ -85,7 +97,7 @@ export const useUserBibleActions = (
 
             const updatedUser = { ...currentUser, ...updateData };
             setCurrentUser(updatedUser);
-            setViewingDay(newDay);
+            setViewingDay(nextViewingDay); // 무조건 다음 날짜로 이동
             setHasReadToday(true);
             setReadHistory(prev => [historyItem, ...prev]);
 
@@ -118,7 +130,7 @@ export const useUserBibleActions = (
         } catch (e) {
             console.error("읽기 처리 실패:", e);
         }
-    }, [currentUser, setCurrentUser, loadAllMembers, setAllMembersForRace, setCommunityMembers, setSubgroupStats, checkAchievements]);
+    }, [currentUser, viewingDay, setCurrentUser, setViewingDay, loadAllMembers, setAllMembersForRace, setCommunityMembers, setSubgroupStats, checkAchievements]);
 
     const handleRestart = useCallback(async (setMemos, setReadHistory) => {
         if (!currentUser) return;

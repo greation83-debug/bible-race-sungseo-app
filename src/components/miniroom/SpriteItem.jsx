@@ -23,7 +23,14 @@ const SpriteItem = ({
     const backgroundPositionX = -(item.spriteX * spriteWidth);
     const backgroundPositionY = -(item.spriteY * spriteHeight);
 
-    const cols = item.spriteSheet.includes('set') ? 3 : 2;
+    // 시트의 전체 컬럼 수 계산
+    let cols = 8;
+    if (item.spriteSheet.includes('set')) {
+        cols = item.spriteSheet.includes('wallpaper') || item.spriteSheet.includes('floor') ? 3 : 2;
+    } else if (item.spriteSheet.includes('furniture')) {
+        // 새로 생성한 4x2 가구 시트들
+        cols = 4;
+    }
     const sheetWidth = cols * spriteWidth;
 
     const containerStyle = {
@@ -33,9 +40,13 @@ const SpriteItem = ({
         backgroundPosition: `${backgroundPositionX * scale}px ${backgroundPositionY * scale}px`,
         backgroundSize: `${sheetWidth * scale}px auto`,
         backgroundRepeat: 'no-repeat',
+        backgroundColor: 'transparent',
         imageRendering: 'pixelated', // 픽셀아트 느낌 살리기
         ...style
     };
+
+
+
 
     return (
         <div className={`sprite-item ${className}`} style={containerStyle} title={item.name} />

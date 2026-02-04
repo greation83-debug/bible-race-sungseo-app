@@ -17,13 +17,22 @@ const InventorySection = ({
                     if (!item) return null;
                     return (
                         <div key={`${itemId}_${idx}`} className="bg-slate-50 border border-slate-100 rounded-3xl p-4 flex flex-col items-center group">
-                            <div className="w-20 h-20 flex items-center justify-center mb-3">
+                            <div className="w-20 h-20 flex items-center justify-center mb-3 overflow-hidden rounded-xl border border-slate-200 shadow-sm">
                                 {item.spriteSheet ? (
                                     <SpriteItem item={item} scale={1.2} />
+                                ) : item.color || item.gradient || item.baseColor ? (
+                                    <div
+                                        className="w-full h-full"
+                                        style={{
+                                            backgroundColor: item.color || item.baseColor,
+                                            backgroundImage: item.gradient
+                                        }}
+                                    />
                                 ) : (
-                                    <div className="text-5xl">{item.icon}</div>
+                                    <div className="text-4xl">{item.icon || '📦'}</div>
                                 )}
                             </div>
+
                             <p className="text-sm font-bold text-slate-700 text-center truncate w-full">{item.name}</p>
                             <button
                                 onClick={() => onUseItem(item)}

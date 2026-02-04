@@ -9,7 +9,7 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
         rooms: [
             {
                 wallpaper: 'wall_plain_white',
-                floor: 'floor_plain_gray',
+                floor: 'floor_plain_white',
                 items: [],
                 characterPos: { x: 4, y: 4 }
             }
@@ -21,7 +21,7 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
         accessoryId: null,
         outfitId: null
     });
-    const [inventory, setInventory] = useState(['wall_plain_white', 'floor_plain_gray', 'base_man']);
+    const [inventory, setInventory] = useState(['wall_plain_white', 'floor_plain_white', 'base_man']);
     const [loading, setLoading] = useState(true);
     const [previewItem, setPreviewItem] = useState(null);
 
@@ -40,7 +40,7 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
                     activeRoomIndex: 0,
                     rooms: [{
                         wallpaper: 'wall_plain_white',
-                        floor: 'floor_plain_gray',
+                        floor: 'floor_plain_white',
                         items: [],
                         characterPos: { x: 4, y: 4 }
                     }]
@@ -51,7 +51,7 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
                     accessoryId: null,
                     outfitId: null
                 },
-                inventory: ['wall_plain_white', 'floor_plain_gray', 'base_man']
+                inventory: ['wall_plain_white', 'floor_plain_white', 'base_man']
             };
             setRoomData(initialData.miniroom);
             setCharacter(initialData.character);
@@ -184,7 +184,7 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
                 unlockedRooms: roomData.unlockedRooms + 1,
                 rooms: [...roomData.rooms, {
                     wallpaper: 'wall_plain_white',
-                    floor: 'floor_plain_gray',
+                    floor: 'floor_plain_white',
                     items: [],
                     characterPos: { x: 4, y: 4 }
                 }]
