@@ -190,6 +190,9 @@ export const useTTS = (verseText) => {
                 processedText = cleanLine;
             }
             processedText = processedText.replace(/^#+\s*/, '');
+            // 따옴표 및 어퍼스트로피 제거 (TTS에서 "어퍼스트로피"라고 읽는 문제 해결)
+            processedText = processedText.replace(/['"‘’“”「」『』]/g, ' ');
+
             const subChunks = processedText.split(/([.?!])/g).reduce((acc, part) => {
                 if (['.', '?', '!'].indexOf(part) !== -1) {
                     if (acc.length > 0) acc[acc.length - 1] += part;
