@@ -114,18 +114,32 @@ const MarkdownRenderer = ({ content, fontSize = 16, activeChunkIndex = -1, onSeg
         processedText = processedText.replace(/^#+\s*/, '');
 
         // 문장 부호 기준으로 세부 분할
+        // acc를 객체 배열로 관리하여 스피킹 가능 여부와 원본 텍스트를 함께 보관합니다.
         const segments = processedText.split(/([.?!])/g).reduce((acc, part) => {
             if (['.', '?', '!'].indexOf(part) !== -1) {
-                if (acc.length > 0) acc[acc.length - 1] += part;
+                if (acc.length > 0) acc[acc.length - 1].content += part;
                 return acc;
             }
-            if (part.trim().length > 0) {
-                acc.push(part);
+
+            // 실제 읽을 내용이 있는지 판단 (따옴표, 어퍼스트로피, 공백 제외)
+            const isSpeakable = part.replace(/['"‘’“”「」『』\s]/g, '').length > 0;
+            if (part.length > 0) {
+                acc.push({ content: part, isSpeakable });
             }
             return acc;
         }, []);
 
         return segments.map((seg, i) => {
+            // 따옴표만 있는 등 읽을 내용이 없는 구간은 인덱스를 부여하지 않고 일반 텍스트로 렌더링
+            if (!seg.isSpeakable) {
+                return (
+                    <span key={`noise-${segmentCounter}-${i}`} className="font-normal opacity-90">
+                        {renderVerseMarkers(seg.content)}
+                    </span>
+                );
+            }
+
+            // 실제 TTS 인덱스와 일치하는 유효한 구절
             const idx = segmentCounter++;
             const isActive = activeChunkIndex === idx;
             return (
@@ -136,7 +150,7 @@ const MarkdownRenderer = ({ content, fontSize = 16, activeChunkIndex = -1, onSeg
                     className={`transition-all duration-300 cursor-pointer rounded px-0.5 font-normal ${isActive ? 'bg-yellow-300 text-slate-900 font-bold shadow-sm' : 'hover:bg-slate-100'}`}
                     title="클릭하면 여기부터 읽어줍니다"
                 >
-                    {renderVerseMarkers(seg)}
+                    {renderVerseMarkers(seg.content)}
                 </span>
             );
         });

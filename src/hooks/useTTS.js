@@ -193,15 +193,20 @@ export const useTTS = (verseText) => {
             // 따옴표 및 어퍼스트로피 제거 (TTS에서 "어퍼스트로피"라고 읽는 문제 해결)
             processedText = processedText.replace(/['"‘’“”「」『』]/g, ' ');
 
-            const subChunks = processedText.split(/([.?!])/g).reduce((acc, part) => {
-                if (['.', '?', '!'].indexOf(part) !== -1) {
-                    if (acc.length > 0) acc[acc.length - 1] += part;
+            // 제목(#)은 문장 부호로 나누지 않고 통째로 한 구절로 처리 (UI와 싱크를 맞춤)
+            if (cleanLine.indexOf('#') === 0) {
+                if (processedText.trim().length > 0) chunks.push(processedText);
+            } else {
+                const subChunks = processedText.split(/([.?!])/g).reduce((acc, part) => {
+                    if (['.', '?', '!'].indexOf(part) !== -1) {
+                        if (acc.length > 0) acc[acc.length - 1] += part;
+                        return acc;
+                    }
+                    if (part.trim().length > 0) acc.push(part);
                     return acc;
-                }
-                if (part.trim().length > 0) acc.push(part);
-                return acc;
-            }, []);
-            chunks.push(...subChunks);
+                }, []);
+                chunks.push(...subChunks);
+            }
         });
 
         if (chunks.length === 0) return;
