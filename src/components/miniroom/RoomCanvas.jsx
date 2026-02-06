@@ -8,30 +8,97 @@ const RoomCanvas = ({
     activeRoom,
     character,
     previewItem,
-    isPlacementMode = false,
     selectedPlacementId,
     onGridClick,
     onItemClick,
     onCharacterClick,
     onPreviewClick,
-    previewPos = { x: 4, y: 4 }
+    previewPos = { x: 4, y: 4 },
+    movePlacedItem,
+    moveCharacter
 }) => {
+    const [dragging, setDragging] = useState(null); // { type: 'item'|'char'|'preview', id?: string, startX?: number, startY?: number }
+    const [hoverPos, setHoverPos] = useState(null);
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
     const GRID_SIZE = 10;
     const TILE_W = 64;
     const TILE_H = 32;
 
-    const isFurniturePreview = previewItem && !['wallpaper', 'floor', 'character', 'hair', 'accessory', 'outfit'].includes(previewItem.category);
+    const isFurniturePreview = previewItem && !['wallpaper', 'floor', 'character', 'hair', 'accessory', 'outfit', 'eye', 'expression', 'hand'].includes(previewItem.category);
 
-    // 미리보기 우선 적용: previewItem이 wallpaper/floor면 해당 아이템 사용
-    const effectiveWallpaperId = (previewItem?.category === 'wallpaper')
-        ? previewItem.id
-        : (activeRoom.wallpaper || 'wall_plain_white');
-    const effectiveFloorId = (previewItem?.category === 'floor')
-        ? previewItem.id
-        : (activeRoom.floor || 'floor_plain_white');
+    const getPos = (gx, gy) => {
+        const x = (gx - gy) * (TILE_W / 2);
+        const y = (gx + gy) * (TILE_H / 2);
+        return { x, y };
+    };
 
-    const wallpaperItem = SHOP_ITEMS.find(i => i.id === effectiveWallpaperId) || previewItem;
-    const floorItem = SHOP_ITEMS.find(i => i.id === effectiveFloorId) || previewItem;
+    const screenToGrid = (clientX, clientY, containerRef) => {
+        if (!containerRef) return null;
+        const rect = containerRef.getBoundingClientRect();
+
+        // 스케일 factor 계산 (부모에서 scale조정된 경우 대응)
+        const scale = rect.width / 640;
+
+        // 캔버스 중심점 (320, 180) 기준
+        const centerX = rect.left + (320 * scale);
+        const centerY = rect.top + (180 * scale);
+
+        const relX = (clientX - centerX) / scale;
+        const relY = (clientY - centerY) / scale;
+
+        const gx = Math.floor((relY / (TILE_H / 2) + relX / (TILE_W / 2)) / 2);
+        const gy = Math.floor((relY / (TILE_H / 2) - relX / (TILE_W / 2)) / 2);
+
+        if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
+            return { x: gx, y: gy };
+        }
+        return null;
+    };
+
+    const containerRef = React.useRef(null);
+
+    const handleMouseDown = (e, type, id = null) => {
+        e.stopPropagation();
+        setDragging({ type, id });
+    };
+
+    const handleMouseMove = (e) => {
+        if (!dragging) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const scale = rect.width / 640;
+
+        // 정교한 마우스 위치 (캔버스 내부 좌표)
+        const mx = (e.clientX - rect.left) / scale;
+        const my = (e.clientY - rect.top) / scale;
+        setMousePos({ x: mx, y: my });
+
+        const gridPos = screenToGrid(e.clientX, e.clientY, containerRef.current);
+        if (gridPos) {
+            setHoverPos(gridPos);
+        }
+    };
+
+    const handleMouseUp = () => {
+        if (dragging && hoverPos) {
+            if (dragging.type === 'item') {
+                movePlacedItem(dragging.id, hoverPos.x, hoverPos.y);
+            } else if (dragging.type === 'char') {
+                moveCharacter(hoverPos.x, hoverPos.y);
+            } else if (dragging.type === 'preview') {
+                // 미리보기 위치업데이트는 부모에서 처리하도록 유도하거나 로컬 상태로 유지 (이 예시에서는 previewPos는 부모 소유)
+                onGridClick(hoverPos.x, hoverPos.y);
+            }
+        }
+        setDragging(null);
+        setHoverPos(null);
+    };
+
+    const effectiveWallpaperId = previewItem?.category === 'wallpaper' ? previewItem.id : activeRoom.wallpaper || 'wall_plain_white';
+    const effectiveFloorId = previewItem?.category === 'floor' ? previewItem.id : activeRoom.floor || 'floor_plain_white';
+
+    const wallpaperItem = SHOP_ITEMS.find(i => i.id === effectiveWallpaperId) || (previewItem?.category === 'wallpaper' ? previewItem : null);
+    const floorItem = SHOP_ITEMS.find(i => i.id === effectiveFloorId) || (previewItem?.category === 'floor' ? previewItem : null);
 
     const wallpaperUrl = wallpaperItem?.spriteSheet ? Assets[wallpaperItem.spriteSheet] : '';
     const wallPosPX = wallpaperItem ? -(wallpaperItem.spriteX * (wallpaperItem.width || 64)) : 0;
@@ -41,81 +108,50 @@ const RoomCanvas = ({
     const floorPosPX = floorItem ? -(floorItem.spriteX * (floorItem.width || 64)) : 0;
     const floorPosPY = floorItem ? -(floorItem.spriteY * (floorItem.height || 64)) : 0;
 
-    const getPos = (gx, gy) => {
-        const x = (gx - gy) * (TILE_W / 2);
-        const y = (gx + gy) * (TILE_H / 2);
-        return { x, y };
-    };
-
-
-    const roomStyle = {
-        position: 'relative',
-        width: '640px',
-        height: '520px', // 바닥 높이(320) + 여유분
-        margin: '0 auto',
-    };
-
-    // 캐릭터 위치
-    const charPos = activeRoom.characterPos || { x: 4, y: 4 };
+    const charPos = dragging?.type === 'char' && hoverPos ? hoverPos : (activeRoom.characterPos || { x: 4, y: 4 });
 
     return (
-        <div className="room-canvas-container py-10 flex items-center justify-center bg-slate-200 rounded-[2rem] overflow-hidden shadow-inner border-4 border-white/50 relative">
-            <div style={roomStyle}>
-                {/* 1. 벽 (미리보기 시 투명도 조절) */}
+        <div
+            ref={containerRef}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            className="room-canvas-container py-10 flex items-center justify-center bg-slate-400 rounded-[2rem] overflow-hidden shadow-inner border-4 border-white/50 relative select-none"
+        >
+            <div style={{ position: 'relative', width: '640px', height: '520px', margin: '0 auto' }}>
                 <div className={`absolute inset-0 pointer-events-none z-0 transition-opacity duration-500 ${isFurniturePreview ? 'opacity-40' : 'opacity-100'}`}>
-                    {/* 왼쪽 벽 */}
                     <div className="absolute" style={{
-                        width: '320px', height: '240px', transform: 'skewY(-26.5deg)', left: '0', top: '-220px',
-                        backgroundColor: wallpaperItem?.color || '#fff',
-                        borderRight: '1.5px solid rgba(0,0,0,0.05)',
-                        backgroundImage: wallpaperUrl ? `url(${wallpaperUrl})` : 'none',
-                        backgroundPosition: `${wallPosPX}px ${wallPosPY}px`,
-                        backgroundSize: `512px auto`, // 8컬럼 기준
-                        imageRendering: 'pixelated'
-                    }} >
-                        <div className="absolute bottom-0 w-full h-[6px] bg-white/20 border-t border-black/5" />
+                        width: '320.5px', height: '405px', left: '0', top: '-224px', transform: 'skewY(-26.565deg)', transformOrigin: 'bottom right',
+                        backgroundColor: wallpaperItem?.color || '#fff', borderRight: '1.5px solid rgba(0,0,0,0.1)',
+                        backgroundImage: wallpaperUrl ? `url(${wallpaperUrl})` : 'none', backgroundPosition: `${wallPosPX}px ${wallPosPY}px`,
+                        backgroundSize: `512px auto`, imageRendering: 'pixelated'
+                    }}>
+                        <div className="absolute bottom-0 w-full h-[8px] bg-black/5 border-t border-black/10" />
                     </div>
-
-                    {/* 오른쪽 벽 */}
                     <div className="absolute" style={{
-                        width: '320px', height: '240px', transform: 'skewY(26.5deg)', left: '320px', top: '-220px',
-                        backgroundColor: wallpaperItem?.color || '#fff',
-                        backgroundImage: wallpaperUrl ? `url(${wallpaperUrl})` : 'none',
-                        backgroundPosition: `${wallPosPX}px ${wallPosPY}px`,
-                        backgroundSize: `512px auto`,
-                        imageRendering: 'pixelated', filter: 'brightness(0.97)'
-                    }} >
-                        <div className="absolute bottom-0 w-full h-[6px] bg-white/10 border-t border-black/5" />
+                        width: '320.5px', height: '405px', left: '320px', top: '-224px', transform: 'skewY(26.565deg)', transformOrigin: 'bottom left',
+                        backgroundColor: wallpaperItem?.color || '#fff', backgroundImage: wallpaperUrl ? `url(${wallpaperUrl})` : 'none',
+                        backgroundPosition: `${wallPosPX}px ${wallPosPY}px`, backgroundSize: `512px auto`, imageRendering: 'pixelated', filter: 'brightness(0.97)'
+                    }}>
+                        <div className="absolute bottom-0 w-full h-[8px] bg-black/10 border-t border-black/20" />
                     </div>
-
-                    {/* 코너 세로 라인 및 그림자 */}
                     <div className="absolute left-[319.5px] top-[-100px] w-[1px] h-[300px] bg-black/10 z-10" />
-                    {/* 바닥과의 경계 그림자 */}
-                    <div className="absolute left-[320px] top-[180px] w-[320px] h-[160px] bg-gradient-to-br from-black/5 to-transparent pointer-events-none" style={{ transform: 'skewY(26.5deg)', transformOrigin: 'top left' }} />
-                    <div className="absolute left-0 top-[180px] w-[320px] h-[160px] bg-gradient-to-bl from-black/5 to-transparent pointer-events-none" style={{ transform: 'skewY(-26.5deg)', transformOrigin: 'top right' }} />
                 </div>
 
-                {/* 2. 바닥 그리드 및 인터랙션 레이어 */}
-                <div className="absolute top-[180px] left-[320px] -translate-x-1/2">
+                <div className="absolute top-[180px] left-[288px]">
                     {Array.from({ length: GRID_SIZE }).map((_, gy) => (
                         <div key={gy} style={{ position: 'absolute', zIndex: 0 }}>
                             {Array.from({ length: GRID_SIZE }).map((_, gx) => {
                                 const { x, y } = getPos(gx, gy);
+                                const isTarget = hoverPos?.x === gx && hoverPos?.y === gy;
                                 return (
-                                    <div
-                                        key={gx}
-                                        onClick={() => onGridClick && onGridClick(gx, gy)}
-                                        className={`${isPlacementMode ? 'hover:bg-blue-500/40 cursor-crosshair' : ''} transition-all`}
+                                    <div key={gx}
+                                        className={`transition-colors duration-100 ${isTarget ? 'bg-indigo-400/30' : ''}`}
                                         style={{
-                                            position: 'absolute', left: x, top: y, width: TILE_W, height: TILE_H,
-                                            backgroundColor: floorItem?.color || 'transparent',
-                                            backgroundImage: floorUrl ? `url(${floorUrl})` : 'none',
-                                            backgroundPosition: `${floorPosPX}px ${floorPosPY}px`,
-                                            backgroundSize: `512px auto`, zIndex: 0,
-                                            // 흰 장판일 경우 그리드 라인을 숨기기 위해 배경 투명도 조절 및 clip-path 유지
-                                            clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-                                            opacity: isFurniturePreview && !isPlacementMode ? 0.3 : 1,
-                                            imageRendering: 'pixelated'
+                                            position: 'absolute', left: x, top: y, width: TILE_W + 1, height: TILE_H + 1,
+                                            backgroundColor: floorItem?.color || 'transparent', backgroundImage: floorUrl ? `url(${floorUrl})` : 'none',
+                                            backgroundPosition: `${floorPosPX}px ${floorPosPY}px`, backgroundSize: `512px auto`,
+                                            clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', imageRendering: 'pixelated'
                                         }}
                                     />
                                 );
@@ -123,107 +159,103 @@ const RoomCanvas = ({
                         </div>
                     ))}
 
-                    {/* 3. 배치된 가구들 (미리보기 시 흐리게) */}
-                    <div className={`transition-all duration-500 ${isFurniturePreview ? 'opacity-20 saturate-0 scale-95 blur-[1px] pointer-events-none' : 'opacity-100 scale-100'}`}>
+                    <div className={`transition-all duration-300 ${isFurniturePreview ? 'opacity-40 saturate-[0.5] blur-[0.5px]' : ''}`}>
                         {activeRoom.items?.map((item) => {
-                            const { x, y } = getPos(item.x, item.y);
+                            const isDraggingThis = dragging?.type === 'item' && dragging.id === item.id;
                             const shopItem = SHOP_ITEMS.find(i => i.id === item.itemId);
                             if (!shopItem) return null;
 
+                            // 드래그 중인 아이템은 마우스 좌표를, 아니면 그리드 좌표를 사용
+                            let x, y, z;
+                            if (isDraggingThis) {
+                                x = mousePos.x - 320; // 320: 캔버스 중심 보정
+                                y = mousePos.y - 180;
+                                z = 1000;
+                            } else {
+                                const pos = { x: item.x, y: item.y };
+                                const coords = getPos(pos.x, pos.y);
+                                x = coords.x;
+                                y = coords.y;
+                                z = 10 + pos.y;
+                            }
+
                             return (
-                                <div
-                                    key={item.id}
-                                    onClick={(e) => { e.stopPropagation(); onItemClick && onItemClick(item); }}
-                                    className={`absolute transition-transform hover:scale-105 cursor-pointer ${selectedPlacementId === item.id ? 'ring-2 ring-blue-500 rounded-full scale-110' : ''}`}
-                                    style={{
-                                        left: x, top: y,
-                                        // 아이소메트릭 정렬 기준: 발 아래가 타일 중앙에 오도록 오프셋 조절
-                                        transform: `translate(${-shopItem.width / 4}px, ${-shopItem.height / 2}px)`,
-                                        zIndex: 10 + item.y // Y좌표에 기반한 간단한 Sorting
-                                    }}
-                                >
-                                    <SpriteItem item={shopItem} scale={1} />
-                                </div>
+                                <React.Fragment key={item.id}>
+                                    {/* 드래그 중일 때 바닥에 표시될 가이드 그림자 */}
+                                    {isDraggingThis && hoverPos && (() => {
+                                        const { x: gx, y: gy } = getPos(hoverPos.x, hoverPos.y);
+                                        return (
+                                            <div className="absolute pointer-events-none transition-all duration-75"
+                                                style={{
+                                                    left: gx, top: gy,
+                                                    width: TILE_W, height: TILE_H,
+                                                    background: 'rgba(99, 102, 241, 0.2)',
+                                                    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                                                    transform: `translate(${TILE_W / 2 - shopItem.width / 2}px, ${TILE_H - shopItem.height}px)`,
+                                                    zIndex: 5
+                                                }}
+                                            />
+                                        );
+                                    })()}
+
+                                    <div
+                                        onMouseDown={(e) => handleMouseDown(e, 'item', item.id)}
+                                        onClick={(e) => { e.stopPropagation(); onItemClick && onItemClick(item); }}
+                                        className={`absolute transition-transform cursor-grab active:cursor-grabbing ${isDraggingThis ? 'scale-110 drop-shadow-2xl z-[1000]' : ''}`}
+                                        style={{
+                                            left: x,
+                                            top: y,
+                                            transform: `translate(${(TILE_W / 2) - (shopItem.width / 2)}px, ${(TILE_H / 2) - shopItem.height}px) ${isDraggingThis ? 'translateY(-10px)' : ''}`,
+                                            zIndex: z,
+                                            opacity: isDraggingThis ? 0.8 : 1
+                                        }}>
+                                        <SpriteItem item={shopItem} scale={1} />
+                                        {!isDraggingThis && <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-2 bg-black/10 rounded-full blur-[1px] -z-10" />}
+                                    </div>
+                                </React.Fragment>
                             );
                         })}
                     </div>
 
-                    {/* 4. 캐릭터 (미리보기 반영) */}
-                    <div className={`transition-all duration-500 ${isFurniturePreview ? 'opacity-20 blur-[1px] pointer-events-none' : 'opacity-100'}`}>
+                    <div className={`transition-all duration-300 ${isFurniturePreview ? 'opacity-40 blur-[0.5px]' : ''}`}>
                         {(() => {
                             const { x, y } = getPos(charPos.x, charPos.y);
-                            // 미리보기 아이템이 캐릭터 관련이면 임시 캐릭터 객체 생성
                             let displayChar = { ...character };
                             if (previewItem) {
-                                if (previewItem.category === 'character') displayChar.baseId = previewItem.id;
-                                if (previewItem.category === 'hair') displayChar.hairId = previewItem.id;
-                                if (previewItem.category === 'accessory') displayChar.accessoryId = previewItem.id;
-                                if (previewItem.category === 'outfit') displayChar.outfitId = previewItem.id;
+                                const keyMap = { 'character': 'baseId', 'hair': 'hairId', 'accessory': 'accessoryId', 'outfit': 'outfitId', 'eye': 'eyeId', 'expression': 'expressionId', 'hand': 'handId' };
+                                if (keyMap[previewItem.category]) displayChar[keyMap[previewItem.category]] = previewItem.id;
                             }
+                            const isDraggingChar = dragging?.type === 'char';
 
                             return (
-                                <div
-                                    onClick={(e) => { e.stopPropagation(); onCharacterClick && onCharacterClick(); }}
-                                    className={`absolute cursor-move transition-all group ${selectedPlacementId === 'character' ? 'scale-110' : ''}`}
-                                    style={{
-                                        left: x, top: y, zIndex: 50 + charPos.y,
-                                        transform: 'translate(-50%, -70%)'
-                                    }}
-                                >
+                                <div onMouseDown={(e) => handleMouseDown(e, 'char')}
+                                    className={`absolute cursor-grab active:cursor-grabbing transition-all ${isDraggingChar ? 'z-[100] scale-105 opacity-80' : ''}`}
+                                    style={{ left: x, top: y, zIndex: 50 + charPos.y, transform: 'translate(-50%, -70%)' }}>
                                     <div className="relative">
                                         <CharacterView character={displayChar} />
                                         <div className="w-10 h-3 bg-black/10 rounded-full blur-[2px] mx-auto -mt-2"></div>
-                                        {selectedPlacementId === 'character' && (
-                                            <div className="absolute -inset-4 border-2 border-blue-500 rounded-xl animate-pulse"></div>
-                                        )}
                                     </div>
                                 </div>
                             );
                         })()}
                     </div>
 
-                    {/* 5. 벽지/바닥 미리보기 표시 라벨 */}
-                    {previewItem && (previewItem.category === 'wallpaper' || previewItem.category === 'floor') && (
-                        <div className="absolute -top-[200px] left-1/2 -translate-x-1/2 z-[100]">
-                            <p className="bg-indigo-600 text-white px-4 py-2 rounded-full font-black text-sm shadow-xl animate-bounce border-2 border-white/50">
-                                🎨 미리보기 적용됨: {previewItem.name}
-                            </p>
-                        </div>
-                    )}
-
-                    {/* 6. 가구/소품 미리보기 (집중 모드) */}
                     {isFurniturePreview && (() => {
-                        const { x, y } = getPos(previewPos.x, previewPos.y);
+                        const isDraggingPreview = dragging?.type === 'preview';
+                        const pos = isDraggingPreview && hoverPos ? hoverPos : previewPos;
+                        const { x, y } = getPos(pos.x, pos.y);
                         return (
-                            <div
-                                onClick={(e) => { e.stopPropagation(); onPreviewClick && onPreviewClick(); }}
-                                className={`absolute cursor-move transition-all ${selectedPlacementId === 'preview' ? 'scale-110' : 'hover:scale-105'}`}
+                            <div onMouseDown={(e) => handleMouseDown(e, 'preview')}
+                                className={`absolute cursor-grab active:cursor-grabbing transition-all z-[100] ${isDraggingPreview ? 'scale-110 opacity-70' : ''}`}
                                 style={{
                                     left: x,
                                     top: y,
-                                    transform: `translate(${-(previewItem.width || 32) / 4}px, ${-(previewItem.height || 32) / 2}px)`,
-                                    zIndex: 100,
-                                }}
-                            >
-                                <div className="relative">
-                                    {/* 아이템 발밑 강조 후광 */}
-                                    <div className="absolute inset-0 bg-blue-400/20 blur-xl rounded-full scale-150 animate-pulse"></div>
-
-                                    <SpriteItem item={previewItem} scale={1.2} className={selectedPlacementId === 'preview' ? 'brightness-125' : ''} />
-
-                                    {/* 미리보기 라벨 */}
-                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap shadow-lg font-bold border-2 border-white/30 flex items-center gap-1 z-20">
-                                        <span className="animate-pulse">✨</span> {previewItem.name}
-                                    </div>
-
-                                    {selectedPlacementId === 'preview' ? (
-                                        <div className="absolute inset-x-[-10px] inset-y-[-10px] border-4 border-dashed border-indigo-500 rounded-2xl animate-pulse"></div>
-                                    ) : (
-                                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-black/60 text-white text-[8px] px-2 py-0.5 rounded shadow whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">클릭하여 이동</div>
-                                    )}
-
-                                    {/* 핑 애니메이션 */}
-                                    {!selectedPlacementId && <div className="absolute inset-0 rounded-lg ring-4 ring-indigo-500/50 animate-ping pointer-events-none"></div>}
+                                    transform: `translate(${(TILE_W / 2) - ((previewItem.width || 64) / 2)}px, ${(TILE_H / 2) - (previewItem.height || 64)}px)`
+                                }}>
+                                <div className="relative group">
+                                    <SpriteItem item={previewItem} scale={1.2} />
+                                    <div className="absolute inset-0 bg-blue-400/10 blur-xl rounded-full -z-10"></div>
+                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[8px] px-2 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">드래그하여 이동</div>
                                 </div>
                             </div>
                         );
@@ -231,20 +263,23 @@ const RoomCanvas = ({
                 </div>
             </div>
 
-            {(isPlacementMode || isFurniturePreview) && (
-                <div className="absolute top-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-[200]">
-                    <div className={`${isPlacementMode ? 'bg-blue-600' : 'bg-indigo-600'} text-white px-8 py-2.5 rounded-full font-black shadow-2xl border-2 border-white/20 animate-in slide-in-from-top-4`}>
-                        {selectedPlacementId ? (
-                            <span className="flex items-center gap-2">🎯 {selectedPlacementId === 'preview' ? '미리보기 아이템' : '아이템'}을 옮길 곳을 클릭하세요!</span>
-                        ) : (
-                            <span className="flex items-center gap-2">🔍 미리보기 모드 (아이템을 클릭해 이동해보세요)</span>
-                        )}
+            {(previewItem || dragging) && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[85%] z-[100]">
+                    <div className="bg-slate-900/80 backdrop-blur-sm text-white px-6 py-3 rounded-2xl flex items-center justify-between shadow-xl border border-white/10">
+                        <div className="flex items-center gap-3">
+                            <span className="text-lg">{dragging ? '🖐️' : '✨'}</span>
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{dragging ? 'Dragging' : 'Preview'}</span>
+                                <span className="text-xs font-bold">
+                                    {dragging ? '마우스를 떼면 배치가 완료됩니다.' : `미리보기 적용 중: ${previewItem?.name}`}
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
         </div>
     );
 };
-
 
 export default RoomCanvas;

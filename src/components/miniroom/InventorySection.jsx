@@ -38,7 +38,7 @@ const InventorySection = ({
                                 onClick={() => onUseItem(item)}
                                 className="mt-3 w-full py-2 bg-slate-200 text-slate-600 rounded-xl text-xs font-black hover:bg-indigo-100 hover:text-indigo-600 transition-colors"
                             >
-                                {['wallpaper', 'floor', 'character', 'hair', 'accessory', 'outfit'].includes(item.category) ? '착용/변경' : '배치하기'}
+                                {['wallpaper', 'floor', 'character', 'hair', 'accessory', 'outfit', 'eye', 'expression', 'hand'].includes(item.category) ? '착용/변경' : '배치하기'}
                             </button>
                         </div>
                     );

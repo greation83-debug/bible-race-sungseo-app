@@ -106,30 +106,18 @@ const MiniRoomPage = ({ currentUser, setView, setCurrentUser }) => {
                                                     character={character}
                                                     previewItem={previewItem}
                                                     previewPos={previewPos}
-                                                    isPlacementMode={isPlacementMode}
                                                     selectedPlacementId={selectedPlacementId}
+                                                    movePlacedItem={movePlacedItem}
+                                                    moveCharacter={moveCharacter}
                                                     onGridClick={(gx, gy) => {
-                                                        if (!isPlacementMode) return;
-                                                        if (selectedPlacementId === 'character') moveCharacter(gx, gy);
-                                                        else if (selectedPlacementId === 'preview') setPreviewPos({ x: gx, y: gy });
-                                                        else if (selectedPlacementId) movePlacedItem(selectedPlacementId, gx, gy);
-                                                        setIsPlacementMode(false);
-                                                        setSelectedPlacementId(null);
+                                                        // 미리보기 아이템 위치만 클릭으로 변경 지원
+                                                        if (previewItem) setPreviewPos({ x: gx, y: gy });
                                                     }}
-                                                    onItemClick={(item) => { setSelectedPlacementId(item.id); setIsPlacementMode(true); }}
-                                                    onCharacterClick={() => { setSelectedPlacementId('character'); setIsPlacementMode(true); }}
-                                                    onPreviewClick={() => { setSelectedPlacementId('preview'); setIsPlacementMode(true); }}
+                                                    onItemClick={(item) => setSelectedPlacementId(item.id)}
+                                                    onCharacterClick={() => setSelectedPlacementId('character')}
+                                                    onPreviewClick={() => setSelectedPlacementId('preview')}
                                                 />
                                             </div>
-
-                                            {isPlacementMode && (
-                                                <div className="absolute top-2 sm:top-4 left-1/2 -translate-x-1/2 flex gap-1 sm:gap-2 z-[100] w-[90%] justify-center">
-                                                    <div className="bg-blue-600 text-white px-3 py-1 rounded-full text-[9px] sm:text-[10px] font-bold shadow-lg animate-bounce whitespace-nowrap">
-                                                        {selectedPlacementId === 'preview' ? '🛒 미리보기 이동' : '배치 활성화'}
-                                                    </div>
-                                                    <button onClick={() => { setIsPlacementMode(false); setSelectedPlacementId(null); }} className="bg-white border border-slate-200 px-2 sm:px-3 py-1 rounded-full text-[9px] sm:text-[10px] font-bold shadow-sm hover:bg-slate-50 transition-colors">취소</button>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 )}
@@ -156,10 +144,22 @@ const MiniRoomPage = ({ currentUser, setView, setCurrentUser }) => {
                                                 const currentRooms = [...roomData.rooms];
                                                 const activeIdx = roomData.activeRoomIndex;
 
-                                                if (category === 'wallpaper') updateRoom({ rooms: currentRooms.map((r, i) => i === activeIdx ? { ...r, wallpaper: item.id } : r) });
-                                                else if (category === 'floor') updateRoom({ rooms: currentRooms.map((r, i) => i === activeIdx ? { ...r, floor: item.id } : r) });
-                                                else if (['character', 'hair', 'accessory', 'outfit'].includes(category)) updateCharacter({ [`${category}Id`]: item.id });
-                                                else {
+                                                if (category === 'wallpaper') {
+                                                    updateRoom({ rooms: currentRooms.map((r, i) => i === activeIdx ? { ...r, wallpaper: item.id } : r) });
+                                                } else if (category === 'floor') {
+                                                    updateRoom({ rooms: currentRooms.map((r, i) => i === activeIdx ? { ...r, floor: item.id } : r) });
+                                                } else if (['character', 'hair', 'accessory', 'outfit', 'eye', 'expression', 'hand'].includes(category)) {
+                                                    const keyMap = {
+                                                        'character': 'baseId',
+                                                        'hair': 'hairId',
+                                                        'accessory': 'accessoryId',
+                                                        'outfit': 'outfitId',
+                                                        'eye': 'eyeId',
+                                                        'expression': 'expressionId',
+                                                        'hand': 'handId'
+                                                    };
+                                                    updateCharacter({ [keyMap[category]]: item.id });
+                                                } else {
                                                     placeItem(item.id, 4, 4);
                                                 }
                                                 setActiveTab('main');
@@ -197,16 +197,38 @@ const MiniRoomPage = ({ currentUser, setView, setCurrentUser }) => {
                 </div>
             </div>
 
-            {/* 미리보기 종료 플로팅 버튼 */}
+            {/* 미리보기 종료 및 구매 플로팅 카드 */}
             {previewItem && activeTab === 'main' && (
-                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[200] w-auto">
-                    <div className="bg-indigo-600 text-white pl-4 pr-2 py-1.5 rounded-full shadow-2xl flex items-center gap-3 border-2 border-white/20 whitespace-nowrap">
-                        <span className="font-bold text-[10px]">PREVIEW: {previewItem.name}</span>
-                        <div className="flex gap-1">
-                            {!inventory.includes(previewItem.id) && (
-                                <button onClick={() => buyItem(previewItem)} className="bg-yellow-400 text-indigo-900 px-2 py-0.5 rounded-full font-black text-[10px]">구매</button>
+                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] w-[90%] max-w-[400px] animate-in slide-in-from-bottom-8 duration-500">
+                    <div className="bg-white/90 backdrop-blur-md border-2 border-indigo-100 p-4 rounded-[2.5rem] shadow-[0_20px_50px_rgba(79,70,229,0.2)] flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center shrink-0 border border-indigo-100">
+                                <span className="text-2xl">{previewItem.icon || '✨'}</span>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-0.5">Previewing</p>
+                                <p className="text-sm font-bold text-slate-800 truncate">{previewItem.name}</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                            {!inventory.includes(previewItem.id) ? (
+                                <button
+                                    onClick={() => buyItem(previewItem)}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-2xl font-black text-xs shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                                >
+                                    {previewItem.price}⭐ 구매
+                                </button>
+                            ) : (
+                                <div className="bg-slate-100 text-slate-400 px-4 py-2.5 rounded-2xl font-black text-[10px]">보유 중</div>
                             )}
-                            <button onClick={() => setPreviewItem(null)} className="bg-white/20 text-white px-2 py-0.5 rounded-full font-bold text-[10px]">지우기</button>
+                            <button
+                                onClick={() => setPreviewItem(null)}
+                                className="w-10 h-10 bg-slate-100 hover:bg-red-50 hover:text-red-500 text-slate-400 rounded-full flex items-center justify-center transition-colors active:scale-95"
+                                title="미리보기 종료"
+                            >
+                                <span className="text-xl leading-none">&times;</span>
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -36,6 +36,9 @@ const AdminView = ({
     setSelectedSyncVersions,
     syncNotionToFirestore,
     adminStats,
+    kakaoLinkInput,
+    setKakaoLinkInput,
+    saveKakaoLink,
     db
 }) => {
     return (
@@ -467,6 +470,35 @@ const AdminView = ({
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        💬 카카오톡 채널 연동
+                    </h2>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-600 mb-1">카카오톡 채널 채팅 URL</label>
+                            <input
+                                type="url"
+                                value={kakaoLinkInput}
+                                onChange={(e) => setKakaoLinkInput(e.target.value)}
+                                placeholder="https://pf.kakao.com/_xxxx/chat"
+                                className="w-full p-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-yellow-400 outline-none"
+                            />
+                            <p className="text-xs text-slate-400 mt-1">
+                                ※ 교회의 카카오톡 채널 관리자 센터에서 채팅 URL을 복사하여 붙여넣으세요.
+                            </p>
+                        </div>
+                        <div className="flex justify-end">
+                            <button
+                                onClick={saveKakaoLink}
+                                className="bg-[#FEE500] text-[#3c1e1e] px-8 py-2.5 rounded-xl font-bold hover:bg-[#FDD835] shadow-lg shadow-yellow-100 transition-all active:scale-95"
+                            >
+                                링크 저장하기
+                            </button>
+                        </div>
                     </div>
                 </div>
 

@@ -15,6 +15,9 @@ const CharacterView = ({ character, size = "w-16 h-20", className = "" }) => {
                 hairId={character.hairId}
                 outfitId={character.outfitId}
                 accId={character.accessoryId}
+                eyeId={character.eyeId}
+                expressionId={character.expressionId}
+                handId={character.handId}
             />
         </div>
     );

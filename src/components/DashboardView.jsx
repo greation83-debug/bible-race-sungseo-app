@@ -26,7 +26,8 @@ import {
     BibleReader,
     MemoSection,
     SubgroupRankingCard,
-    ReadingChampionSection
+    ReadingChampionSection,
+    KakaoChannelButton
 } from './dashboard';
 
 const DashboardView = ({
@@ -38,6 +39,7 @@ const DashboardView = ({
     setCurrentMemo,
     readHistory,
     announcement,
+    kakaoLink,
     verseData,
     hasReadToday,
     viewingDay,
@@ -367,6 +369,7 @@ const DashboardView = ({
                     </button>
                 </div>
             )}
+            <KakaoChannelButton kakaoLink={kakaoLink} />
         </div>
     );
 };

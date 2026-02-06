@@ -252,3 +252,98 @@ body {
             65% 50%, 75% 88%, 85% 65%, 92% 75%, 100% 55%, 100% 100%);
     z-index: 2;
 }
+
+/* ============================================
+   카카오톡 플로팅 버튼 스타일
+   ============================================ */
+.kakao-floating-btn {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 9999;
+
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+
+    background-color: #FEE500;
+    color: #391B1B;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
+        0 2px 4px rgba(0, 0, 0, 0.12);
+
+    cursor: pointer;
+    text-decoration: none;
+
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: kakao-pulse 2s infinite;
+}
+
+.kakao-floating-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(254, 229, 0, 0.5),
+        0 4px 8px rgba(0, 0, 0, 0.15);
+    animation: none;
+}
+
+.kakao-floating-btn:active {
+    transform: scale(0.95);
+}
+
+.kakao-icon {
+    width: 28px;
+    height: 28px;
+}
+
+.kakao-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    font-size: 14px;
+    animation: kakao-bounce 1s infinite;
+}
+
+@keyframes kakao-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15),
+            0 2px 4px rgba(0, 0, 0, 0.12);
+    }
+
+    50% {
+        box-shadow: 0 4px 20px rgba(254, 229, 0, 0.4),
+            0 2px 8px rgba(0, 0, 0, 0.15);
+    }
+}
+
+@keyframes kakao-bounce {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+/* 모바일에서 버튼 위치 조정 */
+@media (max-width: 640px) {
+    .kakao-floating-btn {
+        right: 16px;
+        bottom: 16px;
+        width: 52px;
+        height: 52px;
+    }
+
+    .kakao-icon {
+        width: 24px;
+        height: 24px;
+    }
+}

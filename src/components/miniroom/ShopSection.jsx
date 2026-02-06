@@ -24,18 +24,18 @@ const ShopSection = ({
                 ))}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {SHOP_ITEMS.filter(i => i.category === shopCategory).map(item => {
                     const isOwned = inventory.includes(item.id);
                     return (
-                        <div key={item.id} className="bg-slate-50 border border-slate-100 rounded-3xl p-4 flex flex-col items-center hover:shadow-md transition-shadow group relative">
+                        <div key={item.id} className="bg-slate-50 border border-slate-100 rounded-2xl p-3 flex flex-col items-center hover:shadow-md transition-shadow group relative">
                             <div
-                                className="w-20 h-20 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform cursor-help overflow-hidden rounded-xl border border-slate-200 shadow-sm"
+                                className="w-16 h-16 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform cursor-help overflow-hidden rounded-xl border border-slate-200 shadow-sm bg-white"
                                 onClick={() => onPreview(item)}
                                 title="미리보기 (체험하기)"
                             >
                                 {item.spriteSheet ? (
-                                    <SpriteItem item={item} scale={1.2} />
+                                    <SpriteItem item={item} scale={0.8} />
                                 ) : item.color || item.gradient || item.baseColor ? (
                                     <div
                                         className="w-full h-full"
@@ -45,19 +45,19 @@ const ShopSection = ({
                                         }}
                                     />
                                 ) : (
-                                    <div className="text-4xl">{item.icon || '📦'}</div>
+                                    <div className="text-3xl">{item.icon || '📦'}</div>
                                 )}
                             </div>
 
-                            <p className="text-sm font-bold text-slate-700 text-center truncate w-full">{item.name}</p>
-                            <p className="text-xs font-black text-orange-500 mt-1">⭐ {item.price}</p>
+                            <p className="text-[10px] font-bold text-slate-700 text-center leading-tight mb-auto w-full px-1">{item.name}</p>
+                            <p className="text-[10px] font-black text-orange-500 mt-1">⭐ {item.price}</p>
 
                             {isOwned ? (
-                                <div className="mt-3 w-full py-2 bg-slate-200 text-slate-400 rounded-xl text-xs font-black text-center">보유 중</div>
+                                <div className="mt-2 w-full py-1.5 bg-slate-200 text-slate-400 rounded-lg text-[9px] font-black text-center">보유 중</div>
                             ) : (
                                 <button
                                     onClick={() => buyItem(item)}
-                                    className={`mt-3 w-full py-2 rounded-xl text-xs font-black transition-colors ${currentTalants >= item.price ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
+                                    className={`mt-2 w-full py-1.5 rounded-lg text-[9px] font-black transition-colors ${currentTalants >= item.price ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
                                 >
                                     구매하기
                                 </button>
@@ -65,7 +65,7 @@ const ShopSection = ({
 
                             <button
                                 onClick={() => onPreview(item)}
-                                className="absolute top-2 right-2 p-1.5 bg-white shadow-sm border border-slate-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-[10px]"
+                                className="absolute top-2 right-2 p-1 bg-white shadow-sm border border-slate-100 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-[8px]"
                                 title="미리보기"
                             >
                                 👁️

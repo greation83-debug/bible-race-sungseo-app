@@ -18,6 +18,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
     const {
         subgroupStats, setSubgroupStats, communityMembers, setCommunityMembers,
         allMembersForRace, setAllMembersForRace, announcement, loadAnnouncement,
+        kakaoLink, loadKakaoLink, setKakaoLink,
         loadAllMembers, changeSubgroup
     } = useCommunity(currentUser, setCurrentUser);
 
@@ -76,6 +77,9 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
 
             // Load Announcements
             await loadAnnouncement();
+
+            // Load Kakao Link
+            await loadKakaoLink();
         };
 
         loadData();
@@ -103,6 +107,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         memos, setMemos,
         readHistory, setReadHistory,
         announcement,
+        kakaoLink,
         viewingDay, setViewingDay,
         hasReadToday, setHasReadToday,
 
@@ -123,6 +128,8 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         // Data Loaders
         loadAllMembers,
         loadMemos,
-        loadAnnouncement
+        loadAnnouncement,
+        loadKakaoLink,
+        setKakaoLink // 셋터도 추가 (관리자용)
     };
 };

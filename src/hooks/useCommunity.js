@@ -7,6 +7,7 @@ export const useCommunity = (currentUser, setCurrentUser) => {
     const [communityMembers, setCommunityMembers] = useState([]);
     const [allMembersForRace, setAllMembersForRace] = useState([]);
     const [announcement, setAnnouncement] = useState(null);
+    const [kakaoLink, setKakaoLink] = useState(null);
 
     const loadAllMembers = useCallback(async () => {
         try {
@@ -29,6 +30,17 @@ export const useCommunity = (currentUser, setCurrentUser) => {
             }
         } catch (e) {
             console.error("공지 로딩 실패:", e);
+        }
+    }, []);
+
+    const loadKakaoLink = useCallback(async () => {
+        try {
+            const doc = await db.collection('settings').doc('kakao').get();
+            if (doc.exists) {
+                setKakaoLink(doc.data().url);
+            }
+        } catch (e) {
+            console.error("카카오 링크 로딩 실패:", e);
         }
     }, []);
 
@@ -68,8 +80,11 @@ export const useCommunity = (currentUser, setCurrentUser) => {
         setAllMembersForRace,
         announcement,
         setAnnouncement,
+        kakaoLink,
+        setKakaoLink,
         loadAllMembers,
         loadAnnouncement,
+        loadKakaoLink,
         changeSubgroup
     };
 };

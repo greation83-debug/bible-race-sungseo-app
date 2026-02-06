@@ -66,9 +66,9 @@ const App = () => {
         handleRestart,
         changeStartDate,
 
-        loadAllMembers,
         loadMemos,
-        loadAnnouncement
+        loadAnnouncement,
+        kakaoLink, loadKakaoLink, setKakaoLink
     } = useBibleLogic(currentUser, setCurrentUser, view);
     const [showMonthlyContestInfo, setShowMonthlyContestInfo] = useState(false); // 월간 대항전 설명 모달
     const [rankingCommunityFilter, setRankingCommunityFilter] = useState('all'); // 누적 랭킹 대그룹 필터
@@ -113,6 +113,7 @@ const App = () => {
         links: [{ url: '', text: '' }], // 여러 링크를 담을 수 있는 배열
         enabled: false
     }); // 공지 입력
+    const [kakaoLinkInput, setKakaoLinkInput] = useState(''); // 카카오 링크 입력
     const [syncProgress, setSyncProgress] = useState(null);   // 동기화 진행 상황
     const [fontSize, setFontSize] = useState(() => {
         const saved = localStorage.getItem('bible_fontSize');
@@ -190,6 +191,22 @@ const App = () => {
             alert('광고가 저장되었습니다!');
         } catch (e) {
             console.error("광고 저장 실패:", e);
+            alert('저장 실패');
+        }
+    };
+
+    // 카카오 링크 저장 (관리자용)
+    const saveKakaoLink = async () => {
+        if (!db) return;
+        try {
+            await db.collection('settings').doc('kakao').set({
+                url: kakaoLinkInput,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            setKakaoLink(kakaoLinkInput);
+            alert('카카오 링크가 저장되었습니다!');
+        } catch (e) {
+            console.error("카카오 링크 저장 실패:", e);
             alert('저장 실패');
         }
     };
@@ -345,6 +362,11 @@ const App = () => {
                 const syncDoc = await db.collection('settings').doc('sync').get();
                 if (syncDoc.exists) {
                     setLastSyncInfo(syncDoc.data());
+                }
+
+                const kakaoDoc = await db.collection('settings').doc('kakao').get();
+                if (kakaoDoc.exists) {
+                    setKakaoLinkInput(kakaoDoc.data().url);
                 }
 
                 setIsAdmin(true);  // 관리자 모드 활성화
@@ -728,6 +750,9 @@ const App = () => {
                 setSelectedSyncVersions={setSelectedSyncVersions}
                 syncNotionToFirestore={syncNotionToFirestore}
                 adminStats={getAdminStats(allUsers)}
+                kakaoLinkInput={kakaoLinkInput}
+                setKakaoLinkInput={setKakaoLinkInput}
+                saveKakaoLink={saveKakaoLink}
                 db={db}
             />
         );
@@ -783,6 +808,7 @@ const App = () => {
                 setCurrentMemo={setCurrentMemo}
                 readHistory={readHistory}
                 announcement={announcement}
+                kakaoLink={kakaoLink}
                 verseData={verseData}
                 hasReadToday={hasReadToday}
                 viewingDay={viewingDay}

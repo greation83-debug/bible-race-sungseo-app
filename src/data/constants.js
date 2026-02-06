@@ -9,3 +9,6 @@ export const TOTAL_DAYS = 365;
 export const PANIC_DISTANCE = 5;
 export const AUDIO_BASE_URL = "https://bible114.net/html/audio";
 export const SUPABASE_FUNCTION_URL = "https://mvwhepqqzdtqtorgkrtf.supabase.co/functions/v1/notion-proxy";
+// 카카오톡 채널 상담 URL (실제 채널 ID로 교체 필요)
+export const KAKAO_CHANNEL_URL = "http://pf.kakao.com/_xdJrRX/chat";
+

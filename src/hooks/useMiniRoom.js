@@ -19,7 +19,10 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
         baseId: 'base_man',
         hairId: null,
         accessoryId: null,
-        outfitId: null
+        outfitId: null,
+        eyeId: 'eye_basic',
+        expressionId: 'expr_happy',
+        handId: null
     });
     const [inventory, setInventory] = useState(['wall_plain_white', 'floor_plain_white', 'base_man']);
     const [loading, setLoading] = useState(true);
@@ -49,9 +52,12 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
                     baseId: 'base_man',
                     hairId: null,
                     accessoryId: null,
-                    outfitId: null
+                    outfitId: null,
+                    eyeId: 'eye_basic',
+                    expressionId: 'expr_happy',
+                    handId: null
                 },
-                inventory: ['wall_plain_white', 'floor_plain_white', 'base_man']
+                inventory: ['wall_plain_white', 'floor_plain_white', 'base_man', 'eye_basic', 'expr_happy']
             };
             setRoomData(initialData.miniroom);
             setCharacter(initialData.character);
@@ -80,7 +86,7 @@ export const useMiniRoom = (currentUser, setCurrentUser) => {
 
         // 이미 가지고 있는 아이템인지 확인 (중복 구매 가능 여부에 따라 다름)
         // 벽지/바닥/캐릭터베이스는 1개만 있으면 됨
-        const isOneTime = ['wallpaper', 'floor', 'character', 'hair', 'accessory', 'outfit'].includes(item.category);
+        const isOneTime = ['wallpaper', 'floor', 'character', 'hair', 'accessory', 'outfit', 'eye', 'expression', 'hand'].includes(item.category);
         if (isOneTime && inventory.includes(item.id)) {
             alert("이미 보유 중인 아이템입니다.");
             return false;

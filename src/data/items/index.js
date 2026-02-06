@@ -57,6 +57,9 @@ export const SHOP_CATEGORIES = [
     // 캐릭터 꾸미기
     { id: 'character', name: '캐릭터', icon: '👤', count: CHARACTER_ITEMS.filter(i => i.category === 'character').length },
     { id: 'hair', name: '머리/모자', icon: '💇', count: CHARACTER_ITEMS.filter(i => i.category === 'hair').length },
+    { id: 'eye', name: '눈 모양', icon: '👀', count: CHARACTER_ITEMS.filter(i => i.category === 'eye').length },
+    { id: 'expression', name: '표정', icon: '😊', count: CHARACTER_ITEMS.filter(i => i.category === 'expression').length },
+    { id: 'hand', name: '손 아이템', icon: '🤲', count: CHARACTER_ITEMS.filter(i => i.category === 'hand').length },
     { id: 'accessory', name: '악세서리', icon: '👓', count: CHARACTER_ITEMS.filter(i => i.category === 'accessory').length },
     { id: 'outfit', name: '의상', icon: '👕', count: CHARACTER_ITEMS.filter(i => i.category === 'outfit').length },
 
