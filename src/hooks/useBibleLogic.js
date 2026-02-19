@@ -39,20 +39,25 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
     // 4. Memos Hook
     const { memos, setMemos, loadMemos, saveMemo } = useMemos(currentUser);
 
-    // Orchestrated Loading Effect
+    // [Effect 1] Load Bible Content when viewingDay changes
+    useEffect(() => {
+        if (view !== 'dashboard' || !currentUser || viewingDay === null) return;
+        loadContent(viewingDay);
+    }, [view, currentUser?.uid, viewingDay, currentUser?.planId, currentUser?.dayOffset, loadContent]);
+
+    // [Effect 2] Initial full load when entering dashboard or user changes
     useEffect(() => {
         if (view !== 'dashboard' || !currentUser) return;
 
+        // initial viewingDay setting
         if (viewingDay === null) {
             setViewingDay(currentUser.currentDay || 1);
-            return;
         }
 
-        const loadData = async () => {
-            // Load Bible Content
-            await loadContent(viewingDay);
+        const loadDashboardData = async () => {
+            const uid = currentUser.uid;
 
-            // Load Community Data
+            // 1. Load Community Data
             const allMembers = await loadAllMembers();
             setAllMembersForRace(allMembers);
             if (allMembers && allMembers.length > 0) {
@@ -63,29 +68,36 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
                 }
             }
 
-            // Load User Specific Data
-            const uid = auth.currentUser ? auth.currentUser.uid : null;
-            if (uid) {
-                await loadMemos(uid);
-                // Also load read history if needed (already handled in App.jsx or loadMemos if we want)
-                // In previous version, loadMemos also setReadHistory.
-                const userDoc = await db.collection('users').doc(uid).get();
-                if (userDoc.exists && userDoc.data().readHistory) {
-                    setReadHistory(userDoc.data().readHistory);
-                }
-            }
+            // 2. Load User Specific Data (Memos & History)
+            await loadMemos(uid);
 
-            // Load Announcements
+            // readHistory loading (combine sub-collection and array field)
+            const historySnap = await db.collection('users').doc(uid).collection('history').get();
+            const subCollectionHistory = historySnap.docs.map(doc => doc.data());
+
+            const userDoc = await db.collection('users').doc(uid).get();
+            const arrayFieldHistory = (userDoc.exists && userDoc.data().readHistory) || [];
+
+            // Combine and de-duplicate by date string
+            const combinedMap = new Map();
+            [...arrayFieldHistory, ...subCollectionHistory].forEach(item => {
+                const dateKey = typeof item === 'string' ? item : item.date;
+                if (dateKey) combinedMap.set(dateKey, item);
+            });
+
+            setReadHistory(Array.from(combinedMap.values()));
+
+            // 3. Load Announcements & Links
             await loadAnnouncement();
-
-            // Load Kakao Link
             await loadKakaoLink();
         };
 
-        loadData();
+        loadDashboardData();
     }, [
-        view, currentUser?.uid, viewingDay, currentUser?.planId, currentUser?.dayOffset,
-        loadContent, loadAllMembers, loadMemos, loadAnnouncement,
+        view,
+        currentUser?.uid,
+        // We removed viewingDay from here to prevent re-fetching on every day change
+        loadAllMembers, loadMemos, loadAnnouncement, loadKakaoLink,
         setAllMembersForRace, setSubgroupStats, setCommunityMembers, setReadHistory
     ]);
 

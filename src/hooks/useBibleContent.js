@@ -6,36 +6,87 @@ import { getActualDay } from '../utils/helpers';
 
 /**
  * 새한글 버전 본문 전처리: 절 번호 앞에 줄바꿈 삽입 및 마크업 추가
- * 패턴: 문장 시작 또는 구두점 뒤의 숫자(단위가 아닌 경우)
+ * Notion에서 bold(**숫자**)로 표시된 숫자만 절 번호로 인식.
+ * 순차 검증(1→2→3...)을 통해 잘못된 숫자가 절로 인식되는 것을 방지.
+ * bold 마크업이 없는 기존 캐시 데이터도 fallback 처리.
  */
 const formatSaehangulText = (text) => {
     if (!text) return text;
 
-    // 개선된 패턴:
-    // 1. (^|[.!?""“”‘’\(\)\[\]]\s*) : 문장 시작 또는 각종 문장 부호/괄호 뒤(공백 포함)
-    // 2. (\d+) : 절 번호
-    // 3. (?!\s*(개월|개|년|일|번|차|회|명|층|시|분|초|세|살|권|편|절|장|막)(?![가-힣])) : 뒤에 단위가 붙는 경우 제외
-    // 4. (?=\s*[^0-9]) : 뒤에 숫자가 아닌 문자가 오는 경우 (연속된 숫자의 중간이 아님을 보장)
-    const versePattern = /(^|[.!?""“”‘’\(\)\[\]]\s*)(\d+)(?!\s*(개월|개|년|일|번|차|회|명|층|시|분|초|세|살|권|편|절|장|막)(?![가-힣]))(?=\s*[^0-9])/gm;
+    const hasBoldMarkers = /\*\*\d+\s*\*\*/.test(text);
 
-    // 절 번호를 [[VERSE:숫자]] 형식으로 마킹 (나중에 렌더러에서 스타일링)
-    // 첫 번째 절(문장 시작)은 줄바꿈 없이, 나머지는 줄바꿈 추가
-    let isFirst = true;
-    const formatted = text.replace(versePattern, (match, prefix, verseNum) => {
-        const marker = `[[VERSE:${verseNum}]]`;
+    if (hasBoldMarkers) {
+        // 장(chapter) 단위로 분리하여 처리 (# 제목 기준)
+        // 각 장마다 expectedVerse를 1로 리셋
+        const lines = text.split('\n');
+        const result = [];
+        let expectedVerse = 1;
+        let isFirst = true;
 
-        // 줄바꿈 조건: 문장 시작이 아니고 앞부분에 공백이나 부호가 있는 경우
-        if (isFirst && prefix.trim() === '') {
-            isFirst = false;
-            return marker;
+        for (const line of lines) {
+            // 장 제목(# 창세기 7 등)이 나오면 절 카운터 리셋
+            if (/^#\s/.test(line)) {
+                // 장 제목(# 창세기 7)에서만 리셋, 소제목(### ...)에서는 리셋 안 함
+                expectedVerse = 1;
+                isFirst = true;
+            }
+            if (/^#{1,3}\s/.test(line)) {
+                result.push(line);
+                continue;
+            }
+
+            const processed = line.replace(/\*\*(\d+)\s*\*\*/g, (match, verseNum) => {
+                const num = parseInt(verseNum, 10);
+                if (num !== expectedVerse) {
+                    return verseNum; // bold 마크업 제거, 일반 숫자로 표시
+                }
+                expectedVerse++;
+                const marker = `[[VERSE:${verseNum}]]`;
+                if (isFirst) {
+                    isFirst = false;
+                    return marker;
+                }
+                return `\n${marker}`;
+            });
+            result.push(processed);
         }
-        isFirst = false;
 
-        // 줄바꿈과 함께 마커 반환 (기존 공백/부호 유지)
-        return `${prefix}\n${marker}`;
-    });
+        // 남은 ** 마크업 제거 (소제목 이외의 bold 텍스트)
+        return result.join('\n').replace(/\*\*([^*]+)\*\*/g, '$1');
+    }
 
-    return formatted;
+    // fallback: bold 마크업 없는 기존 캐시 데이터용 (기존 로직 + 순차 검증)
+    const lines = text.split('\n');
+    const result = [];
+    let expectedVerse = 1;
+    let isFirst = true;
+    const versePattern = /(^|[.!?""""''\(\)\[\]]\s*)(\d+)(?!\s*(개월|개|년|일|번|차|회|명|층|시|분|초|세|살|권|편|절|장|막)(?![가-힣]))(?=\s*[^0-9])/gm;
+
+    for (const line of lines) {
+        // 장 제목이 나오면 절 카운터 리셋
+        if (/^#{1,3}\s/.test(line)) {
+            expectedVerse = 1;
+            isFirst = true;
+            result.push(line);
+            continue;
+        }
+
+        versePattern.lastIndex = 0;
+        const processed = line.replace(versePattern, (match, prefix, verseNum) => {
+            const num = parseInt(verseNum, 10);
+            if (num !== expectedVerse) return match;
+            expectedVerse++;
+            const marker = `[[VERSE:${verseNum}]]`;
+            if (isFirst && prefix.trim() === '') {
+                isFirst = false;
+                return marker;
+            }
+            isFirst = false;
+            return `${prefix}\n${marker}`;
+        });
+        result.push(processed);
+    }
+    return result.join('\n');
 };
 
 export const useBibleContent = (currentUser) => {
@@ -91,9 +142,39 @@ export const useBibleContent = (currentUser) => {
     };
 
     const fetchNotionData = async (planId, currentDay) => {
+        const [planType, version] = (planId || '1year_revised').split('_');
+        const isSaehangul = version && version.startsWith('saehangul');
+
         const cached = await fetchVerseFromCache(planId, currentDay);
-        if (cached && cached.text) return cached;
-        return await fetchFromNotion(planId, currentDay);
+        if (cached && cached.text) {
+            // 새한글 버전: bold 마크업(**) 없는 구 캐시는 건너뛰고 Notion에서 새로 받기
+            if (isSaehangul && !/\*\*\d+\s*\*\*/.test(cached.text)) {
+                // 구 캐시 무시 → 아래에서 Notion으로 새로 받음
+            } else {
+                return cached;
+            }
+        }
+
+        const notionResult = await fetchFromNotion(planId, currentDay);
+
+        // Notion에서 정상 데이터를 받으면 캐시에 저장 (다음 로드 시 빠르게)
+        if (notionResult && notionResult.text && !notionResult.text.startsWith('[오류]')) {
+            try {
+                const cacheKey = `${planType}_${version}_${currentDay}`;
+                await db.collection('verses').doc(cacheKey).set({
+                    title: notionResult.title,
+                    text: notionResult.text,
+                    audioUrl: notionResult.audioUrl || null,
+                    day: currentDay,
+                    planId: planId,
+                    syncedAt: new Date()
+                });
+            } catch (e) {
+                console.error("캐시 저장 실패:", e);
+            }
+        }
+
+        return notionResult;
     };
 
     const loadContent = useCallback(async (dayToShow) => {

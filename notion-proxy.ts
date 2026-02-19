@@ -56,9 +56,10 @@ async function fetchBlockChildren(blockId: string, notionKey: string, depth: num
 }
 
 // ★ 블록을 텍스트로 변환하는 함수
-function blockToText(block: any): string {
+// isSaehangul: 새한글 버전일 때 bold 정보를 보존하여 절 번호/소제목 구분에 활용
+function blockToText(block: any, isSaehangul: boolean = false): string {
   const type = block.type;
-  
+
   // 오디오 블록 처리 (audioUrl을 반환하기 위해 특별 처리)
   if (type === 'audio') {
     const audioFile = block.audio?.file || block.audio?.external;
@@ -66,13 +67,14 @@ function blockToText(block: any): string {
       return `[AUDIO]${audioFile.url}[/AUDIO]\n\n`;
     }
   }
-  
+
   // rich_text가 있는 블록 처리
   if (block[type]?.rich_text) {
-    const textContent = block[type].rich_text.map((t: any) => t.plain_text).join('');
-    
+    const richTextArr = block[type].rich_text;
+    const textContent = richTextArr.map((t: any) => t.plain_text).join('');
+
     if (!textContent.trim()) return '';
-    
+
     if (type === 'heading_1') return `# ${textContent}\n\n`;
     if (type === 'heading_2') return `## ${textContent}\n\n`;
     if (type === 'heading_3') return `### ${textContent}\n\n`;
@@ -81,12 +83,29 @@ function blockToText(block: any): string {
     if (type === 'quote') return `> ${textContent}\n\n`;
     if (type === 'callout') return `💡 ${textContent}\n\n`;
     if (type === 'toggle') return `**${textContent}**\n\n`; // 토글 제목은 볼드로
+
+    // 새한글 버전: bold 정보를 활용하여 소제목과 절 번호 구분
+    if (isSaehangul && type === 'paragraph') {
+      // 블록 전체가 bold이면 소제목으로 변환
+      const allBold = richTextArr.length > 0 && richTextArr.every((t: any) => t.annotations?.bold);
+      if (allBold) {
+        return `### ${textContent}\n\n`;
+      }
+
+      // bold인 텍스트 조각을 **로 감싸서 보존 (절 번호 구분용)
+      const boldPreserved = richTextArr.map((t: any) => {
+        if (t.annotations?.bold) return `**${t.plain_text}**`;
+        return t.plain_text;
+      }).join('');
+      return `${boldPreserved}\n\n`;
+    }
+
     return `${textContent}\n\n`;
   }
-  
+
   // 구분선
   if (type === 'divider') return `---\n\n`;
-  
+
   return '';
 }
 
@@ -207,9 +226,10 @@ serve(async (req) => {
     console.log(`Total blocks fetched (including children): ${allBlocks.length}`);
 
     // 8. 블록을 Markdown 텍스트로 변환 + 오디오 URL 추출
+    const isSaehangul = tag.startsWith('새한글');
     let fullText = "";
     allBlocks.forEach((block: any) => {
-      fullText += blockToText(block);
+      fullText += blockToText(block, isSaehangul);
     });
     
     // 본문에서 오디오 URL 추출 (속성보다 우선)

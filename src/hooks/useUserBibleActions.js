@@ -80,16 +80,17 @@ export const useUserBibleActions = (
             else if (diffDays === 0) newStreak = currentUser.streak || 0;
         }
 
+        const historyItem = { date: todayStr, day: vDay, score: addedScore };
+
         const updateData = {
             currentDay: newProgressDay,
             readCount: newReadCount,
             score: newScore,
             streak: newStreak,
             lastReadDate: todayStr,
+            readHistory: firebase.firestore.FieldValue.arrayUnion(historyItem),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
-
-        const historyItem = { date: todayStr, day: vDay, score: addedScore };
 
         try {
             await db.collection('users').doc(uid).set(updateData, { merge: true });
