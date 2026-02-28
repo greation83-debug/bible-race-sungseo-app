@@ -232,7 +232,7 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
         }
 
         // CSV Header
-        let csvContent = '\uFEFF이름,부서,소그룹,총읽은횟수(장막론기준)';
+        let csvContent = '\uFEFF이름,부서,소그룹,총읽은횟수(Day분량)';
         dateColumns.forEach(dateStr => {
             csvContent += `,${dateStr}`;
         });
@@ -240,7 +240,7 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
 
         for (const u of allUsers) {
             let periodReadCount = 0;
-            // tracking read chapters amount per day
+            // tracking read Days amount per calendar day
             const readDaysMap = {};
             dateColumns.forEach(dateStr => readDaysMap[dateStr] = 0);
 
@@ -280,20 +280,10 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
                     const formattedDateStr = `${yyyy}-${mm}-${dd}`;
 
                     if (readDaysMap[formattedDateStr] !== undefined) {
-                        // Calculate chapters read based on schedule mapping 'day' -> range
-                        let readAmount = 1; // fallback
+                        const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
 
-                        const planId = u.planId || '1year_revised';
-                        const scheduleForPlan = SCHEDULE_DATA[planId] || SCHEDULE_DATA['1year_revised'];
-
-                        // item.day is usually the offset 1-365
-                        if (item.day && scheduleForPlan && scheduleForPlan[item.day - 1]) {
-                            const rangeStr = scheduleForPlan[item.day - 1].range;
-                            readAmount = countChapters(rangeStr);
-                        }
-
-                        readDaysMap[formattedDateStr] += readAmount;
-                        periodReadCount += readAmount;
+                        readDaysMap[formattedDateStr] += daysRead;
+                        periodReadCount += daysRead;
                     }
                 }
             }
