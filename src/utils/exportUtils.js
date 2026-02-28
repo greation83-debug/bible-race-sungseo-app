@@ -178,6 +178,7 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
         return;
     }
 
+    // Parse start & end dates
     const startDate = new Date(startDateStr);
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(endDateStr);
@@ -189,10 +190,29 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
     }
 
     try {
-        let csvContent = '\uFEFF이름,부서,소그룹,기간내읽은횟수(장막론),플랜ID\n';
+        // Generate array of date strings for the columns
+        const dateColumns = [];
+        let currDate = new Date(startDate);
+        while (currDate <= endDate) {
+            const yyyy = currDate.getFullYear();
+            const mm = String(currDate.getMonth() + 1).padStart(2, '0');
+            const dd = String(currDate.getDate()).padStart(2, '0');
+            dateColumns.push(`${yyyy}-${mm}-${dd}`);
+            currDate.setDate(currDate.getDate() + 1);
+        }
+
+        // CSV Header
+        let csvContent = '\uFEFF이름,부서,소그룹,총읽은횟수(기간내)';
+        dateColumns.forEach(dateStr => {
+            csvContent += `,${dateStr}`;
+        });
+        csvContent += '\n';
 
         for (const u of allUsers) {
             let periodReadCount = 0;
+            // tracking whether each day was read
+            const readDaysMap = {};
+            dateColumns.forEach(dateStr => readDaysMap[dateStr] = 'X');
 
             const userDoc = await db.collection('users').doc(u.uid).get();
             const arrayHistory = (userDoc.exists && userDoc.data().readHistory) || [];
@@ -200,25 +220,48 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
             const historySnap = await db.collection('users').doc(u.uid).collection('history').get();
             const subHistory = historySnap.docs.map(doc => doc.data());
 
+            // Merge and de-duplicate by date
             const combinedMap = new Map();
-            [...arrayHistory, ...subHistory].forEach(item => {
-                const dateKey = typeof item === 'string' ? item : item.date;
-                if (dateKey) combinedMap.set(dateKey, item);
-            });
+            if (Array.isArray(arrayHistory)) {
+                arrayHistory.forEach(item => {
+                    const dateKey = typeof item === 'string' ? item : item.date;
+                    if (dateKey) combinedMap.set(dateKey, item);
+                });
+            }
+            if (Array.isArray(subHistory)) {
+                subHistory.forEach(item => {
+                    const dateKey = typeof item === 'string' ? item : item.date;
+                    if (dateKey) combinedMap.set(dateKey, item);
+                });
+            }
 
-            Array.from(combinedMap.values()).forEach(item => {
+            const historyValues = Array.from(combinedMap.values());
+
+            for (let i = 0; i < historyValues.length; i++) {
+                const item = historyValues[i];
                 const itemDateStr = typeof item === 'string' ? item : item.date;
-                if (!itemDateStr) return;
+                if (!itemDateStr) continue;
 
                 const itemDate = new Date(itemDateStr);
-                if (!isNaN(itemDate.getTime())) {
-                    if (itemDate >= startDate && itemDate <= endDate) {
+                if (!isNaN(itemDate.getTime()) && itemDate >= startDate && itemDate <= endDate) {
+                    const yyyy = itemDate.getFullYear();
+                    const mm = String(itemDate.getMonth() + 1).padStart(2, '0');
+                    const dd = String(itemDate.getDate()).padStart(2, '0');
+                    const formattedDateStr = `${yyyy}-${mm}-${dd}`;
+
+                    if (readDaysMap[formattedDateStr] === 'X') {
+                        readDaysMap[formattedDateStr] = 'O';
                         periodReadCount++;
                     }
                 }
-            });
+            }
 
-            csvContent += `"${u.name}","${u.communityName || '-'}","${u.subgroupId || '-'}","${periodReadCount}","${u.planId || '1year_revised'}"\n`;
+            // Build user row
+            csvContent += `"${u.name}","${u.communityName || '-'}","${u.subgroupId || '-'}","${periodReadCount}"`;
+            dateColumns.forEach(dateStr => {
+                csvContent += `,"${readDaysMap[dateStr]}"`;
+            });
+            csvContent += '\n';
         }
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
