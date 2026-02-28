@@ -247,25 +247,9 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
             const userDoc = await db.collection('users').doc(u.uid).get();
             const arrayHistory = (userDoc.exists && userDoc.data().readHistory) || [];
 
-            const historySnap = await db.collection('users').doc(u.uid).collection('history').get();
-            const subHistory = historySnap.docs.map(doc => doc.data());
-
-            // Merge and de-duplicate by date
-            const combinedMap = new Map();
-            if (Array.isArray(arrayHistory)) {
-                arrayHistory.forEach(item => {
-                    const dateKey = typeof item === 'string' ? item : item.date;
-                    if (dateKey) combinedMap.set(dateKey, item);
-                });
-            }
-            if (Array.isArray(subHistory)) {
-                subHistory.forEach(item => {
-                    const dateKey = typeof item === 'string' ? item : item.date;
-                    if (dateKey) combinedMap.set(dateKey, item);
-                });
-            }
-
-            const historyValues = Array.from(combinedMap.values());
+            // Use readHistory array directly (same as Reading Champion logic)
+            // Do NOT de-duplicate - each entry represents one Day read action
+            const historyValues = Array.isArray(arrayHistory) ? arrayHistory : [];
 
             for (let i = 0; i < historyValues.length; i++) {
                 const item = historyValues[i];
