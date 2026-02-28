@@ -171,6 +171,36 @@ export const downloadCSV = (allUsers) => {
     URL.revokeObjectURL(url);
 };
 
+import { SCHEDULE_DATA } from '../data/schedules';
+
+// Helper to count chapters from a range string like "창 1-3장, 출 4-5장" or "창 1장"
+const countChapters = (rangeStr) => {
+    if (!rangeStr) return 0;
+
+    // Split by comma in case of multiple parts
+    const parts = rangeStr.split(',');
+    let total = 0;
+
+    parts.forEach(part => {
+        // match "1-3장" or "1장"
+        // Sometimes it's like "창 1-3장", so we look for numbers before "장"
+        const match = part.match(/\d+(-\d+)?장/);
+        if (match) {
+            const numPart = match[0].replace('장', '');
+            if (numPart.includes('-')) {
+                const [start, end] = numPart.split('-').map(Number);
+                if (!isNaN(start) && !isNaN(end)) {
+                    total += (end - start + 1);
+                }
+            } else {
+                total += 1;
+            }
+        }
+    });
+
+    return total > 0 ? total : 1; // Default to 1 if we can't parse it
+};
+
 export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDateStr) => {
     if (!db) return;
     if (!startDateStr || !endDateStr) {
@@ -202,7 +232,7 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
         }
 
         // CSV Header
-        let csvContent = '\uFEFF이름,부서,소그룹,총읽은횟수(기간내)';
+        let csvContent = '\uFEFF이름,부서,소그룹,총읽은횟수(장막론기준)';
         dateColumns.forEach(dateStr => {
             csvContent += `,${dateStr}`;
         });
@@ -250,9 +280,18 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
                     const formattedDateStr = `${yyyy}-${mm}-${dd}`;
 
                     if (readDaysMap[formattedDateStr] !== undefined) {
-                        // The item.chapters or item.score can represent how many chapters they read.
-                        // Assuming each entry is a single "Day" read unless specified.
-                        const readAmount = item.amount || 1;
+                        // Calculate chapters read based on schedule mapping 'day' -> range
+                        let readAmount = 1; // fallback
+
+                        const planId = u.planId || '1year_revised';
+                        const scheduleForPlan = SCHEDULE_DATA[planId] || SCHEDULE_DATA['1year_revised'];
+
+                        // item.day is usually the offset 1-365
+                        if (item.day && scheduleForPlan && scheduleForPlan[item.day - 1]) {
+                            const rangeStr = scheduleForPlan[item.day - 1].range;
+                            readAmount = countChapters(rangeStr);
+                        }
+
                         readDaysMap[formattedDateStr] += readAmount;
                         periodReadCount += readAmount;
                     }
@@ -263,7 +302,8 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
             csvContent += `"${u.name}","${u.communityName || '-'}","${u.subgroupId || '-'}","${periodReadCount}"`;
             dateColumns.forEach(dateStr => {
                 const count = readDaysMap[dateStr];
-                csvContent += `,"${count > 0 ? count : ''}"`; // Leave empty if 0
+                // Don't format as an empty string, show '0' if it's 0 to be more spreadsheet friendly for sum
+                csvContent += `,"${count > 0 ? count : 0}"`;
             });
             csvContent += '\n';
         }
