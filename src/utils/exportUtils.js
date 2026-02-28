@@ -210,9 +210,9 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
 
         for (const u of allUsers) {
             let periodReadCount = 0;
-            // tracking whether each day was read
+            // tracking read chapters amount per day
             const readDaysMap = {};
-            dateColumns.forEach(dateStr => readDaysMap[dateStr] = 'X');
+            dateColumns.forEach(dateStr => readDaysMap[dateStr] = 0);
 
             const userDoc = await db.collection('users').doc(u.uid).get();
             const arrayHistory = (userDoc.exists && userDoc.data().readHistory) || [];
@@ -249,9 +249,12 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
                     const dd = String(itemDate.getDate()).padStart(2, '0');
                     const formattedDateStr = `${yyyy}-${mm}-${dd}`;
 
-                    if (readDaysMap[formattedDateStr] === 'X') {
-                        readDaysMap[formattedDateStr] = 'O';
-                        periodReadCount++;
+                    if (readDaysMap[formattedDateStr] !== undefined) {
+                        // The item.chapters or item.score can represent how many chapters they read.
+                        // Assuming each entry is a single "Day" read unless specified.
+                        const readAmount = item.amount || 1;
+                        readDaysMap[formattedDateStr] += readAmount;
+                        periodReadCount += readAmount;
                     }
                 }
             }
@@ -259,7 +262,8 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
             // Build user row
             csvContent += `"${u.name}","${u.communityName || '-'}","${u.subgroupId || '-'}","${periodReadCount}"`;
             dateColumns.forEach(dateStr => {
-                csvContent += `,"${readDaysMap[dateStr]}"`;
+                const count = readDaysMap[dateStr];
+                csvContent += `,"${count > 0 ? count : ''}"`; // Leave empty if 0
             });
             csvContent += '\n';
         }
