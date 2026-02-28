@@ -8,7 +8,7 @@ import { PLAN_TYPES, BIBLE_VERSIONS } from './data/bible_options';
 import { makePseudoEmail, userDocToState, toSinoKorean, dateToOffset, offsetToDateStr, getActualDay } from './utils/helpers';
 import { calculateSubgroupStats, getWeeklyMVP, getMonthlyContest, formatSubgroupRanking, formatProgressRanking, getAdminStats } from './utils/statsUtils';
 import { getSubgroupDisplay } from './utils/dashboardUtils';
-import { generateMemosHTML, generateMemosCSV, downloadCSV } from './utils/exportUtils';
+import { generateMemosHTML, generateMemosCSV, downloadCSV, downloadPeriodStatsCSV } from './utils/exportUtils';
 import { useUserAuth } from './hooks/useUserAuth';
 import { useBibleLogic } from './hooks/useBibleLogic';
 import Icon from './components/Icon';
@@ -753,6 +753,7 @@ const App = () => {
                 kakaoLinkInput={kakaoLinkInput}
                 setKakaoLinkInput={setKakaoLinkInput}
                 saveKakaoLink={saveKakaoLink}
+                downloadPeriodStatsCSV={downloadPeriodStatsCSV}
                 db={db}
             />
         );

@@ -39,8 +39,12 @@ const AdminView = ({
     kakaoLinkInput,
     setKakaoLinkInput,
     saveKakaoLink,
+    downloadPeriodStatsCSV,
     db
 }) => {
+    const [startDate, setStartDate] = React.useState('');
+    const [endDate, setEndDate] = React.useState('');
+
     return (
         <div className="min-h-screen bg-slate-100 p-4">
             <div className="max-w-5xl mx-auto space-y-6">
@@ -49,9 +53,26 @@ const AdminView = ({
                         <h1 className="text-2xl font-bold text-slate-800">🛠️ 관리자 모드</h1>
                         <button onClick={handleLogout} className="text-sm bg-slate-200 px-3 py-2 rounded hover:bg-slate-300">나가기</button>
                     </div>
-                    <button onClick={downloadCSV} className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold">
-                        <Icon name="download" size={18} /> CSV 다운로드
-                    </button>
+                    <div className="flex flex-col md:flex-row gap-4">
+                        <button onClick={() => downloadCSV(allUsers)} className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold whitespace-nowrap">
+                            <Icon name="download" size={18} /> 전체 CSV 다운로드
+                        </button>
+
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1">
+                            <span className="text-sm font-bold text-slate-600 whitespace-nowrap">기간별 통계:</span>
+                            <div className="flex items-center gap-2 flex-1">
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="border border-slate-300 rounded p-1.5 text-sm w-full sm:w-auto focus:ring-2 focus:ring-blue-500 outline-none" />
+                                <span className="text-slate-400 font-bold">~</span>
+                                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="border border-slate-300 rounded p-1.5 text-sm w-full sm:w-auto focus:ring-2 focus:ring-blue-500 outline-none" />
+                            </div>
+                            <button
+                                onClick={() => downloadPeriodStatsCSV(db, allUsers, startDate, endDate)}
+                                className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-bold whitespace-nowrap w-full sm:w-auto"
+                            >
+                                <Icon name="download" size={18} /> 다운로드
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-xl shadow-lg p-6">

@@ -158,12 +158,79 @@ export const generateMemosCSV = async (db) => {
 
 export const downloadCSV = (allUsers) => {
     if (allUsers.length === 0) { alert("데이터가 없습니다."); return; }
-    let csvContent = "data:text/csv;charset=utf-8,\uFEFF이름,부서,소그룹,현재Day,총점수,연속일수,마지막읽은날,플랜ID\n";
+    let csvContent = "\uFEFF이름,부서,소그룹,현재Day,총점수,연속일수,마지막읽은날,플랜ID\n";
     allUsers.forEach(u => {
         csvContent += `${u.name},${u.communityName},${u.subgroupId},${u.currentDay},${u.score},${u.streak},${u.lastReadDate || '없음'},${u.planId || '1year_revised'}\r\n`;
     });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csvContent));
-    link.setAttribute("download", `성경통독_전체기록_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    link.href = url;
+    link.download = `성경통독_전체기록_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+};
+
+export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDateStr) => {
+    if (!db) return;
+    if (!startDateStr || !endDateStr) {
+        alert('시작일과 종료일을 모두 선택해주세요.');
+        return;
+    }
+
+    const startDate = new Date(startDateStr);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(endDateStr);
+    endDate.setHours(23, 59, 59, 999);
+
+    if (startDate > endDate) {
+        alert('시작일이 종료일보다 클 수 없습니다.');
+        return;
+    }
+
+    try {
+        let csvContent = '\uFEFF이름,부서,소그룹,기간내읽은횟수(장막론),플랜ID\n';
+
+        for (const u of allUsers) {
+            let periodReadCount = 0;
+
+            const userDoc = await db.collection('users').doc(u.uid).get();
+            const arrayHistory = (userDoc.exists && userDoc.data().readHistory) || [];
+
+            const historySnap = await db.collection('users').doc(u.uid).collection('history').get();
+            const subHistory = historySnap.docs.map(doc => doc.data());
+
+            const combinedMap = new Map();
+            [...arrayHistory, ...subHistory].forEach(item => {
+                const dateKey = typeof item === 'string' ? item : item.date;
+                if (dateKey) combinedMap.set(dateKey, item);
+            });
+
+            Array.from(combinedMap.values()).forEach(item => {
+                const itemDateStr = typeof item === 'string' ? item : item.date;
+                if (!itemDateStr) return;
+
+                const itemDate = new Date(itemDateStr);
+                if (!isNaN(itemDate.getTime())) {
+                    if (itemDate >= startDate && itemDate <= endDate) {
+                        periodReadCount++;
+                    }
+                }
+            });
+
+            csvContent += `"${u.name}","${u.communityName || '-'}","${u.subgroupId || '-'}","${periodReadCount}","${u.planId || '1year_revised'}"\n`;
+        }
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `성경통독_기간별통계_${startDateStr}_to_${endDateStr}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+
+    } catch (e) {
+        console.error('기간별 통계 CSV 생성 오류:', e);
+        alert('CSV 생성 중 오류가 발생했습니다.');
+    }
 };
