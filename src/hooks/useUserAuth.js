@@ -23,6 +23,21 @@ export const useUserAuth = () => {
                     if (userDoc.exists) {
                         const user = userDocToState(userDoc);
                         console.log('✅ 사용자 데이터 복원:', user.name);
+
+                        // [안전장치] currentDay > 365 자동 보정 (모든 사용자)
+                        var needsUpdate = {};
+                        if (user.currentDay && user.currentDay > 365) {
+                            var extraDays = user.currentDay - 1;
+                            var extraRounds = Math.floor(extraDays / 365);
+                            user.currentDay = (extraDays % 365) + 1;
+                            user.readCount = (user.readCount || 1) + extraRounds;
+                            needsUpdate.currentDay = user.currentDay;
+                            needsUpdate.readCount = user.readCount;
+                        }
+                        if (Object.keys(needsUpdate).length > 0) {
+                            db.collection('users').doc(firebaseUser.uid).update(needsUpdate);
+                        }
+
                         setCurrentUser(user);
                     } else {
                         // Firestore에 데이터가 없으면 로그인 화면으로/초기화

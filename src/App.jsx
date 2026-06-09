@@ -287,8 +287,9 @@ const App = () => {
             await db.collection('users').doc(editingUser.uid).set({
                 communityId: editingUser.communityId, communityName: editingUser.communityName,
                 subgroupId: editingUser.subgroupId, planId: editingUser.planId,
-                currentDay: editingUser.currentDay, score: editingUser.score,
-                streak: editingUser.streak, lastReadDate: editingUser.lastReadDate || null,
+                currentDay: editingUser.currentDay, readCount: editingUser.readCount || 1,
+                score: editingUser.score, streak: editingUser.streak,
+                lastReadDate: editingUser.lastReadDate || null,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             }, { merge: true });
             setAllUsers(prev => prev.map(u => u.uid === editingUser.uid ? editingUser : u));

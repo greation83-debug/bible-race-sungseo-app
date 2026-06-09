@@ -596,7 +596,7 @@ const AdminView = ({
 
                 {editingUser && (
                     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4">
+                        <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                             <h3 className="font-bold text-lg border-b pb-2">회원 정보 수정 ({editingUser.name})</h3>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1">소속 공동체</label>
@@ -615,6 +615,16 @@ const AdminView = ({
                                         return comm ? comm.subgroups.map(s => <option key={s} value={s}>{s}</option>) : null;
                                     })()}
                                 </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">현재 Day (1~365)</label>
+                                    <input type="number" min="1" max="365" value={editingUser.currentDay || 1} onChange={e => setEditingUser({ ...editingUser, currentDay: parseInt(e.target.value) || 1 })} className="w-full border rounded p-2 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">독수 (readCount)</label>
+                                    <input type="number" min="1" value={editingUser.readCount || 1} onChange={e => setEditingUser({ ...editingUser, readCount: parseInt(e.target.value) || 1 })} className="w-full border rounded p-2 text-sm" />
+                                </div>
                             </div>
                             <div className="flex gap-2 pt-4">
                                 <button onClick={saveEditUser} className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700">저장</button>
