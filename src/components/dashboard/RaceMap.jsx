@@ -27,8 +27,8 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
             })
             .sort((a, b) => a.x - b.x);
 
-        return sorted.map((item) => {
-            if (item.isMe) return { ...item, top: 48, laneIndex: -1 };
+        return sorted.map((item, displayIndex) => {
+            if (item.isMe) return { ...item, displayIndex, top: 48, laneIndex: -1 };
 
             let bestLane = 0;
             let bestGap = -Infinity;
@@ -43,7 +43,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                 }
             });
             lastXByLane[bestLane] = item.x;
-            return { ...item, top: lanes[bestLane], laneIndex: bestLane };
+            return { ...item, displayIndex, top: lanes[bestLane], laneIndex: bestLane };
         });
     }, [racers]);
 
@@ -55,9 +55,6 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
             <div className="absolute left-4 top-4 z-30 flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 shadow-md border border-white/70">
                 <span className="text-xs font-black text-slate-700">🏃 함께 달리는 중</span>
                 <span className="text-xs font-black text-blue-600">{totalRacers}명</span>
-                {totalRacers > racers.length && (
-                    <span className="text-[10px] font-bold text-slate-400">지도 표시 {racers.length}명</span>
-                )}
             </div>
             <div className="absolute top-2 left-10 text-2xl opacity-80 animate-float">☁️</div>
             <div className="absolute top-5 right-20 text-xl opacity-60 animate-float-slow">☁️</div>
@@ -87,15 +84,16 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                 <span className="text-[9px] font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded-full mt-2 shadow-sm border border-slate-200 relative z-20">천국성</span>
             </div>
 
-            {placedRacers.map(({ racer, idx, x, top, racerReadCount, is2ndRound }) => {
+            {placedRacers.map(({ racer, idx, displayIndex, x, top, racerReadCount, is2ndRound }) => {
                 const isMe = racer.isMe;
                 const subgroupInfo = getSubgroupDisplay(racer.subgroupId);
                 const isDeptChampion = departmentChampions[racer.uid];
                 const zIndex = isMe ? 29 : is2ndRound ? 28 : 25;
                 const topPos = `${top}%`;
+                const hideOnMobile = !isMe && displayIndex > 12;
 
                 return (
-                    <div key={racer.uid || idx} className="absolute transition-all duration-1000 ease-out"
+                    <div key={racer.uid || idx} className={`absolute transition-all duration-1000 ease-out ${hideOnMobile ? 'hidden sm:block' : ''}`}
                         style={{ left: `calc(${x}% - 16px)`, top: topPos, zIndex }}>
                         <div className="relative flex items-center">
                             {racerReadCount > 1 && (

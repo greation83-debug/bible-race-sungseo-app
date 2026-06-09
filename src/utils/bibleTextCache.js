@@ -1,4 +1,4 @@
-const BIBLE_CACHE_BASE = '/bible-cache';
+const BIBLE_CACHE_BASE = `${import.meta.env.BASE_URL || './'}bible-cache`.replace(/\/+$/, '');
 
 export const getBibleCachePath = (planId, day) => {
     const safePlanId = String(planId || '1year_revised').replace(/[^a-zA-Z0-9_-]/g, '');
