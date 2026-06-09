@@ -147,7 +147,7 @@ const DashboardView = ({
         return { ...m, day: actualProgress, isMe: m.uid === currentUser.uid };
     }).sort((a, b) => b.day - a.day);
 
-    const top20Overall = allRacersSorted.slice(0, 20);
+    const topOverall = allRacersSorted.slice(0, 12);
     const departmentChampions = {};
     const deptChampionsList = [];
     const communityIds = ['senior', 'youth', 'middlehigh', 'elementary', 'kinder'];
@@ -176,14 +176,29 @@ const DashboardView = ({
                 const isCandidate = !myCommId && !myCommName ? true : isSameComm;
                 return isCandidate &&
                     !r.isMe &&
-                    !top20Overall.find(t => t.uid === r.uid) &&
+                    !topOverall.find(t => t.uid === r.uid) &&
                     !deptChampionsList.find(d => d.uid === r.uid);
             })
             .sort((a, b) => Math.abs(a.day - me.day) - Math.abs(b.day - me.day))
-            .slice(0, 10);
+            .slice(0, 24);
     }
 
-    const combinedRacers = [...top20Overall];
+    const representativeRacers = [];
+    if (allRacersSorted.length > 0) {
+        const byProgress = [...allRacersSorted].sort((a, b) => a.day - b.day);
+        const sampleCount = Math.min(28, byProgress.length);
+        const seenSamples = new Set();
+        for (let i = 0; i < sampleCount; i += 1) {
+            const idx = Math.round((i * (byProgress.length - 1)) / Math.max(1, sampleCount - 1));
+            const racer = byProgress[idx];
+            if (racer && !seenSamples.has(racer.uid)) {
+                seenSamples.add(racer.uid);
+                representativeRacers.push(racer);
+            }
+        }
+    }
+
+    const combinedRacers = [...topOverall];
     deptChampionsList.forEach(champion => {
         if (!combinedRacers.find(r => r.uid === champion.uid)) {
             combinedRacers.push(champion);
@@ -195,6 +210,11 @@ const DashboardView = ({
     nearbyRacers.forEach(nearby => {
         if (!combinedRacers.find(r => r.uid === nearby.uid)) {
             combinedRacers.push(nearby);
+        }
+    });
+    representativeRacers.forEach(representative => {
+        if (!combinedRacers.find(r => r.uid === representative.uid)) {
+            combinedRacers.push(representative);
         }
     });
 
@@ -304,7 +324,7 @@ const DashboardView = ({
             />
 
             <div className="max-w-5xl mx-auto w-full pb-10 mt-8">
-                <RaceMap racers={racers} departmentChampions={departmentChampions} getSubgroupDisplay={getSubgroupDisplay} />
+                <RaceMap racers={racers} totalRacers={allRacersSorted.length} departmentChampions={departmentChampions} getSubgroupDisplay={getSubgroupDisplay} />
 
                 <main className="px-4 space-y-6">
                     <AnnouncementBanner announcement={announcement} />
