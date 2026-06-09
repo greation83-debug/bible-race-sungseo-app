@@ -11,7 +11,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
     };
 
     const placedRacers = useMemo(() => {
-        const lanes = [10, 18, 26, 34, 43, 52, 61, 70, 79];
+        const lanes = [12, 20, 28, 36, 44, 52, 60, 68, 76, 84];
         const lastXByLane = lanes.map(() => -100);
         const sorted = [...racers]
             .map((racer, idx) => {
@@ -44,29 +44,47 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                     bestLane = laneIndex;
                 }
             });
+            if (item.x < 46 && lanes[bestLane] < 44) {
+                const lowerLaneIndex = lanes.findIndex((laneTop, laneIndex) =>
+                    laneTop >= 44 && item.x - lastXByLane[laneIndex] >= 5
+                );
+                if (lowerLaneIndex !== -1) {
+                    bestLane = lowerLaneIndex;
+                }
+            }
             lastXByLane[bestLane] = item.x;
             return { ...item, displayIndex, top: lanes[bestLane], laneIndex: bestLane };
         });
 
         const visibleMobileUids = new Set();
         const mobileCandidates = placed.filter(item => !item.isMe);
-        const maxMobileNonMe = 8;
+        const maxMobileNonMe = 20;
+        const me = placed.find(item => item.isMe);
+        const byProgressAsc = [...mobileCandidates].sort((a, b) => a.racer.day - b.racer.day);
+        const byProgressDesc = [...mobileCandidates].sort((a, b) => b.racer.day - a.racer.day);
+        const byNearby = me
+            ? [...mobileCandidates].sort((a, b) => Math.abs(a.racer.day - me.racer.day) - Math.abs(b.racer.day - me.racer.day))
+            : [];
+        const addCandidate = (item) => {
+            if (item && item.racer.uid && visibleMobileUids.size < maxMobileNonMe) {
+                visibleMobileUids.add(item.racer.uid);
+            }
+        };
 
         mobileCandidates.forEach(item => {
             if (departmentChampions[item.racer.uid]) {
-                visibleMobileUids.add(item.racer.uid);
+                addCandidate(item);
             }
         });
 
-        const remainingSlots = Math.max(0, maxMobileNonMe - visibleMobileUids.size);
-        const sampleCandidates = mobileCandidates.filter(item => !visibleMobileUids.has(item.racer.uid));
-        const sampleCount = Math.min(remainingSlots, sampleCandidates.length);
-        for (let i = 0; i < sampleCount; i += 1) {
-            const idx = Math.round((i * (sampleCandidates.length - 1)) / Math.max(1, sampleCount - 1));
-            const candidate = sampleCandidates[idx];
-            if (candidate && candidate.racer.uid) {
-                visibleMobileUids.add(candidate.racer.uid);
-            }
+        const balancedGroups = [byProgressDesc, byNearby, byProgressAsc];
+        let groupIndex = 0;
+        while (visibleMobileUids.size < maxMobileNonMe && mobileCandidates.length > visibleMobileUids.size) {
+            const group = balancedGroups[groupIndex % balancedGroups.length];
+            const candidate = group.find(item => item.racer.uid && !visibleMobileUids.has(item.racer.uid));
+            if (!candidate) break;
+            addCandidate(candidate);
+            groupIndex += 1;
         }
 
         return placed.map(item => ({
@@ -76,7 +94,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
     }, [racers, departmentChampions]);
 
     return (
-        <div className="mx-4 mb-6 relative h-72 bg-sky-texture overflow-hidden rounded-3xl shadow-xl border border-slate-100">
+        <div className="mx-4 mb-6 relative h-80 sm:h-72 bg-sky-texture overflow-hidden rounded-3xl shadow-xl border border-slate-100">
             <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-white/20 to-transparent z-10"></div>
             <div className="mountain-back"></div>
             <div className="mountain-front"></div>
