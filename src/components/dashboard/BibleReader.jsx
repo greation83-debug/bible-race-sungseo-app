@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import MarkdownRenderer from '../MarkdownRenderer';
 
 const BibleReader = ({
@@ -25,8 +25,17 @@ const BibleReader = ({
     hasReadToday,
     handleRead
 }) => {
+    const readerRef = useRef(null);
+
+    const handleReadAndScroll = async () => {
+        await handleRead();
+        window.setTimeout(() => {
+            readerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 120);
+    };
+
     return (
-        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100">
+        <div ref={readerRef} className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-100 scroll-mt-4">
             <div className="p-6 text-white relative bg-gradient-to-br from-indigo-600 to-blue-700">
                 <div className="flex items-center justify-between mb-2 px-2">
                     <button
@@ -188,7 +197,7 @@ const BibleReader = ({
                 {!verseData.loading && (
                     <div className="mt-8 pt-6 border-t border-slate-100">
                         <button
-                            onClick={handleRead}
+                            onClick={handleReadAndScroll}
                             className={`w-full py-5 rounded-3xl font-bold text-xl transition-all shadow-xl hover:shadow-2xl active:scale-95 flex items-center justify-center gap-3
                                 ${hasReadToday && viewingDay === currentUser.currentDay
                                     ? "bg-slate-800 text-white"
