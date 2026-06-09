@@ -87,8 +87,9 @@ function blockToText(block: any, isSaehangul: boolean = false): string {
     // 새한글 버전: bold 정보를 활용하여 소제목과 절 번호 구분
     if (isSaehangul && type === 'paragraph') {
       // 블록 전체가 bold이면 소제목으로 변환
+      // 단, 숫자로 시작하면 절(verse)이므로 소제목이 아님
       const allBold = richTextArr.length > 0 && richTextArr.every((t: any) => t.annotations?.bold);
-      if (allBold) {
+      if (allBold && !/^\d+\s/.test(textContent)) {
         return `### ${textContent}\n\n`;
       }
 

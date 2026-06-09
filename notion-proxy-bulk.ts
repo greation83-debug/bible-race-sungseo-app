@@ -121,13 +121,14 @@ async function fetchBlockChildren(
 }
 
 // 블록을 텍스트로 변환
-function blockToText(block: any): string {
+function blockToText(block: any, isSaehangul: boolean = false): string {
   const type = block.type;
-  
+
   if (block[type]?.rich_text) {
-    const textContent = block[type].rich_text.map((t: any) => t.plain_text).join('');
+    const richTextArr = block[type].rich_text;
+    const textContent = richTextArr.map((t: any) => t.plain_text).join('');
     if (!textContent.trim()) return '';
-    
+
     if (type === 'heading_1') return `# ${textContent}\n\n`;
     if (type === 'heading_2') return `## ${textContent}\n\n`;
     if (type === 'heading_3') return `### ${textContent}\n\n`;
@@ -136,11 +137,25 @@ function blockToText(block: any): string {
     if (type === 'quote') return `> ${textContent}\n\n`;
     if (type === 'callout') return `💡 ${textContent}\n\n`;
     if (type === 'toggle') return `**${textContent}**\n\n`;
+
+    // 새한글 버전: bold 정보를 활용하여 소제목과 절 번호 구분
+    if (isSaehangul && type === 'paragraph') {
+      const allBold = richTextArr.length > 0 && richTextArr.every((t: any) => t.annotations?.bold);
+      if (allBold && !/^\d+\s/.test(textContent)) {
+        return `### ${textContent}\n\n`;
+      }
+      const boldPreserved = richTextArr.map((t: any) => {
+        if (t.annotations?.bold) return `**${t.plain_text}**`;
+        return t.plain_text;
+      }).join('');
+      return `${boldPreserved}\n\n`;
+    }
+
     return `${textContent}\n\n`;
   }
-  
+
   if (type === 'divider') return `---\n\n`;
-  
+
   return '';
 }
 
@@ -248,10 +263,11 @@ serve(async (req) => {
       
       // 본문 포함 옵션 (시간이 오래 걸림)
       if (includeContent) {
+        const isSaehangul = tag.startsWith('새한글');
         const { blocks, media } = await fetchBlockChildren(page.id, NOTION_KEY);
         let text = "";
         blocks.forEach((block: any) => {
-          text += blockToText(block);
+          text += blockToText(block, isSaehangul);
         });
         item.text = text || "본문 내용이 없습니다.";
         item.images = media.images;

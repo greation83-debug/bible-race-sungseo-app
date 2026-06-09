@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-06-09T11:42:21.663Z",
+  "source": "notion-supabase-export + Sword fill",
+  "plans": {
+    "1year_revised": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "1year_new": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "1year_easy": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "1year_saehangul": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "1year_sequential": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "nt_new": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "nt_easy": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "nt_saehangul": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    },
+    "nt_message": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": []
+    }
+  }
+}

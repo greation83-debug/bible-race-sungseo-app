@@ -179,7 +179,10 @@ export const useTTS = (verseText) => {
         const chunks = [];
         lines.forEach(line => {
             // [[VERSE:n]] 패턴 제거
-            const cleanLine = line.replace(/\[\[VERSE:\d+\]\]/g, '').trim();
+            const cleanLine = line
+                .replace(/\[\[VERSE:\d+\]\]/g, '')
+                .replace(/^\s*\d+[\s.]+(?!일|월|년|차|번|회|명|개|장|절|편|권|시|분|초|세|살)/, '')
+                .trim();
             if (!cleanLine) return;
 
             let processedText = cleanLine;

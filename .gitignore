@@ -6,6 +6,7 @@ dist-ssr
 .DS_Store
 
 # Tools & Scripts (Keep config files)
+.claude/
 *.py
 *.xlsx
 *.zip
@@ -26,4 +27,3 @@ vite_dev.log
 !tailwind.config.js
 !postcss.config.js
 !jsconfig.json
-
