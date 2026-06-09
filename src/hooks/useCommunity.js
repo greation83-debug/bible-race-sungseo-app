@@ -16,6 +16,7 @@ const compactRaceMember = (member) => ({
     streak: member.streak || 0,
     lastReadDate: member.lastReadDate || null,
     planId: member.planId || '',
+    readHistory: Array.isArray(member.readHistory) ? member.readHistory : [],
 });
 
 const readCachedRaceMembers = () => {
