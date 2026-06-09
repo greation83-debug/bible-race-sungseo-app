@@ -29,7 +29,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
             })
             .sort((a, b) => a.x - b.x);
 
-        return sorted.map((item, displayIndex) => {
+        const placed = sorted.map((item, displayIndex) => {
             if (item.isMe) return { ...item, displayIndex, top: 48, laneIndex: -1 };
 
             let bestLane = 0;
@@ -47,7 +47,33 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
             lastXByLane[bestLane] = item.x;
             return { ...item, displayIndex, top: lanes[bestLane], laneIndex: bestLane };
         });
-    }, [racers]);
+
+        const visibleMobileUids = new Set();
+        const mobileCandidates = placed.filter(item => !item.isMe);
+        const maxMobileNonMe = 8;
+
+        mobileCandidates.forEach(item => {
+            if (departmentChampions[item.racer.uid]) {
+                visibleMobileUids.add(item.racer.uid);
+            }
+        });
+
+        const remainingSlots = Math.max(0, maxMobileNonMe - visibleMobileUids.size);
+        const sampleCandidates = mobileCandidates.filter(item => !visibleMobileUids.has(item.racer.uid));
+        const sampleCount = Math.min(remainingSlots, sampleCandidates.length);
+        for (let i = 0; i < sampleCount; i += 1) {
+            const idx = Math.round((i * (sampleCandidates.length - 1)) / Math.max(1, sampleCount - 1));
+            const candidate = sampleCandidates[idx];
+            if (candidate && candidate.racer.uid) {
+                visibleMobileUids.add(candidate.racer.uid);
+            }
+        }
+
+        return placed.map(item => ({
+            ...item,
+            showOnMobile: item.isMe || visibleMobileUids.has(item.racer.uid)
+        }));
+    }, [racers, departmentChampions]);
 
     return (
         <div className="mx-4 mb-6 relative h-72 bg-sky-texture overflow-hidden rounded-3xl shadow-xl border border-slate-100">
@@ -86,13 +112,13 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                 <span className="text-[9px] font-bold text-slate-600 bg-white/90 px-2 py-0.5 rounded-full mt-2 shadow-sm border border-slate-200 relative z-20">천국성</span>
             </div>
 
-            {placedRacers.map(({ racer, idx, displayIndex, x, top, racerReadCount, is2ndRound }) => {
+            {placedRacers.map(({ racer, idx, x, top, racerReadCount, is2ndRound, showOnMobile }) => {
                 const isMe = racer.isMe;
                 const subgroupInfo = getSubgroupDisplay(racer.subgroupId);
                 const isDeptChampion = departmentChampions[racer.uid];
                 const zIndex = isMe ? 29 : is2ndRound ? 28 : 25;
                 const topPos = `${top}%`;
-                const hideOnMobile = !isMe && displayIndex > 5;
+                const hideOnMobile = !showOnMobile;
 
                 return (
                     <div key={racer.uid || idx} className={`absolute transition-all duration-1000 ease-out ${hideOnMobile ? 'hidden sm:block' : ''}`}
