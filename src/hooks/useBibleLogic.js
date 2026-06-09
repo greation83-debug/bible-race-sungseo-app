@@ -57,8 +57,28 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         const loadDashboardData = async () => {
             const uid = currentUser.uid;
 
-            // 1. Load Community Data
-            const allMembers = await loadAllMembers();
+            const membersPromise = loadAllMembers();
+            const memosPromise = loadMemos(uid);
+            const historyPromise = (async () => {
+                const historySnap = await db.collection('users').doc(uid).collection('history').get();
+                const subCollectionHistory = historySnap.docs.map(doc => doc.data());
+
+                const userDoc = await db.collection('users').doc(uid).get();
+                const arrayFieldHistory = (userDoc.exists && userDoc.data().readHistory) || [];
+
+                // 같은 날 여러 Day를 몰아서 읽을 수 있으므로 date+day 기준으로만 중복 제거한다.
+                const combinedMap = new Map();
+                [...arrayFieldHistory, ...subCollectionHistory].forEach(item => {
+                    const dateKey = typeof item === 'string' ? item : item.date;
+                    const dayKey = typeof item === 'string' ? '' : (item.day || '');
+                    if (dateKey) combinedMap.set(`${dateKey}-${dayKey}`, item);
+                });
+
+                setReadHistory(Array.from(combinedMap.values()));
+            })();
+            const settingsPromise = Promise.all([loadAnnouncement(), loadKakaoLink()]);
+
+            const allMembers = await membersPromise;
             setAllMembersForRace(allMembers);
             if (allMembers && allMembers.length > 0) {
                 setSubgroupStats(calculateSubgroupStats(allMembers));
@@ -68,29 +88,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
                 }
             }
 
-            // 2. Load User Specific Data (Memos & History)
-            await loadMemos(uid);
-
-            // readHistory loading (combine sub-collection and array field)
-            const historySnap = await db.collection('users').doc(uid).collection('history').get();
-            const subCollectionHistory = historySnap.docs.map(doc => doc.data());
-
-            const userDoc = await db.collection('users').doc(uid).get();
-            const arrayFieldHistory = (userDoc.exists && userDoc.data().readHistory) || [];
-
-            // 같은 날 여러 Day를 몰아서 읽을 수 있으므로 date+day 기준으로만 중복 제거한다.
-            const combinedMap = new Map();
-            [...arrayFieldHistory, ...subCollectionHistory].forEach(item => {
-                const dateKey = typeof item === 'string' ? item : item.date;
-                const dayKey = typeof item === 'string' ? '' : (item.day || '');
-                if (dateKey) combinedMap.set(`${dateKey}-${dayKey}`, item);
-            });
-
-            setReadHistory(Array.from(combinedMap.values()));
-
-            // 3. Load Announcements & Links
-            await loadAnnouncement();
-            await loadKakaoLink();
+            await Promise.all([memosPromise, historyPromise, settingsPromise]);
         };
 
         loadDashboardData();

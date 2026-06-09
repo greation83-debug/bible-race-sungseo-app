@@ -1,6 +1,8 @@
 import React, { useMemo } from 'react';
 
 const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, getSubgroupDisplay }) => {
+    const clampMapPos = (position) => Math.max(8, Math.min(position, 94));
+
     const getNonLinearPos = (day) => {
         const actualDay = Math.min(day, 365);
         if (actualDay <= 100) return (actualDay / 100) * 50;
@@ -19,7 +21,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                 return {
                     racer,
                     idx,
-                    x: Math.min(getNonLinearPos(displayDay), 96),
+                    x: clampMapPos(getNonLinearPos(displayDay)),
                     isMe: racer.isMe,
                     racerReadCount,
                     is2ndRound,
@@ -90,7 +92,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                 const isDeptChampion = departmentChampions[racer.uid];
                 const zIndex = isMe ? 29 : is2ndRound ? 28 : 25;
                 const topPos = `${top}%`;
-                const hideOnMobile = !isMe && displayIndex > 12;
+                const hideOnMobile = !isMe;
 
                 return (
                     <div key={racer.uid || idx} className={`absolute transition-all duration-1000 ease-out ${hideOnMobile ? 'hidden sm:block' : ''}`}

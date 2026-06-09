@@ -141,7 +141,8 @@ const DashboardView = ({
     const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
 
     // 레이터 데이터 정제
-    const allRacersSorted = allMembersForRace.map(m => {
+    const raceMemberSource = allMembersForRace.length > 0 ? allMembersForRace : [currentUser];
+    const allRacersSorted = raceMemberSource.map(m => {
         const readCount = m.readCount || 1;
         const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
         return { ...m, day: actualProgress, isMe: m.uid === currentUser.uid };
@@ -324,7 +325,7 @@ const DashboardView = ({
             />
 
             <div className="max-w-5xl mx-auto w-full pb-10 mt-8">
-                <RaceMap racers={racers} totalRacers={allRacersSorted.length} departmentChampions={departmentChampions} getSubgroupDisplay={getSubgroupDisplay} />
+                <RaceMap racers={racers} totalRacers={allMembersForRace.length || 1} departmentChampions={departmentChampions} getSubgroupDisplay={getSubgroupDisplay} />
 
                 <main className="px-4 space-y-6">
                     <AnnouncementBanner announcement={announcement} />

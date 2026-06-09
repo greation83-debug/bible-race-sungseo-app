@@ -2,21 +2,60 @@ import { useState, useCallback } from 'react';
 import { db, firebase } from '../utils/firebase';
 import { calculateSubgroupStats } from '../utils/statsUtils';
 
+const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v1';
+
+const compactRaceMember = (member) => ({
+    uid: member.uid,
+    name: member.name || '',
+    currentDay: member.currentDay || 1,
+    readCount: member.readCount || 1,
+    subgroupId: member.subgroupId || '소속없음',
+    communityId: member.communityId || '',
+    communityName: member.communityName || '',
+    score: member.score || 0,
+    streak: member.streak || 0,
+    lastReadDate: member.lastReadDate || null,
+    planId: member.planId || '',
+});
+
+const readCachedRaceMembers = () => {
+    try {
+        const cached = localStorage.getItem(RACE_MEMBERS_CACHE_KEY);
+        if (!cached) return [];
+        const parsed = JSON.parse(cached);
+        return Array.isArray(parsed.members) ? parsed.members : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+const writeCachedRaceMembers = (members) => {
+    try {
+        localStorage.setItem(RACE_MEMBERS_CACHE_KEY, JSON.stringify({
+            cachedAt: Date.now(),
+            members: members.map(compactRaceMember)
+        }));
+    } catch (e) {
+        // localStorage 용량/권한 문제는 레이스맵 표시만 느려질 뿐 기능에는 영향이 없다.
+    }
+};
+
 export const useCommunity = (currentUser, setCurrentUser) => {
     const [subgroupStats, setSubgroupStats] = useState({});
     const [communityMembers, setCommunityMembers] = useState([]);
-    const [allMembersForRace, setAllMembersForRace] = useState([]);
+    const [allMembersForRace, setAllMembersForRace] = useState(readCachedRaceMembers);
     const [announcement, setAnnouncement] = useState(null);
     const [kakaoLink, setKakaoLink] = useState(null);
 
     const loadAllMembers = useCallback(async () => {
         try {
             const snapshot = await db.collection('users').get();
-            const members = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+            const members = snapshot.docs.map(doc => compactRaceMember({ uid: doc.id, ...doc.data() }));
+            writeCachedRaceMembers(members);
             return members;
         } catch (e) {
             console.error("멤버 로딩 실패:", e);
-            return [];
+            return readCachedRaceMembers();
         }
     }, []);
 
