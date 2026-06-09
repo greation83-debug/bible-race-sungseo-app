@@ -78,11 +78,12 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
             const userDoc = await db.collection('users').doc(uid).get();
             const arrayFieldHistory = (userDoc.exists && userDoc.data().readHistory) || [];
 
-            // Combine and de-duplicate by date string
+            // 같은 날 여러 Day를 몰아서 읽을 수 있으므로 date+day 기준으로만 중복 제거한다.
             const combinedMap = new Map();
             [...arrayFieldHistory, ...subCollectionHistory].forEach(item => {
                 const dateKey = typeof item === 'string' ? item : item.date;
-                if (dateKey) combinedMap.set(dateKey, item);
+                const dayKey = typeof item === 'string' ? '' : (item.day || '');
+                if (dateKey) combinedMap.set(`${dateKey}-${dayKey}`, item);
             });
 
             setReadHistory(Array.from(combinedMap.values()));

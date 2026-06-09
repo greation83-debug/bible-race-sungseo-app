@@ -45,7 +45,11 @@ export const useUserBibleActions = (
         const uid = currentUser.uid;
         const todayStr = new Date().toDateString();
 
-        const currentProgressDay = currentUser.currentDay || 1;
+        // currentDay가 365를 초과하면 안전하게 보정
+        let currentProgressDay = currentUser.currentDay || 1;
+        if (currentProgressDay > 365) {
+            currentProgressDay = ((currentProgressDay - 1) % 365) + 1;
+        }
         const vDay = viewingDay || currentProgressDay; // 현재 보고 있는 날짜
         const oldScore = currentUser.score || 0;
         const oldLevel = Math.floor(oldScore / 100);
@@ -58,15 +62,19 @@ export const useUserBibleActions = (
         // 다음으로 이동할 날짜 (무조건 현재 보고 있는 날짜의 다음 날짜)
         const nextViewingDay = vDay >= 365 ? 1 : vDay + 1;
 
-        // 진도 업데이트 (현재 진도와 일치할 때만 진도 상승)
+        // 보고 있는 날짜를 읽음 처리하되, 사용자의 실제 진도는 뒤로 되돌리지 않는다.
+        const currentReadCount = currentUser.readCount || 1;
+        const shouldAdvanceProgress = vDay >= currentProgressDay;
         let newProgressDay = currentProgressDay;
-        let newReadCount = currentUser.readCount || 1;
+        let newReadCount = currentReadCount;
         let completedRound = false;
 
-        if (vDay === currentProgressDay) {
-            newProgressDay = currentProgressDay >= 365 ? 1 : currentProgressDay + 1;
-            newReadCount = currentProgressDay >= 365 ? (currentUser.readCount || 1) + 1 : (currentUser.readCount || 1);
-            completedRound = currentProgressDay >= 365;
+        if (shouldAdvanceProgress) {
+            newProgressDay = nextViewingDay;
+            if (vDay >= 365) {
+                newReadCount = currentReadCount + 1;
+                completedRound = true;
+            }
         }
 
         // 연속 읽기 계산
