@@ -11,7 +11,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
     };
 
     const placedRacers = useMemo(() => {
-        const lanes = [12, 20, 28, 36, 44, 52, 60, 68, 76, 84];
+        const lanes = [12, 18, 24, 30, 38, 46, 54, 62, 70, 78, 86];
         const lastXByLane = lanes.map(() => -100);
         const sorted = [...racers]
             .map((racer, idx) => {
@@ -44,9 +44,9 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                     bestLane = laneIndex;
                 }
             });
-            if (item.x < 46 && lanes[bestLane] < 44) {
+            if (item.x < 46 && lanes[bestLane] < 46) {
                 const lowerLaneIndex = lanes.findIndex((laneTop, laneIndex) =>
-                    laneTop >= 44 && item.x - lastXByLane[laneIndex] >= 5
+                    laneTop >= 46 && item.x - lastXByLane[laneIndex] >= 5
                 );
                 if (lowerLaneIndex !== -1) {
                     bestLane = lowerLaneIndex;
@@ -58,7 +58,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
 
         const visibleMobileUids = new Set();
         const mobileCandidates = placed.filter(item => !item.isMe);
-        const maxMobileNonMe = 20;
+        const maxMobileNonMe = 34;
         const me = placed.find(item => item.isMe);
         const byProgressAsc = [...mobileCandidates].sort((a, b) => a.racer.day - b.racer.day);
         const byProgressDesc = [...mobileCandidates].sort((a, b) => b.racer.day - a.racer.day);
@@ -94,7 +94,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
     }, [racers, departmentChampions]);
 
     return (
-        <div className="mx-4 mb-6 relative h-80 sm:h-72 bg-sky-texture overflow-hidden rounded-3xl shadow-xl border border-slate-100">
+        <div className="mx-4 mb-6 relative h-96 sm:h-72 bg-sky-texture overflow-hidden rounded-3xl shadow-xl border border-slate-100">
             <div className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-white/20 to-transparent z-10"></div>
             <div className="mountain-back"></div>
             <div className="mountain-front"></div>
