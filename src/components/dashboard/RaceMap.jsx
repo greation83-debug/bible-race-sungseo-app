@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 
 const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, getSubgroupDisplay }) => {
-    const clampMapPos = (position) => Math.max(8, Math.min(position, 94));
+    const clampMapPos = (position) => Math.max(14, Math.min(position, 86));
 
     const getNonLinearPos = (day) => {
         const actualDay = Math.min(day, 365);
@@ -92,11 +92,11 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                 const isDeptChampion = departmentChampions[racer.uid];
                 const zIndex = isMe ? 29 : is2ndRound ? 28 : 25;
                 const topPos = `${top}%`;
-                const hideOnMobile = !isMe;
+                const hideOnMobile = !isMe && displayIndex > 5;
 
                 return (
                     <div key={racer.uid || idx} className={`absolute transition-all duration-1000 ease-out ${hideOnMobile ? 'hidden sm:block' : ''}`}
-                        style={{ left: `calc(${x}% - 16px)`, top: topPos, zIndex }}>
+                        style={{ left: `${x}%`, top: topPos, zIndex, transform: 'translateX(-50%)' }}>
                         <div className="relative flex items-center">
                             {racerReadCount > 1 && (
                                 <div className="absolute -left-2 -top-1 w-4 h-4 bg-gradient-to-br from-purple-500 to-purple-700 rounded-full flex items-center justify-center border-2 border-white shadow-md z-10">
@@ -104,13 +104,13 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
                                 </div>
                             )}
                             <div className={`flex items-stretch rounded-full shadow-md overflow-hidden ${isMe ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}>
-                                <div className={`max-w-[72px] text-[9px] pl-2 pr-1 py-0.5 font-bold whitespace-nowrap truncate flex items-center gap-0.5 ${isMe ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' : 'bg-white/95 text-slate-700'}`}>
+                                <div className={`max-w-[56px] sm:max-w-[72px] text-[9px] pl-2 pr-1 py-0.5 font-bold whitespace-nowrap truncate flex items-center gap-0.5 ${isMe ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' : 'bg-white/95 text-slate-700'}`}>
                                     {isDeptChampion && (
                                         <span className="text-[11px]" title={`${isDeptChampion} 1위`}>👑</span>
                                     )}
                                     {racer.name}
                                 </div>
-                                <div className={`text-[9px] pl-1 pr-1.5 py-0.5 font-bold whitespace-nowrap text-white flex items-center ${subgroupInfo.bgColor} border-l border-white/30`}>
+                                <div className={`max-w-[54px] sm:max-w-none text-[9px] pl-1 pr-1.5 py-0.5 font-bold whitespace-nowrap truncate text-white flex items-center ${subgroupInfo.bgColor} border-l border-white/30`}>
                                     {racer.subgroupId}
                                 </div>
                             </div>
