@@ -1,8 +1,9 @@
 import { MOCK_COMMUNITIES } from '../data/communities';
 import { TOTAL_DAYS } from '../data/constants';
+import { kstTodayDateString } from './dateUtils';
 
 export const calculateSubgroupStats = (members) => {
-    const todayStr = new Date().toDateString();
+    const todayStr = kstTodayDateString();
     const stats = {};
     // 모든 공동체(부서)의 소그룹을 순회하며 통계 계산
     MOCK_COMMUNITIES.forEach(comm => {
@@ -21,7 +22,7 @@ export const calculateSubgroupStats = (members) => {
                     return sum + actualProgress;
                 }, 0) / totalCount
                 : 0;
-            const progressRate = TOTAL_DAYS > 0 ? Math.round((avgDay / TOTAL_DAYS) * 100) : 0;
+            const progressRate = TOTAL_DAYS > 0 ? Math.min(100, Math.round((avgDay / TOTAL_DAYS) * 100)) : 0;
             const totalScore = subMembers.reduce((sum, m) => sum + (m.score || 0), 0);
 
             stats[`${comm.id}_${sub}`] = {

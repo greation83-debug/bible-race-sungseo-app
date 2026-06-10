@@ -171,35 +171,7 @@ export const downloadCSV = (allUsers) => {
     URL.revokeObjectURL(url);
 };
 
-import { SCHEDULE_DATA } from '../data/schedules';
-
-// Helper to count chapters from a range string like "창 1-3장, 출 4-5장" or "창 1장"
-const countChapters = (rangeStr) => {
-    if (!rangeStr) return 0;
-
-    // Split by comma in case of multiple parts
-    const parts = rangeStr.split(',');
-    let total = 0;
-
-    parts.forEach(part => {
-        // match "1-3장" or "1장"
-        // Sometimes it's like "창 1-3장", so we look for numbers before "장"
-        const match = part.match(/\d+(-\d+)?장/);
-        if (match) {
-            const numPart = match[0].replace('장', '');
-            if (numPart.includes('-')) {
-                const [start, end] = numPart.split('-').map(Number);
-                if (!isNaN(start) && !isNaN(end)) {
-                    total += (end - start + 1);
-                }
-            } else {
-                total += 1;
-            }
-        }
-    });
-
-    return total > 0 ? total : 1; // Default to 1 if we can't parse it
-};
+const csvEscape = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
 
 export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDateStr) => {
     if (!db) return;
@@ -233,23 +205,16 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
 
         // CSV Header
         let csvContent = '\uFEFF이름,부서,소그룹,총읽은횟수(Day분량)';
-        dateColumns.forEach(dateStr => {
-            csvContent += `,${dateStr}`;
-        });
-        csvContent += '\n';
+        dateColumns.forEach(dateStr => { csvContent += `,${dateStr}`; });
+        csvContent += '\r\n';
 
         for (const u of allUsers) {
             let periodReadCount = 0;
-            // tracking read Days amount per calendar day
             const readDaysMap = {};
             dateColumns.forEach(dateStr => readDaysMap[dateStr] = 0);
 
-            const userDoc = await db.collection('users').doc(u.uid).get();
-            const arrayHistory = (userDoc.exists && userDoc.data().readHistory) || [];
-
-            // Use readHistory array directly (same as Reading Champion logic)
-            // Do NOT de-duplicate - each entry represents one Day read action
-            const historyValues = Array.isArray(arrayHistory) ? arrayHistory : [];
+            // allUsers에 readHistory가 이미 포함되어 있으므로 추가 Firestore 읽기 불필요
+            const historyValues = Array.isArray(u.readHistory) ? u.readHistory : [];
 
             for (let i = 0; i < historyValues.length; i++) {
                 const item = historyValues[i];
@@ -265,7 +230,6 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
 
                     if (readDaysMap[formattedDateStr] !== undefined) {
                         const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
-
                         readDaysMap[formattedDateStr] += daysRead;
                         periodReadCount += daysRead;
                     }
@@ -273,13 +237,11 @@ export const downloadPeriodStatsCSV = async (db, allUsers, startDateStr, endDate
             }
 
             // Build user row
-            csvContent += `"${u.name}","${u.communityName || '-'}","${u.subgroupId || '-'}","${periodReadCount}"`;
+            csvContent += `${csvEscape(u.name)},${csvEscape(u.communityName || '-')},${csvEscape(u.subgroupId || '-')},${csvEscape(periodReadCount)}`;
             dateColumns.forEach(dateStr => {
-                const count = readDaysMap[dateStr];
-                // Don't format as an empty string, show '0' if it's 0 to be more spreadsheet friendly for sum
-                csvContent += `,"${count > 0 ? count : 0}"`;
+                csvContent += `,${csvEscape(readDaysMap[dateStr] || 0)}`;
             });
-            csvContent += '\n';
+            csvContent += '\r\n';
         }
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

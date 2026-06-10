@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 관리자 여부 확인 헬퍼
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/config/admins)
+        && request.auth.uid in get(/databases/$(database)/documents/config/admins).data.uids;
+    }
+
+    // 익명 인증 차단
+    function isAuthenticated() {
+      return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    // 사용자 문서: 본인만 읽기/쓰기, 관리자는 모두
+    match /users/{uid} {
+      allow read: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
+      allow write: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
+
+      // 읽기 이력 서브컬렉션
+      match /history/{historyId} {
+        allow read, write: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
+      }
+    }
+
+    // 성경 본문 캐시: 로그인한 모든 사용자 읽기, 관리자만 쓰기
+    match /verses/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 레이스맵 요약 캐시: 로그인한 모든 사용자 읽기, 인증된 사용자 자신 필드 쓰기(merge)
+    match /summary/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // 설정(공지/카카오 링크/동기화): 읽기 모두, 쓰기 관리자만
+    match /settings/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 관리자 설정: 관리자만 읽기/쓰기
+    match /config/{docId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

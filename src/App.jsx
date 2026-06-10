@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { db, auth, firebase } from './utils/firebase';
 import { MOCK_COMMUNITIES } from './data/communities';
 import { SCHEDULE_DATA } from './data/schedules';
@@ -11,6 +11,7 @@ import { getSubgroupDisplay } from './utils/dashboardUtils';
 import { generateMemosHTML, generateMemosCSV, downloadCSV, downloadPeriodStatsCSV } from './utils/exportUtils';
 import { useUserAuth } from './hooks/useUserAuth';
 import { useBibleLogic } from './hooks/useBibleLogic';
+import { clearRaceMembersCache } from './hooks/useCommunity';
 import Icon from './components/Icon';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import LoginView from './components/LoginView';
@@ -39,6 +40,7 @@ const App = () => {
     const [signupBirthdate, setSignupBirthdate] = useState(''); // 회원가입: 생년월일
     const [loginName, setLoginName] = useState('');     // 로그인: 이름
     const [loginPw, setLoginPw] = useState('');         // 로그인: 비밀번호
+    const [loginBirthdate, setLoginBirthdate] = useState(''); // 로그인: 생년월일 (신규 가입자용)
     const [tempUser, setTempUser] = useState(null);     // 임시 사용자 (가입 진행 중)
     const { currentUser, setCurrentUser, authLoading } = useUserAuth(); // Auth hook
     const [errorMsg, setErrorMsg] = useState('');       // 에러 메시지
@@ -70,6 +72,7 @@ const App = () => {
         loadAnnouncement,
         kakaoLink, loadKakaoLink, setKakaoLink
     } = useBibleLogic(currentUser, setCurrentUser, view);
+    const weeklyMVPFn = useMemo(() => () => getWeeklyMVP(communityMembers), [communityMembers]);
     const [showMonthlyContestInfo, setShowMonthlyContestInfo] = useState(false); // 월간 대항전 설명 모달
     const [rankingCommunityFilter, setRankingCommunityFilter] = useState('all'); // 누적 랭킹 대그룹 필터
     const [rankingSubgroupFilter, setRankingSubgroupFilter] = useState('all'); // 누적 랭킹 소그룹 필터
@@ -103,8 +106,6 @@ const App = () => {
     const [allUsers, setAllUsers] = useState([]);             // 전체 사용자 목록 (관리자용)
 
     const [editingUser, setEditingUser] = useState(null);     // 편집 중인 사용자
-    const [changingPassword, setChangingPassword] = useState(null); // 비밀번호 변경 대상
-    const [newPassword, setNewPassword] = useState('');       // 새 비밀번호
     const [adminFilter, setAdminFilter] = useState('all');    // 관리자 필터: 전체/부서별
     const [adminViewMode, setAdminViewMode] = useState('today'); // 'today' or 'inactive'
     const [adminSortBy, setAdminSortBy] = useState('name'); // 'name', 'day', 'score', 'subgroup'
@@ -238,44 +239,14 @@ const App = () => {
     const deleteUser = async (uid, userName) => {
         if (confirm(`${userName}님의 데이터를 정말 삭제하시겠습니까?`)) {
             try {
-                await db.collection('users').doc(uid).delete();
+                const historySnap = await db.collection('users').doc(uid).collection('history').get();
+                const batch = db.batch();
+                historySnap.docs.forEach(doc => batch.delete(doc.ref));
+                batch.delete(db.collection('users').doc(uid));
+                await batch.commit();
                 setAllUsers(prev => prev.filter(u => u.uid !== uid));
                 alert("삭제되었습니다.");
             } catch (e) { console.error(e); alert("삭제 실패"); }
-        }
-    };
-
-    const changePassword = async (uid, userName, currentPassword) => {
-        if (!newPassword || newPassword.length < 6) {
-            alert('새 암호는 6자리 이상이어야 합니다.');
-            return;
-        }
-
-        if (!confirm(`${userName}님의 암호를 변경하시겠습니까?\n\n새 암호: ${newPassword}`)) {
-            return;
-        }
-
-        try {
-            // Firebase Authentication에서 암호 변경은 직접 불가능
-            // Firestore에 새 암호 저장 (사용자가 다음 로그인 시 자동 업데이트됨)
-            await db.collection('users').doc(uid).set({
-                password: newPassword,
-                passwordResetRequired: true,
-                updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-
-            alert(`✅ ${userName}님의 암호가 변경되었습니다!\n\n새 암호: ${newPassword}\n\n※ 사용자에게 새 암호를 전달해주세요.`);
-
-            // 사용자 목록 업데이트
-            setAllUsers(prev => prev.map(u =>
-                u.uid === uid ? { ...u, password: newPassword } : u
-            ));
-
-            setChangingPassword(null);
-            setNewPassword('');
-        } catch (e) {
-            console.error(e);
-            alert('암호 변경 실패');
         }
     };
 
@@ -304,18 +275,11 @@ const App = () => {
      회원가입, 로그인, 로그아웃 등 사용자 인증 관련 비즈니스 로직입니다.
     */
 
-    // 로그인/회원가입 폼 제출 핸들러 (관리자 비밀번호: '08283')
     const handleLogin = async (e) => {
         e.preventDefault();
         setErrorMsg('');
 
-        // 회원가입 모드일 때 추가 검증
         if (loginTab === 'signup') {
-            console.log('=== 회원가입 시작 ===');
-            console.log('이름:', signupName);
-            console.log('암호 길이:', signupPw.length);
-            console.log('생년월일:', signupBirthdate);
-
             if (!signupName.trim() || !signupPw.trim() || !signupBirthdate) {
                 setErrorMsg("모든 항목을 입력해주세요.");
                 return;
@@ -330,121 +294,87 @@ const App = () => {
             }
         }
 
-        // 로그인 모드 기본 검증
         const name = loginTab === 'signup' ? signupName : loginName;
         const pw = loginTab === 'signup' ? signupPw : loginPw;
+        const birthdate = loginTab === 'signup' ? signupBirthdate : loginBirthdate;
 
         if (!name.trim() || !pw.trim()) {
             setErrorMsg("이름과 암호를 모두 입력해주세요.");
             return;
         }
 
-        // ★ 관리자 로그인 체크 (관리자 비밀번호: '08283')
-        // 회원가입 탭에서는 관리자 로그인 불가
-        if (name === 'admin' && pw === '08283' && loginTab === 'login') {
-            try {
-                if (auth && !auth.currentUser) await auth.signInAnonymously();
-                const snap = await db.collection('users').get();
-                setAllUsers(snap.docs.map(doc => userDocToState(doc)));
-
-                const announcementDoc = await db.collection('settings').doc('announcement').get();
-                if (announcementDoc.exists) {
-                    const data = announcementDoc.data();
-                    // 이전 형식(단일 링크)에서 새로운 형식(링크 배열)으로 마이그레이션
-                    if (!data.links && data.linkUrl && data.linkText) {
-                        data.links = [{ url: data.linkUrl, text: data.linkText }];
-                    }
-                    if (!data.links) {
-                        data.links = [{ url: '', text: '' }];
-                    }
-                    setAnnouncementInput(data);
-                }
-
-                const syncDoc = await db.collection('settings').doc('sync').get();
-                if (syncDoc.exists) {
-                    setLastSyncInfo(syncDoc.data());
-                }
-
-                const kakaoDoc = await db.collection('settings').doc('kakao').get();
-                if (kakaoDoc.exists) {
-                    setKakaoLinkInput(kakaoDoc.data().url);
-                }
-
-                setIsAdmin(true);  // 관리자 모드 활성화
-                return;
-            } catch (err) { console.error(err); setErrorMsg('관리자 데이터 로딩 실패'); return; }
-        }
-
-        // 일반 사용자 Firebase 인증
         try {
-            const email = makePseudoEmail(name);  // 이름 → 가짜 이메일 변환
-            console.log('생성된 이메일:', email);
+            const email = makePseudoEmail(name, birthdate);
 
             let cred = null;
 
-            // 먼저 로그인 시도
             try {
-                console.log('로그인 시도 중...');
                 cred = await auth.signInWithEmailAndPassword(email, pw);
-                console.log('로그인 성공!');
             } catch (err) {
-                console.log('로그인 실패:', err.code, err.message);
-
-                // 사용자가 없으면 회원가입 진행 (회원가입 탭에서만)
                 if ((err && err.code === 'auth/user-not-found') || (err && err.code === 'auth/invalid-login-credentials') || (err && err.code === 'auth/invalid-credential')) {
-                    // 로그인 탭에서는 회원가입 불가
                     if (loginTab === 'login') {
-                        setErrorMsg("등록되지 않은 사용자입니다. 회원가입 탭에서 가입해주세요.");
+                        setErrorMsg("이름 또는 암호가 올바르지 않습니다.");
                         return;
                     }
-
-                    // 회원가입 탭에서만 신규 계정 생성
-                    console.log('회원가입 시도 중...');
                     try {
                         cred = await auth.createUserWithEmailAndPassword(email, pw);
-                        console.log('회원가입 성공!');
                     } catch (signupErr) {
-                        console.error("회원가입 상세 에러:", signupErr);
-                        console.error("에러 코드:", signupErr ? signupErr.code : null);
-                        console.error("에러 메시지:", signupErr ? signupErr.message : null);
-
                         if (signupErr && signupErr.code === 'auth/email-already-in-use') {
                             setErrorMsg("이미 사용 중인 이름입니다. 로그인 탭에서 로그인하거나 다른 이름을 사용해주세요.");
-                        }
-                        else if (signupErr && signupErr.code === 'auth/weak-password') {
+                        } else if (signupErr && signupErr.code === 'auth/weak-password') {
                             setErrorMsg("암호는 6자리 이상이어야 합니다.");
-                        }
-                        else if (signupErr && signupErr.code === 'auth/invalid-email') {
+                        } else if (signupErr && signupErr.code === 'auth/invalid-email') {
                             setErrorMsg("이름에 특수문자를 사용할 수 없습니다.");
-                        }
-                        else {
+                        } else {
                             setErrorMsg(`회원가입 실패: ${(signupErr && signupErr.message) || '잠시 후 다시 시도해주세요'}`);
                         }
                         return;
                     }
-                } else if (err && err.code === 'auth/wrong-password') {
-                    setErrorMsg("암호가 틀렸습니다.");
-                    return;
-                }
-                else {
-                    console.error('알 수 없는 로그인 에러:', err);
-                    setErrorMsg("로그인 실패(잠시 후 다시 시도)");
+                } else {
+                    setErrorMsg("이름 또는 암호가 올바르지 않습니다.");
                     return;
                 }
             }
 
             const uid = cred.user.uid;
-            console.log('사용자 UID:', uid);
+
+            // 관리자 체크: config/admins.uids 목록에 uid가 있으면 관리자 모드
+            try {
+                const adminDoc = await db.collection('config').doc('admins').get();
+                if (adminDoc.exists && (adminDoc.data().uids || []).includes(uid)) {
+                    const snap = await db.collection('users').get();
+                    setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+
+                    const announcementDoc = await db.collection('settings').doc('announcement').get();
+                    if (announcementDoc.exists) {
+                        const data = announcementDoc.data();
+                        if (!data.links && data.linkUrl && data.linkText) {
+                            data.links = [{ url: data.linkUrl, text: data.linkText }];
+                        }
+                        if (!data.links) data.links = [{ url: '', text: '' }];
+                        setAnnouncementInput(data);
+                    }
+
+                    const syncDoc = await db.collection('settings').doc('sync').get();
+                    if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
+
+                    const kakaoDoc = await db.collection('settings').doc('kakao').get();
+                    if (kakaoDoc.exists) setKakaoLinkInput(kakaoDoc.data().url);
+
+                    setIsAdmin(true);
+                    return;
+                }
+            } catch (adminErr) {
+                console.warn('관리자 확인 실패, 일반 사용자로 진행:', adminErr);
+            }
 
             const ref = db.collection('users').doc(uid);
             const doc = await ref.get();
 
-            // Firestore에 사용자 데이터가 없으면 신규 생성
             if (!doc.exists) {
-                console.log('신규 사용자 - Firestore에 데이터 생성 중...');
                 const newUserBase = {
-                    name: name.trim(),          // 이름
-                    password: pw,               // 비밀번호 (평문 - 개선 필요) 
+                    name: name.trim(),
+                    birthdate: signupBirthdate || '',
                     startDate: new Date().toDateString(),
                     currentDay: 1,
                     streak: 0,
@@ -459,14 +389,12 @@ const App = () => {
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                 };
                 await ref.set(newUserBase);
-                console.log('Firestore 데이터 생성 완료!');
 
                 setTempUser({ ...newUserBase, uid });
                 setView('plan_type_select');
                 return;
             }
 
-            console.log('기존 사용자 - 데이터 로드 완료');
             const user = userDocToState(doc);
             setCurrentUser(user);
             setHasReadToday(user.lastReadDate === new Date().toDateString());
@@ -508,7 +436,16 @@ const App = () => {
         setCurrentUser(finalUser); setTempUser(null); setView('dashboard');
         try {
             const uid = (auth.currentUser ? auth.currentUser.uid : null) || finalUser.uid;
-            if (uid) await db.collection('users').doc(uid).set({ ...finalUser, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            if (uid) {
+                await db.collection('users').doc(uid).set({
+                    name: finalUser.name,
+                    communityId: finalUser.communityId,
+                    communityName: finalUser.communityName,
+                    subgroupId: finalUser.subgroupId,
+                    planId: finalUser.planId || '1year_revised',
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true });
+            }
         } catch (e) { console.error(e); alert("서버 저장 실패"); }
     };
 
@@ -687,7 +624,8 @@ const App = () => {
 
     const handleLogout = () => {
         if (auth) auth.signOut();
-        setCurrentUser(null); setIsAdmin(false); setTempUser(null); setLoginName(''); setLoginPw('');
+        clearRaceMembersCache();
+        setCurrentUser(null); setIsAdmin(false); setTempUser(null); setLoginName(''); setLoginPw(''); setLoginBirthdate('');
         setErrorMsg(''); setView('login'); setHasReadToday(false); setEditingUser(null); setCommunityMembers([]);
     };
 
@@ -737,11 +675,6 @@ const App = () => {
                 setEditingUser={setEditingUser}
                 startEditUser={startEditUser}
                 saveEditUser={saveEditUser}
-                changingPassword={changingPassword}
-                setChangingPassword={setChangingPassword}
-                newPassword={newPassword}
-                setNewPassword={setNewPassword}
-                changePassword={changePassword}
                 deleteUser={deleteUser}
                 lastSyncInfo={lastSyncInfo}
                 setLastSyncInfo={setLastSyncInfo}
@@ -769,6 +702,8 @@ const App = () => {
                 setLoginName={setLoginName}
                 loginPw={loginPw}
                 setLoginPw={setLoginPw}
+                loginBirthdate={loginBirthdate}
+                setLoginBirthdate={setLoginBirthdate}
                 signupName={signupName}
                 setSignupName={setSignupName}
                 signupBirthdate={signupBirthdate}
@@ -859,7 +794,7 @@ const App = () => {
                 getProgressRanking={() => formatProgressRanking(subgroupStats)}
                 getSubgroupDisplay={getSubgroupDisplay}
                 generateMemosHTML={generateMemosHTML}
-                getWeeklyMVP={() => getWeeklyMVP(communityMembers)}
+                getWeeklyMVP={weeklyMVPFn}
                 setView={setView}
             />
         );

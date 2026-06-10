@@ -30,8 +30,8 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         handleRead, handleRestart, changeStartDate, checkAchievements
     } = useUserBibleActions(
         currentUser, setCurrentUser,
+        allMembersForRace,
         setAllMembersForRace, setCommunityMembers, setSubgroupStats,
-        loadAllMembers,
         setViewingDay,
         viewingDay
     );

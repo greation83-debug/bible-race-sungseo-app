@@ -21,6 +21,7 @@ export const useTTS = (verseText) => {
 
     // 1. 목소리 목록 로드 및 업데이트 - 의존성 제거
     useEffect(() => {
+        if (!window.speechSynthesis) return;
         const loadVoices = () => {
             if (!window.speechSynthesis) return;
             const voices = window.speechSynthesis.getVoices();
@@ -73,18 +74,16 @@ export const useTTS = (verseText) => {
     }, [availableVoices, selectedVoiceURI]);
 
     const handleSpeedChange = (delta) => {
-        setTtsSpeed(prev => {
-            const newSpeed = parseFloat((prev + delta).toFixed(1));
-            const safeSpeed = Math.max(0.6, Math.min(2.0, newSpeed));
-            localStorage.setItem('bible_ttsSpeed', safeSpeed);
-            if (isSpeaking && !isPaused && speakQueueRef.current.length > 0) {
-                handleStop();
-                setTimeout(() => {
-                    handleSpeak(verseText, currentChunkIndexRef.current, safeSpeed);
-                }, 50);
-            }
-            return safeSpeed;
-        });
+        const newSpeed = parseFloat((ttsSpeed + delta).toFixed(1));
+        const safeSpeed = Math.max(0.6, Math.min(2.0, newSpeed));
+        localStorage.setItem('bible_ttsSpeed', safeSpeed);
+        setTtsSpeed(safeSpeed);
+        if (isSpeaking && !isPaused && speakQueueRef.current.length > 0) {
+            handleStop();
+            setTimeout(() => {
+                handleSpeak(verseText, currentChunkIndexRef.current, safeSpeed);
+            }, 50);
+        }
     };
 
     const handleTogglePause = () => {

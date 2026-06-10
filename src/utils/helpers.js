@@ -1,5 +1,9 @@
-// 이름 → 가짜 이메일 변환 (Firebase Auth는 이메일 기반이므로 이름을 이메일로 변환)
-export const makePseudoEmail = (name) => `${encodeURIComponent(String(name || "").trim())}@bible.local`;
+// 이름(+생년월일) → 가짜 이메일 변환 (생년월일 포함 시 동명이인 가입 허용)
+export const makePseudoEmail = (name, birthdate = '') => {
+    const safeName = encodeURIComponent(String(name || "").trim());
+    if (birthdate) return `${safeName}_${birthdate}@bible.local`;
+    return `${safeName}@bible.local`;
+};
 
 // Firestore 문서 → 사용자 상태 객체 변환
 // Firestore에서 가져온 문서를 앱에서 사용하는 형식으로 변환
@@ -8,7 +12,6 @@ export const userDocToState = (doc) => {
     return {
         uid: doc.id,                          // 사용자 고유 ID
         name: d.name,                         // 이름
-        password: d.password,                 // 비밀번호 (평문 저장 - 개선 필요)
         startDate: d.startDate,               // 시작 날짜
         currentDay: (d.currentDay !== undefined && d.currentDay !== null) ? d.currentDay : 1,
         streak: (d.streak !== undefined && d.streak !== null) ? d.streak : 0,

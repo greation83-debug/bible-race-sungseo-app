@@ -6,7 +6,7 @@ import { getActualDay } from '../utils/helpers';
 import { fetchStaticBibleText } from '../utils/bibleTextCache';
 
 const ENABLE_NOTION_RUNTIME_FALLBACK = false;
-const CACHE_LOOKUP_TIMEOUT_MS = 3000;
+const CACHE_LOOKUP_TIMEOUT_MS = 8000;
 
 const withTimeout = (promise, ms, fallback = null) => {
     return Promise.race([

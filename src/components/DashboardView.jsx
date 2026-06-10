@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TOTAL_DAYS } from '../data/constants';
 import { BIBLE_VERSIONS, PLAN_TYPES } from '../data/bible_options';
 import { getLevelInfo } from '../data/levels';
@@ -140,86 +140,80 @@ const DashboardView = ({
 
     const daysRemaining = Math.max(0, TOTAL_DAYS - currentDay);
 
-    // 레이터 데이터 정제
-    const raceMemberSource = allMembersForRace.length > 0 ? allMembersForRace : [currentUser];
-    const allRacersSorted = raceMemberSource.map(m => {
-        const readCount = m.readCount || 1;
-        const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
-        return { ...m, day: actualProgress, isMe: m.uid === currentUser.uid };
-    }).sort((a, b) => b.day - a.day);
+    // 레이스맵 데이터 계산 (allMembersForRace 또는 currentUser.uid 변경 시만 재계산)
+    const { racers, departmentChampions } = useMemo(() => {
+        const raceMemberSource = allMembersForRace.length > 0 ? allMembersForRace : [currentUser];
+        const allRacersSorted = raceMemberSource.map(m => {
+            const readCount = m.readCount || 1;
+            const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
+            return { ...m, day: actualProgress, isMe: m.uid === currentUser.uid };
+        }).sort((a, b) => b.day - a.day);
 
-    const topOverall = allRacersSorted.slice(0, 12);
-    const departmentChampions = {};
-    const deptChampionsList = [];
-    const communityIds = ['senior', 'youth', 'middlehigh', 'elementary', 'kinder'];
+        const topOverall = allRacersSorted.slice(0, 12);
+        const departmentChampions = {};
+        const deptChampionsList = [];
+        const communityIds = ['senior', 'youth', 'middlehigh', 'elementary', 'kinder'];
 
-    communityIds.forEach(commId => {
-        const communityEntry = MOCK_COMMUNITIES.find(c => c.id === commId);
-        const commName = communityEntry ? communityEntry.name : null;
-        const deptTop = allRacersSorted.find(r =>
-            r.communityId === commId || (commName && r.communityName === commName)
-        );
-        if (deptTop) {
-            departmentChampions[deptTop.uid] = commName || (commId === 'senior' ? '장년부' : commId);
-            deptChampionsList.push(deptTop);
+        communityIds.forEach(commId => {
+            const communityEntry = MOCK_COMMUNITIES.find(c => c.id === commId);
+            const commName = communityEntry ? communityEntry.name : null;
+            const deptTop = allRacersSorted.find(r =>
+                r.communityId === commId || (commName && r.communityName === commName)
+            );
+            if (deptTop) {
+                departmentChampions[deptTop.uid] = commName || (commId === 'senior' ? '장년부' : commId);
+                deptChampionsList.push(deptTop);
+            }
+        });
+
+        const me = allRacersSorted.find(r => r.isMe);
+        let nearbyRacers = [];
+        if (me) {
+            const myCommId = me.communityId;
+            const myCommName = me.communityName;
+            nearbyRacers = allRacersSorted
+                .filter(r => {
+                    const isSameComm = (myCommId && r.communityId === myCommId) ||
+                        (myCommName && r.communityName === myCommName);
+                    const isCandidate = !myCommId && !myCommName ? true : isSameComm;
+                    return isCandidate &&
+                        !r.isMe &&
+                        !topOverall.find(t => t.uid === r.uid) &&
+                        !deptChampionsList.find(d => d.uid === r.uid);
+                })
+                .sort((a, b) => Math.abs(a.day - me.day) - Math.abs(b.day - me.day))
+                .slice(0, 24);
         }
-    });
 
-    const me = allRacersSorted.find(r => r.isMe);
-    let nearbyRacers = [];
-    if (me) {
-        const myCommId = me.communityId;
-        const myCommName = me.communityName;
-        nearbyRacers = allRacersSorted
-            .filter(r => {
-                const isSameComm = (myCommId && r.communityId === myCommId) ||
-                    (myCommName && r.communityName === myCommName);
-                const isCandidate = !myCommId && !myCommName ? true : isSameComm;
-                return isCandidate &&
-                    !r.isMe &&
-                    !topOverall.find(t => t.uid === r.uid) &&
-                    !deptChampionsList.find(d => d.uid === r.uid);
-            })
-            .sort((a, b) => Math.abs(a.day - me.day) - Math.abs(b.day - me.day))
-            .slice(0, 24);
-    }
-
-    const representativeRacers = [];
-    if (allRacersSorted.length > 0) {
-        const byProgress = [...allRacersSorted].sort((a, b) => a.day - b.day);
-        const sampleCount = Math.min(28, byProgress.length);
-        const seenSamples = new Set();
-        for (let i = 0; i < sampleCount; i += 1) {
-            const idx = Math.round((i * (byProgress.length - 1)) / Math.max(1, sampleCount - 1));
-            const racer = byProgress[idx];
-            if (racer && !seenSamples.has(racer.uid)) {
-                seenSamples.add(racer.uid);
-                representativeRacers.push(racer);
+        const representativeRacers = [];
+        if (allRacersSorted.length > 0) {
+            const byProgress = [...allRacersSorted].sort((a, b) => a.day - b.day);
+            const sampleCount = Math.min(28, byProgress.length);
+            const seenSamples = new Set();
+            for (let i = 0; i < sampleCount; i += 1) {
+                const idx = Math.round((i * (byProgress.length - 1)) / Math.max(1, sampleCount - 1));
+                const racer = byProgress[idx];
+                if (racer && !seenSamples.has(racer.uid)) {
+                    seenSamples.add(racer.uid);
+                    representativeRacers.push(racer);
+                }
             }
         }
-    }
 
-    const combinedRacers = [...topOverall];
-    deptChampionsList.forEach(champion => {
-        if (!combinedRacers.find(r => r.uid === champion.uid)) {
-            combinedRacers.push(champion);
-        }
-    });
-    if (me && !combinedRacers.find(r => r.uid === me.uid)) {
-        combinedRacers.push(me);
-    }
-    nearbyRacers.forEach(nearby => {
-        if (!combinedRacers.find(r => r.uid === nearby.uid)) {
-            combinedRacers.push(nearby);
-        }
-    });
-    representativeRacers.forEach(representative => {
-        if (!combinedRacers.find(r => r.uid === representative.uid)) {
-            combinedRacers.push(representative);
-        }
-    });
+        const combinedRacers = [...topOverall];
+        deptChampionsList.forEach(champion => {
+            if (!combinedRacers.find(r => r.uid === champion.uid)) combinedRacers.push(champion);
+        });
+        if (me && !combinedRacers.find(r => r.uid === me.uid)) combinedRacers.push(me);
+        nearbyRacers.forEach(nearby => {
+            if (!combinedRacers.find(r => r.uid === nearby.uid)) combinedRacers.push(nearby);
+        });
+        representativeRacers.forEach(representative => {
+            if (!combinedRacers.find(r => r.uid === representative.uid)) combinedRacers.push(representative);
+        });
 
-    const racers = combinedRacers.sort((a, b) => a.day - b.day);
+        return { racers: combinedRacers.sort((a, b) => a.day - b.day), departmentChampions };
+    }, [allMembersForRace, currentUser.uid]);
     const progressRanking = getProgressRanking();
     const topProgressGroups = progressRanking.slice(0, 3);
 

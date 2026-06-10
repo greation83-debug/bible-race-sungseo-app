@@ -41,6 +41,10 @@ const writeCachedRaceMembers = (members) => {
     }
 };
 
+export const clearRaceMembersCache = () => {
+    try { localStorage.removeItem(RACE_MEMBERS_CACHE_KEY); } catch (e) {}
+};
+
 export const useCommunity = (currentUser, setCurrentUser) => {
     const [subgroupStats, setSubgroupStats] = useState({});
     const [communityMembers, setCommunityMembers] = useState([]);
@@ -48,7 +52,24 @@ export const useCommunity = (currentUser, setCurrentUser) => {
     const [announcement, setAnnouncement] = useState(null);
     const [kakaoLink, setKakaoLink] = useState(null);
 
+    // summary/global 문서 우선 조회 → fallback: users 풀스캔
     const loadAllMembers = useCallback(async () => {
+        try {
+            const summaryDoc = await db.collection('summary').doc('global').get();
+            if (summaryDoc.exists) {
+                const membersMap = summaryDoc.data().members || {};
+                const keys = Object.keys(membersMap);
+                if (keys.length > 0) {
+                    const members = keys.map(uid => compactRaceMember({ uid, ...membersMap[uid] }));
+                    writeCachedRaceMembers(members);
+                    return members;
+                }
+            }
+        } catch (e) {
+            console.warn('summary 읽기 실패, 풀스캔으로 대체:', e);
+        }
+
+        // Fallback: users 컬렉션 풀스캔
         try {
             const snapshot = await db.collection('users').get();
             const members = snapshot.docs.map(doc => compactRaceMember({ uid: doc.id, ...doc.data() }));
@@ -57,6 +78,47 @@ export const useCommunity = (currentUser, setCurrentUser) => {
         } catch (e) {
             console.error("멤버 로딩 실패:", e);
             return readCachedRaceMembers();
+        }
+    }, []);
+
+    // MVP 계산용: 특정 communityId의 사용자만 readHistory 포함해 로드
+    const loadCommunityMembersWithHistory = useCallback(async (communityId) => {
+        if (!communityId) return [];
+        try {
+            const snap = await db.collection('users')
+                .where('communityId', '==', communityId)
+                .get();
+            return snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+        } catch (e) {
+            console.error('커뮤니티 멤버 로딩 실패:', e);
+            return [];
+        }
+    }, []);
+
+    // summary/global 전체 백필 (관리자 전용)
+    const rebuildSummary = useCallback(async () => {
+        try {
+            const snapshot = await db.collection('users').get();
+            const membersMap = {};
+            snapshot.docs.forEach(doc => {
+                const d = doc.data();
+                membersMap[doc.id] = {
+                    name: d.name || '',
+                    currentDay: d.currentDay || 1,
+                    readCount: d.readCount || 1,
+                    score: d.score || 0,
+                    streak: d.streak || 0,
+                    lastReadDate: d.lastReadDate || null,
+                    subgroupId: d.subgroupId || null,
+                    communityId: d.communityId || null,
+                    communityName: d.communityName || null,
+                };
+            });
+            await db.collection('summary').doc('global').set({ members: membersMap });
+            return snapshot.docs.length;
+        } catch (e) {
+            console.error('summary 백필 실패:', e);
+            throw e;
         }
     }, []);
 
@@ -123,6 +185,8 @@ export const useCommunity = (currentUser, setCurrentUser) => {
         kakaoLink,
         setKakaoLink,
         loadAllMembers,
+        loadCommunityMembersWithHistory,
+        rebuildSummary,
         loadAnnouncement,
         loadKakaoLink,
         changeSubgroup

@@ -13,14 +13,25 @@ export const getBibleCachePath = (planId, day, base = BIBLE_CACHE_BASES[0]) => {
     return `${base}/${safePlanId}/${safeDay}.json`;
 };
 
+/* global __VITE_BUILD_TIME__ */
+const CACHE_BUST = typeof __VITE_BUILD_TIME__ !== 'undefined' ? __VITE_BUILD_TIME__ : '';
+
 export const fetchStaticBibleText = async (planId, day) => {
     let lastError = null;
 
     for (const base of BIBLE_CACHE_BASES) {
-        const url = getBibleCachePath(planId, day, base);
+        const rawUrl = getBibleCachePath(planId, day, base);
+        const url = CACHE_BUST ? `${rawUrl}?v=${CACHE_BUST}` : rawUrl;
         try {
-            const response = await fetch(url, { cache: 'force-cache' });
-            if (!response.ok) continue;
+            const response = await fetch(url);
+            if (!response.ok) {
+                // 1회 재시도
+                const retry = await fetch(url);
+                if (!retry.ok) continue;
+                const data = await retry.json();
+                if (!data || !data.text) continue;
+                return data;
+            }
             const data = await response.json();
             if (!data || !data.text) continue;
             return data;

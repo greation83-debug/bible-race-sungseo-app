@@ -7,6 +7,8 @@ const LoginView = ({
     setLoginName,
     loginPw,
     setLoginPw,
+    loginBirthdate,
+    setLoginBirthdate,
     signupName,
     setSignupName,
     signupBirthdate,
@@ -19,15 +21,7 @@ const LoginView = ({
     handleLogin,
 }) => {
     return (
-        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative">
-            <div className="absolute top-4 right-4">
-                <button
-                    onClick={() => { setLoginName('admin'); setLoginPw(''); }}
-                    className="text-xs text-slate-300 hover:text-slate-500"
-                >
-                    관리자
-                </button>
-            </div>
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
             <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-lg border border-slate-100">
                 <div className="text-center mb-8">
                     <div className="text-4xl mb-2">🏃‍♂️💨</div>
@@ -69,6 +63,21 @@ const LoginView = ({
                                 onChange={e => setLoginName(e.target.value)}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="홍길동"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">
+                                생년월일 <span className="text-slate-400 font-normal">(생년월일로 가입한 경우만 입력)</span>
+                            </label>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                maxLength="8"
+                                value={loginBirthdate}
+                                onChange={e => setLoginBirthdate(e.target.value.replace(/[^0-9]/g, ''))}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg tracking-wider"
+                                placeholder="19500101"
                             />
                         </div>
                         <div>

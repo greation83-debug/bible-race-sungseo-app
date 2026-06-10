@@ -11,20 +11,31 @@ const corsHeaders = {
   "Access-Control-Max-Age": "86400",
 };
 
+// 429 Rate-Limit 재시도 래퍼 (최대 3회)
+async function notionFetch(url: string, options: RequestInit, retries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const resp = await fetch(url, options);
+    if (resp.status !== 429) return resp;
+    const retryAfter = parseInt(resp.headers.get('Retry-After') || '2', 10);
+    await new Promise(r => setTimeout(r, retryAfter * 1000));
+  }
+  throw new Error('Notion API rate limit exceeded after retries');
+}
+
 // 블록 자식들 재귀적으로 가져오기
 async function fetchBlockChildren(blockId: string, notionKey: string, depth: number = 0): Promise<any[]> {
   if (depth > 2) return [];
-  
+
   let allBlocks: any[] = [];
   let hasMore = true;
   let nextCursor: string | null = null;
 
   while (hasMore) {
-    const url = nextCursor 
+    const url = nextCursor
       ? `https://api.notion.com/v1/blocks/${blockId}/children?start_cursor=${nextCursor}`
       : `https://api.notion.com/v1/blocks/${blockId}/children`;
 
-    const resp = await fetch(url, {
+    const resp = await notionFetch(url, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${notionKey}`,
@@ -32,7 +43,7 @@ async function fetchBlockChildren(blockId: string, notionKey: string, depth: num
       },
     });
 
-    if (!resp.ok) break;
+    if (!resp.ok) throw new Error(`Notion blocks API error: ${resp.status}`);
     
     const data = await resp.json();
     

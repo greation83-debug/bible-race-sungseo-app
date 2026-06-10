@@ -22,11 +22,6 @@ const AdminView = ({
     setEditingUser,
     startEditUser,
     saveEditUser,
-    changingPassword,
-    setChangingPassword,
-    newPassword,
-    setNewPassword,
-    changePassword,
     deleteUser,
     lastSyncInfo,
     setLastSyncInfo,
@@ -634,54 +629,6 @@ const AdminView = ({
                     </div>
                 )}
 
-                {changingPassword && (
-                    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setChangingPassword(null)}>
-                        <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
-                            <h3 className="text-xl font-bold text-slate-800 mb-4 border-b pb-2">🔑 암호 변경</h3>
-                            <div className="bg-blue-50 p-3 rounded-lg mb-4">
-                                <p className="text-sm text-blue-700">
-                                    <strong>{changingPassword.name}</strong>님의 암호를 변경합니다.
-                                </p>
-                                <p className="text-xs text-blue-600 mt-1">
-                                    현재 암호: {changingPassword.password}
-                                </p>
-                            </div>
-                            <div className="mb-4">
-                                <label className="block text-sm font-bold text-slate-600 mb-2">새 암호 (6자리 이상)</label>
-                                <input
-                                    type="text"
-                                    value={newPassword}
-                                    onChange={e => setNewPassword(e.target.value)}
-                                    placeholder="123456"
-                                    className="w-full border border-slate-300 rounded-lg p-3 text-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                    autoFocus
-                                />
-                                <p className="text-xs text-slate-400 mt-1">
-                                    ※ 사용자에게 이 암호를 전달해주세요
-                                </p>
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => changePassword(changingPassword.uid, changingPassword.name, changingPassword.password)}
-                                    disabled={!newPassword || newPassword.length < 6}
-                                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
-                                >
-                                    암호 변경
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setChangingPassword(null);
-                                        setNewPassword('');
-                                    }}
-                                    className="flex-1 bg-slate-200 text-slate-600 py-3 rounded-lg hover:bg-slate-300 font-bold"
-                                >
-                                    취소
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 <div className="bg-white rounded-xl shadow-lg p-6">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-lg font-bold text-slate-800">👥 전체 회원 목록</h2>
@@ -734,7 +681,7 @@ const AdminView = ({
                                         const currentDay = u.currentDay || 1;
                                         const totalDays = (readCount - 1) * 365 + currentDay;
                                         return (
-                                            <tr key={idx} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
+                                            <tr key={u.uid} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
                                                 <td className="px-3 py-3 text-center text-xs text-slate-400 font-mono italic">{idx + 1}</td>
                                                 <td className="px-3 py-3 font-medium text-slate-900">{u.name}{readToday && <span className="ml-1 text-green-500">✓</span>}</td>
                                                 <td className="px-3 py-3"><span className="font-bold">{u.communityName}</span><span className="text-xs text-slate-400 block">{u.subgroupId}</span></td>
@@ -752,7 +699,6 @@ const AdminView = ({
                                                 <td className="px-3 py-3 text-center text-xs text-slate-400">{u.lastReadDate ? new Date(u.lastReadDate).toLocaleDateString('ko-KR') : '-'}</td>
                                                 <td className="px-3 py-3 text-center">
                                                     <div className="flex justify-center gap-1">
-                                                        <button onClick={() => setChangingPassword(u)} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="암호 변경"><Icon name="refresh" size={14} /></button>
                                                         <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded" title="정보 수정"><Icon name="edit" size={14} /></button>
                                                         <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded" title="삭제"><Icon name="trash" size={14} /></button>
                                                     </div>

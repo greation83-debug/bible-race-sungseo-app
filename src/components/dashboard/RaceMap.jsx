@@ -166,4 +166,4 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
     );
 };
 
-export default RaceMap;
+export default React.memo(RaceMap);
