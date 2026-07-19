@@ -3,6 +3,7 @@ import Icon from './Icon';
 
 const AdminView = ({
     handleLogout,
+    goUserMode,
     downloadCSV,
     adminViewMode,
     setAdminViewMode,
@@ -46,7 +47,10 @@ const AdminView = ({
                 <div className="bg-white rounded-xl shadow-lg p-6">
                     <div className="flex justify-between items-center mb-4">
                         <h1 className="text-2xl font-bold text-slate-800">🛠️ 관리자 모드</h1>
-                        <button onClick={handleLogout} className="text-sm bg-slate-200 px-3 py-2 rounded hover:bg-slate-300">나가기</button>
+                        <div className="flex gap-2">
+                            <button onClick={goUserMode} className="text-sm bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 font-bold">📱 내 대시보드</button>
+                            <button onClick={handleLogout} className="text-sm bg-slate-200 px-3 py-2 rounded hover:bg-slate-300">나가기</button>
+                        </div>
                     </div>
                     <div className="flex flex-col md:flex-row gap-4">
                         <button onClick={() => downloadCSV(allUsers)} className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold whitespace-nowrap">

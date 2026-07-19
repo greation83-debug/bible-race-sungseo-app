@@ -32,6 +32,8 @@ import {
 
 const DashboardView = ({
     currentUser,
+    isAdminAccount,
+    openAdminMode,
     communityMembers,
     allMembersForRace,
     memos,
@@ -298,6 +300,8 @@ const DashboardView = ({
 
             <DashboardHeader
                 handleLogout={handleLogout}
+                isAdminAccount={isAdminAccount}
+                openAdminMode={openAdminMode}
                 streak={streak}
                 score={score}
                 myLevel={myLevel}

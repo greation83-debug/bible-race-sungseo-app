@@ -20,7 +20,9 @@ const DashboardHeader = ({
     planTypeName,
     versionName,
     handleChangeVersionStart,
-    setView // 추가
+    setView, // 추가
+    isAdminAccount,
+    openAdminMode
 }) => {
     return (
         <header className="sticky top-0 z-30 space-y-4 mb-4">
@@ -37,6 +39,9 @@ const DashboardHeader = ({
                                 {myLevel.emoji} {score || 0}pt
                             </button>
                             <button type="button" onClick={(e) => { e.stopPropagation(); setView('mini_room'); }} className="p-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 shrink-0 flex items-center gap-1" title="미니룸 입장">🏠 <span className="hidden sm:inline">미니룸</span></button>
+                            {isAdminAccount && (
+                                <button type="button" onClick={(e) => { e.stopPropagation(); openAdminMode(); }} className="p-1.5 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-xl hover:bg-slate-200 shrink-0 flex items-center gap-1" title="관리자 화면">🛠️ <span className="hidden sm:inline">관리자</span></button>
+                            )}
                             <button type="button" onClick={(e) => { e.stopPropagation(); setShowAchievements(true); }} className="p-1.5 text-xs font-bold text-yellow-600 bg-yellow-50 border border-yellow-100 rounded-xl hover:bg-yellow-100 shrink-0">🏅</button>
                             <button type="button" onClick={(e) => { e.stopPropagation(); setShowDateSettings(true); }} className="p-1.5 text-xs font-bold text-purple-600 bg-purple-50 border border-purple-100 rounded-xl hover:bg-purple-100 shrink-0">📅</button>
                             <button type="button" onClick={(e) => { e.stopPropagation(); setShowCalendar(true); }} className="p-1.5 text-xs font-bold text-green-600 bg-green-50 border border-green-100 rounded-xl hover:bg-green-100 shrink-0">📆</button>

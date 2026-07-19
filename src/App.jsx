@@ -93,7 +93,8 @@ const App = () => {
 
     // --- 관리자 관련 상태 ---
     const [selectedPlanType, setSelectedPlanType] = useState(null); // 선택된 플랜 타입
-    const [isAdmin, setIsAdmin] = useState(false);            // 관리자 모드 여부
+    const [isAdmin, setIsAdmin] = useState(false);            // 관리자 화면 표시 중 여부
+    const [isAdminAccount, setIsAdminAccount] = useState(false); // 이 계정이 관리자인지 여부
 
     // --- [Hooks] Extract Logic ---
     const {
@@ -274,6 +275,58 @@ const App = () => {
      회원가입, 로그인, 로그아웃 등 사용자 인증 관련 비즈니스 로직입니다.
     */
 
+    // 관리자 화면용 데이터 로딩 (백그라운드, 화면 전환을 막지 않음)
+    const loadAdminData = () => {
+        if (!db) return;
+
+        db.collection('users').get().then(snap => {
+            setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+        }).catch(e => console.warn('회원 목록 로딩 실패:', e));
+
+        db.collection('settings').doc('announcement').get().then(announcementDoc => {
+            if (announcementDoc.exists) {
+                const data = announcementDoc.data();
+                if (!data.links && data.linkUrl && data.linkText) {
+                    data.links = [{ url: data.linkUrl, text: data.linkText }];
+                }
+                if (!data.links) data.links = [{ url: '', text: '' }];
+                setAnnouncementInput(data);
+            }
+        }).catch(e => console.warn('공지 로딩 실패:', e));
+
+        db.collection('settings').doc('sync').get().then(syncDoc => {
+            if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
+        }).catch(() => {});
+
+        db.collection('settings').doc('kakao').get().then(kakaoDoc => {
+            if (kakaoDoc.exists) setKakaoLinkInput(kakaoDoc.data().url);
+        }).catch(() => {});
+    };
+
+    // 관리자 화면 열기 (대시보드 헤더의 관리자 버튼)
+    const openAdminMode = () => {
+        if (allUsers.length === 0) loadAdminData();
+        setIsAdmin(true);
+    };
+
+    // 새로고침 후에도 관리자 계정 여부 복원
+    useEffect(() => {
+        if (!currentUser || !currentUser.uid || !db) {
+            setIsAdminAccount(false);
+            return;
+        }
+        let cancelled = false;
+        db.collection('config').doc('admins').get().then(doc => {
+            if (!cancelled) {
+                setIsAdminAccount(doc.exists && (doc.data().uids || []).includes(currentUser.uid));
+            }
+        }).catch(() => {
+            // 일반 사용자는 rules상 읽기가 거부됨 → 관리자 아님
+            if (!cancelled) setIsAdminAccount(false);
+        });
+        return () => { cancelled = true; };
+    }, [currentUser && currentUser.uid]);
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setErrorMsg('');
@@ -341,33 +394,10 @@ const App = () => {
             try {
                 const adminDoc = await db.collection('config').doc('admins').get();
                 if (adminDoc.exists && (adminDoc.data().uids || []).includes(uid)) {
-                    // 화면 먼저 전환하고, 무거운 데이터(전체 회원 등)는 백그라운드로 로딩
-                    setIsAdmin(true);
-
-                    db.collection('users').get().then(snap => {
-                        setAllUsers(snap.docs.map(doc => userDocToState(doc)));
-                    }).catch(e => console.warn('회원 목록 로딩 실패:', e));
-
-                    db.collection('settings').doc('announcement').get().then(announcementDoc => {
-                        if (announcementDoc.exists) {
-                            const data = announcementDoc.data();
-                            if (!data.links && data.linkUrl && data.linkText) {
-                                data.links = [{ url: data.linkUrl, text: data.linkText }];
-                            }
-                            if (!data.links) data.links = [{ url: '', text: '' }];
-                            setAnnouncementInput(data);
-                        }
-                    }).catch(e => console.warn('공지 로딩 실패:', e));
-
-                    db.collection('settings').doc('sync').get().then(syncDoc => {
-                        if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
-                    }).catch(() => {});
-
-                    db.collection('settings').doc('kakao').get().then(kakaoDoc => {
-                        if (kakaoDoc.exists) setKakaoLinkInput(kakaoDoc.data().url);
-                    }).catch(() => {});
-
-                    return;
+                    // 관리자 계정 표시만 하고, 로그인은 일반 사용자와 동일하게 대시보드로 진행
+                    // (대시보드 헤더의 관리자 버튼으로 관리자 화면 진입)
+                    setIsAdminAccount(true);
+                    loadAdminData();
                 }
             } catch (adminErr) {
                 console.warn('관리자 확인 실패, 일반 사용자로 진행:', adminErr);
@@ -630,7 +660,7 @@ const App = () => {
     const handleLogout = () => {
         if (auth) auth.signOut();
         clearRaceMembersCache();
-        setCurrentUser(null); setIsAdmin(false); setTempUser(null); setLoginName(''); setLoginPw('');
+        setCurrentUser(null); setIsAdmin(false); setIsAdminAccount(false); setTempUser(null); setLoginName(''); setLoginPw('');
         setErrorMsg(''); setView('login'); setHasReadToday(false); setEditingUser(null); setCommunityMembers([]);
     };
 
@@ -661,6 +691,7 @@ const App = () => {
         return (
             <AdminView
                 handleLogout={handleLogout}
+                goUserMode={() => setIsAdmin(false)}
                 downloadCSV={downloadCSV}
                 adminViewMode={adminViewMode}
                 setAdminViewMode={setAdminViewMode}
@@ -741,6 +772,8 @@ const App = () => {
         return (
             <DashboardView
                 currentUser={currentUser}
+                isAdminAccount={isAdminAccount}
+                openAdminMode={openAdminMode}
                 communityMembers={communityMembers}
                 allMembersForRace={allMembersForRace}
                 memos={memos}
