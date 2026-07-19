@@ -6,7 +6,7 @@ import { getActualDay } from '../utils/helpers';
 import { fetchStaticBibleText } from '../utils/bibleTextCache';
 
 const ENABLE_NOTION_RUNTIME_FALLBACK = false;
-const CACHE_LOOKUP_TIMEOUT_MS = 8000;
+const CACHE_LOOKUP_TIMEOUT_MS = 20000;
 
 const withTimeout = (promise, ms, fallback = null) => {
     return Promise.race([
@@ -206,6 +206,13 @@ export const useBibleContent = (currentUser) => {
                 const cacheKey = `${planType}_${version}_${currentDay}`;
                 try { localStorage.removeItem(`v_${cacheKey}`); } catch (e) {}
                 cached = null;
+            }
+        }
+        if (!cached || !cached.text) {
+            // 타임아웃/일시적 네트워크 문제로 놓친 경우 정적 캐시 1회 최종 재시도
+            const staticRetry = await fetchStaticBibleText(planId, currentDay);
+            if (staticRetry && staticRetry.text) {
+                cached = { title: staticRetry.title, text: staticRetry.text, audioUrl: staticRetry.audioUrl || null };
             }
         }
         if (cached && cached.text) {

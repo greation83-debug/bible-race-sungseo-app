@@ -341,26 +341,32 @@ const App = () => {
             try {
                 const adminDoc = await db.collection('config').doc('admins').get();
                 if (adminDoc.exists && (adminDoc.data().uids || []).includes(uid)) {
-                    const snap = await db.collection('users').get();
-                    setAllUsers(snap.docs.map(doc => userDocToState(doc)));
-
-                    const announcementDoc = await db.collection('settings').doc('announcement').get();
-                    if (announcementDoc.exists) {
-                        const data = announcementDoc.data();
-                        if (!data.links && data.linkUrl && data.linkText) {
-                            data.links = [{ url: data.linkUrl, text: data.linkText }];
-                        }
-                        if (!data.links) data.links = [{ url: '', text: '' }];
-                        setAnnouncementInput(data);
-                    }
-
-                    const syncDoc = await db.collection('settings').doc('sync').get();
-                    if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
-
-                    const kakaoDoc = await db.collection('settings').doc('kakao').get();
-                    if (kakaoDoc.exists) setKakaoLinkInput(kakaoDoc.data().url);
-
+                    // 화면 먼저 전환하고, 무거운 데이터(전체 회원 등)는 백그라운드로 로딩
                     setIsAdmin(true);
+
+                    db.collection('users').get().then(snap => {
+                        setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+                    }).catch(e => console.warn('회원 목록 로딩 실패:', e));
+
+                    db.collection('settings').doc('announcement').get().then(announcementDoc => {
+                        if (announcementDoc.exists) {
+                            const data = announcementDoc.data();
+                            if (!data.links && data.linkUrl && data.linkText) {
+                                data.links = [{ url: data.linkUrl, text: data.linkText }];
+                            }
+                            if (!data.links) data.links = [{ url: '', text: '' }];
+                            setAnnouncementInput(data);
+                        }
+                    }).catch(e => console.warn('공지 로딩 실패:', e));
+
+                    db.collection('settings').doc('sync').get().then(syncDoc => {
+                        if (syncDoc.exists) setLastSyncInfo(syncDoc.data());
+                    }).catch(() => {});
+
+                    db.collection('settings').doc('kakao').get().then(kakaoDoc => {
+                        if (kakaoDoc.exists) setKakaoLinkInput(kakaoDoc.data().url);
+                    }).catch(() => {});
+
                     return;
                 }
             } catch (adminErr) {
