@@ -40,7 +40,6 @@ const App = () => {
     const [signupBirthdate, setSignupBirthdate] = useState(''); // 회원가입: 생년월일
     const [loginName, setLoginName] = useState('');     // 로그인: 이름
     const [loginPw, setLoginPw] = useState('');         // 로그인: 비밀번호
-    const [loginBirthdate, setLoginBirthdate] = useState(''); // 로그인: 생년월일 (신규 가입자용)
     const [tempUser, setTempUser] = useState(null);     // 임시 사용자 (가입 진행 중)
     const { currentUser, setCurrentUser, authLoading } = useUserAuth(); // Auth hook
     const [errorMsg, setErrorMsg] = useState('');       // 에러 메시지
@@ -296,7 +295,6 @@ const App = () => {
 
         const name = loginTab === 'signup' ? signupName : loginName;
         const pw = loginTab === 'signup' ? signupPw : loginPw;
-        const birthdate = loginTab === 'signup' ? signupBirthdate : loginBirthdate;
 
         if (!name.trim() || !pw.trim()) {
             setErrorMsg("이름과 암호를 모두 입력해주세요.");
@@ -304,7 +302,8 @@ const App = () => {
         }
 
         try {
-            const email = makePseudoEmail(name, birthdate);
+            // 계정 식별은 이름만 사용 (생년월일은 회원 정보로만 저장)
+            const email = makePseudoEmail(name);
 
             let cred = null;
 
@@ -625,7 +624,7 @@ const App = () => {
     const handleLogout = () => {
         if (auth) auth.signOut();
         clearRaceMembersCache();
-        setCurrentUser(null); setIsAdmin(false); setTempUser(null); setLoginName(''); setLoginPw(''); setLoginBirthdate('');
+        setCurrentUser(null); setIsAdmin(false); setTempUser(null); setLoginName(''); setLoginPw('');
         setErrorMsg(''); setView('login'); setHasReadToday(false); setEditingUser(null); setCommunityMembers([]);
     };
 
@@ -702,8 +701,6 @@ const App = () => {
                 setLoginName={setLoginName}
                 loginPw={loginPw}
                 setLoginPw={setLoginPw}
-                loginBirthdate={loginBirthdate}
-                setLoginBirthdate={setLoginBirthdate}
                 signupName={signupName}
                 setSignupName={setSignupName}
                 signupBirthdate={signupBirthdate}

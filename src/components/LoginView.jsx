@@ -7,8 +7,6 @@ const LoginView = ({
     setLoginName,
     loginPw,
     setLoginPw,
-    loginBirthdate,
-    setLoginBirthdate,
     signupName,
     setSignupName,
     signupBirthdate,
@@ -63,21 +61,6 @@ const LoginView = ({
                                 onChange={e => setLoginName(e.target.value)}
                                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="홍길동"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 mb-1 ml-1">
-                                생년월일 <span className="text-slate-400 font-normal">(생년월일로 가입한 경우만 입력)</span>
-                            </label>
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                maxLength="8"
-                                value={loginBirthdate}
-                                onChange={e => setLoginBirthdate(e.target.value.replace(/[^0-9]/g, ''))}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg tracking-wider"
-                                placeholder="19500101"
                             />
                         </div>
                         <div>
