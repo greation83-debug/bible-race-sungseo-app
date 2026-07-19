@@ -41,6 +41,31 @@ export const calculateSubgroupStats = (members) => {
     return stats;
 };
 
+// 멤버의 읽은 기록 목록 반환: readHistory가 비어 있으면 recentReadDates(날짜 문자열 배열)로 폴백
+const getMemberReadEntries = (member) => {
+    if (Array.isArray(member.readHistory) && member.readHistory.length > 0) return member.readHistory;
+    if (Array.isArray(member.recentReadDates)) return member.recentReadDates;
+    return [];
+};
+
+// 이번 주에 읽은 DAY 분량 계산 (readHistory 없으면 recentReadDates 폴백)
+export const getWeeklyReadCount = (member, weekStart) => {
+    return getMemberReadEntries(member).reduce((total, item) => {
+        try {
+            const date = typeof item === 'string' ? item : item.date;
+            const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
+
+            const readDate = new Date(date);
+            if (readDate >= weekStart) {
+                return total + daysRead;
+            }
+            return total;
+        } catch (e) {
+            return total;
+        }
+    }, 0);
+};
+
 export const getWeeklyMVP = (communityMembers) => {
     if (!communityMembers || communityMembers.length === 0) return null;
 
@@ -49,31 +74,11 @@ export const getWeeklyMVP = (communityMembers) => {
     weekStart.setDate(now.getDate() - now.getDay()); // 이번 주 일요일
     weekStart.setHours(0, 0, 0, 0);
 
-    // 이번 주에 읽은 DAY 분량 계산 함수
-    const getWeeklyReadCount = (member) => {
-        if (!member.readHistory || !Array.isArray(member.readHistory)) return 0;
-
-        return member.readHistory.reduce((total, item) => {
-            try {
-                const date = typeof item === 'string' ? item : item.date;
-                const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
-
-                const readDate = new Date(date);
-                if (readDate >= weekStart) {
-                    return total + daysRead;
-                }
-                return total;
-            } catch (e) {
-                return total;
-            }
-        }, 0);
-    };
-
     const weeklyWithCounts = communityMembers
         .map(m => ({
             ...m,
-            weeklyCount: getWeeklyReadCount(m),
-            totalCount: (m.readHistory ? m.readHistory.length : 0)
+            weeklyCount: getWeeklyReadCount(m, weekStart),
+            totalCount: getMemberReadEntries(m).length
         }))
         .filter(m => m.weeklyCount > 0)
         .sort((a, b) => {
@@ -127,9 +132,7 @@ export const getMonthlyContest = (currentUser, communityMembers, mockCommunities
             if (totalCount === 0) return null;
 
             const totalReads = members.reduce(function (sum, member) {
-                if (!member.readHistory || !Array.isArray(member.readHistory)) return sum;
-
-                const monthlyReads = member.readHistory.filter(function (item) {
+                const monthlyReads = getMemberReadEntries(member).filter(function (item) {
                     var dateStr = typeof item === 'string' ? item : item.date;
                     const readDate = new Date(dateStr);
                     return readDate >= monthStart && readDate <= now;

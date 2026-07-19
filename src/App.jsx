@@ -69,6 +69,7 @@ const App = () => {
 
         loadMemos,
         loadAnnouncement,
+        rebuildSummary,
         kakaoLink, loadKakaoLink, setKakaoLink
     } = useBibleLogic(currentUser, setCurrentUser, view);
     const weeklyMVPFn = useMemo(() => () => getWeeklyMVP(communityMembers), [communityMembers]);
@@ -724,6 +725,7 @@ const App = () => {
                 setKakaoLinkInput={setKakaoLinkInput}
                 saveKakaoLink={saveKakaoLink}
                 downloadPeriodStatsCSV={downloadPeriodStatsCSV}
+                rebuildSummary={rebuildSummary}
                 db={db}
             />
         );

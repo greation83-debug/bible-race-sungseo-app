@@ -36,10 +36,25 @@ const AdminView = ({
     setKakaoLinkInput,
     saveKakaoLink,
     downloadPeriodStatsCSV,
+    rebuildSummary,
     db
 }) => {
     const [startDate, setStartDate] = React.useState('');
     const [endDate, setEndDate] = React.useState('');
+    const [rebuilding, setRebuilding] = React.useState(false);
+
+    const handleRebuildSummary = async () => {
+        if (typeof rebuildSummary !== 'function' || rebuilding) return;
+        setRebuilding(true);
+        try {
+            const count = await rebuildSummary();
+            alert(`집계 재생성 완료: ${count}명`);
+        } catch (e) {
+            alert('집계 재생성 실패: ' + ((e && e.message) || e));
+        } finally {
+            setRebuilding(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-slate-100 p-4">
@@ -55,6 +70,14 @@ const AdminView = ({
                     <div className="flex flex-col md:flex-row gap-4">
                         <button onClick={() => downloadCSV(allUsers)} className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-bold whitespace-nowrap">
                             <Icon name="download" size={18} /> 전체 CSV 다운로드
+                        </button>
+
+                        <button
+                            onClick={handleRebuildSummary}
+                            disabled={rebuilding}
+                            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-bold whitespace-nowrap text-white ${rebuilding ? 'bg-purple-300 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'}`}
+                        >
+                            🔄 {rebuilding ? '재생성 중...' : '레이스맵 집계 재생성'}
                         </button>
 
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1">

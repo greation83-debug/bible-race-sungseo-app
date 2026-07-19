@@ -1,4 +1,5 @@
 import React from 'react';
+import { getWeeklyReadCount } from '../../utils/statsUtils';
 
 const ReadingChampionSection = ({ getWeeklyMVP }) => {
     if (typeof getWeeklyMVP !== 'function') return null;
@@ -29,12 +30,7 @@ const ReadingChampionSection = ({ getWeeklyMVP }) => {
                     <p className="text-xs text-orange-500 mb-2 font-bold">
                         {(() => {
                             if (!streakMVP) return '-';
-                            const weeklyCount = (streakMVP.readHistory || []).reduce((total, item) => {
-                                const date = typeof item === 'string' ? item : item.date;
-                                const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
-                                const readDate = new Date(date);
-                                return readDate >= weekStart ? total + daysRead : total;
-                            }, 0);
+                            const weeklyCount = getWeeklyReadCount(streakMVP, weekStart);
                             return `이번 주 ${weeklyCount}일`;
                         })()}
                     </p>
@@ -69,12 +65,7 @@ const ReadingChampionSection = ({ getWeeklyMVP }) => {
                     <p className="text-[10px] text-slate-500 font-bold mb-2 text-center">주간 2-10위</p>
                     <div className="space-y-1">
                         {weeklyTop10.length > 1 ? weeklyTop10.slice(1, 10).map((member, idx) => {
-                            const weeklyCount = (member.readHistory || []).reduce((total, item) => {
-                                const date = typeof item === 'string' ? item : item.date;
-                                const daysRead = typeof item === 'string' ? 1 : (item.daysRead || 1);
-                                const readDate = new Date(date);
-                                return readDate >= weekStart ? total + daysRead : total;
-                            }, 0);
+                            const weeklyCount = getWeeklyReadCount(member, weekStart);
                             return (
                                 <div key={member.uid} className="flex justify-between items-center text-[10px]">
                                     <span className="text-slate-600 truncate mr-1">{idx + 2}위. {member.name}</span>

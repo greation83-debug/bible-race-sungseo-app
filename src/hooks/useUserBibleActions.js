@@ -136,12 +136,19 @@ export const useUserBibleActions = (
             }
 
             // loadAllMembers() 대신 로컬 낙관적 업데이트 (Firestore 풀스캔 제거)
+            const myRaceEntry = allMembersForRace.find(m => m.uid === uid);
+            const prevRecentDates = (myRaceEntry && Array.isArray(myRaceEntry.recentReadDates))
+                ? myRaceEntry.recentReadDates
+                : [];
+            // 중복 제거 후 오늘 날짜를 뒤에 추가, 최근 14개만 유지 (오래된 것부터 버림)
+            const recentReadDates = [...prevRecentDates.filter(d => d !== todayStr), todayStr].slice(-14);
             const memberPatch = {
                 currentDay: newProgressDay,
                 readCount: newReadCount,
                 score: newScore,
                 streak: newStreak,
                 lastReadDate: todayStr,
+                recentReadDates,
             };
             const updatedMembers = (() => {
                 const found = allMembersForRace.some(m => m.uid === uid);

@@ -19,7 +19,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         subgroupStats, setSubgroupStats, communityMembers, setCommunityMembers,
         allMembersForRace, setAllMembersForRace, announcement, loadAnnouncement,
         kakaoLink, loadKakaoLink, setKakaoLink,
-        loadAllMembers, changeSubgroup
+        loadAllMembers, changeSubgroup, rebuildSummary
     } = useCommunity(currentUser, setCurrentUser);
 
     // 3. User Actions Hook
@@ -138,6 +138,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
 
         // Data Loaders
         loadAllMembers,
+        rebuildSummary,
         loadMemos,
         loadAnnouncement,
         loadKakaoLink,

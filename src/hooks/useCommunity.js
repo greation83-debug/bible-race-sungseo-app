@@ -4,6 +4,15 @@ import { calculateSubgroupStats } from '../utils/statsUtils';
 
 const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v1';
 
+// readHistory에서 date 값만 뽑아 중복 제거 후 최근 maxCount개 반환
+const extractRecentDates = (readHistory, maxCount = 14) => {
+    if (!Array.isArray(readHistory)) return [];
+    const dates = readHistory
+        .map(item => (typeof item === 'string' ? item : (item && item.date)))
+        .filter(Boolean);
+    return [...new Set(dates)].slice(-maxCount);
+};
+
 const compactRaceMember = (member) => ({
     uid: member.uid,
     name: member.name || '',
@@ -17,6 +26,10 @@ const compactRaceMember = (member) => ({
     lastReadDate: member.lastReadDate || null,
     planId: member.planId || '',
     readHistory: Array.isArray(member.readHistory) ? member.readHistory : [],
+    // summary 항목에 recentReadDates가 없으면(구버전) readHistory에서 최근 14개 날짜로 채움
+    recentReadDates: Array.isArray(member.recentReadDates)
+        ? member.recentReadDates
+        : extractRecentDates(member.readHistory),
 });
 
 const readCachedRaceMembers = () => {
@@ -112,6 +125,7 @@ export const useCommunity = (currentUser, setCurrentUser) => {
                     subgroupId: d.subgroupId || null,
                     communityId: d.communityId || null,
                     communityName: d.communityName || null,
+                    recentReadDates: extractRecentDates(d.readHistory),
                 };
             });
             await db.collection('summary').doc('global').set({ members: membersMap });
