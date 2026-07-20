@@ -8,6 +8,21 @@ import { fetchStaticBibleText } from '../utils/bibleTextCache';
 const ENABLE_NOTION_RUNTIME_FALLBACK = false;
 const CACHE_LOOKUP_TIMEOUT_MS = 20000;
 
+// 새한글은 bold 절 마커(**11**)가 있어야 정상 렌더링된다.
+// 마커 없는 옛 캐시(정적 JSON/localStorage)는 사용 불가로 간주하고 다음 단계(Firestore)로 넘어간다.
+const isUsableCacheText = (version, text) => {
+    if (!text) return false;
+    if (version && version.startsWith('saehangul')) {
+        return /\*\*\d+\s*\*\*/.test(text);
+    }
+    return true;
+};
+
+// 절 번호가 bold 마커(**숫자**)로 저장된 버전 (새한글, NIV)은 절 표시 전처리가 필요하다.
+const shouldFormatVerseMarkers = (version) => {
+    return !!version && (version.startsWith('saehangul') || version.startsWith('niv'));
+};
+
 const withTimeout = (promise, ms, fallback = null) => {
     return Promise.race([
         promise,
@@ -124,7 +139,7 @@ export const useBibleContent = (currentUser) => {
 
         // 0단계: 빌드/배포 전에 생성한 정적 JSON 캐시
         const staticData = await fetchStaticBibleText(planId, day);
-        if (staticData) {
+        if (staticData && isUsableCacheText(version, staticData.text)) {
             console.log(`📦 정적 성경본문 캐시 히트: ${planId} Day ${day}`);
             return {
                 title: staticData.title,
@@ -138,8 +153,13 @@ export const useBibleContent = (currentUser) => {
         try {
             const local = localStorage.getItem(`v_${cacheKey}`);
             if (local) {
-                console.log(`⚡ localStorage 히트: ${cacheKey}`);
-                return JSON.parse(local);
+                const parsed = JSON.parse(local);
+                if (isUsableCacheText(version, parsed && parsed.text)) {
+                    console.log(`⚡ localStorage 히트: ${cacheKey}`);
+                    return parsed;
+                }
+                // 마커 없는 옛 새한글 로컬 캐시는 제거하고 Firestore로 진행
+                localStorage.removeItem(`v_${cacheKey}`);
             }
         } catch (e) { /* localStorage 실패 무시 */ }
 
@@ -210,8 +230,9 @@ export const useBibleContent = (currentUser) => {
         }
         if (!cached || !cached.text) {
             // 타임아웃/일시적 네트워크 문제로 놓친 경우 정적 캐시 1회 최종 재시도
+            // (새한글 옛 캐시는 재도입하지 않음)
             const staticRetry = await fetchStaticBibleText(planId, currentDay);
-            if (staticRetry && staticRetry.text) {
+            if (staticRetry && isUsableCacheText(version, staticRetry.text)) {
                 cached = { title: staticRetry.title, text: staticRetry.text, audioUrl: staticRetry.audioUrl || null };
             }
         }
@@ -275,8 +296,8 @@ export const useBibleContent = (currentUser) => {
             if (notionData && notionData.text && !notionData.text.startsWith('[오류]')) {
                 let processedText = notionData.text;
 
-                // 새한글 버전일 경우 절 표시 처리
-                if (version && version.startsWith('saehangul')) {
+                // 새한글·NIV 등 bold 절 마커 버전은 절 표시 처리
+                if (shouldFormatVerseMarkers(version)) {
                     processedText = formatSaehangulText(processedText);
                 }
 
@@ -299,8 +320,8 @@ export const useBibleContent = (currentUser) => {
                 const versionName = (versionInfo && versionInfo.name) || '기본';
                 let displayText = actualDay === 1 ? GENESIS_1 : ((notionData && notionData.text) || `데이터를 불러올 수 없습니다.`);
 
-                // 새한글 버전일 경우 절 표시 처리
-                if (version && version.startsWith('saehangul')) {
+                // 새한글·NIV 등 bold 절 마커 버전은 절 표시 처리
+                if (shouldFormatVerseMarkers(version)) {
                     displayText = formatSaehangulText(displayText);
                 }
 

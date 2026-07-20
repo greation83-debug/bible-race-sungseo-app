@@ -9,10 +9,12 @@ const MAPPED_SCHEDULES = {
     '1year_new': schedules.whole_bible,
     '1year_easy': schedules.whole_bible,
     '1year_saehangul': schedules.whole_bible,
+    '1year_niv': schedules.whole_bible,
     '1year_sequential': schedules.whole_bible,
     'nt_new': schedules.whole_bible, // 임시 매핑 내지는 nt 데이터 필요
     'nt_easy': schedules.whole_bible,
     'nt_saehangul': schedules.whole_bible,
+    'nt_niv': schedules.new_testament,
     'nt_message': schedules.whole_bible,
     // 신약 등 다른 플랜 데이터가 추가되면 여기에 매핑 추가
 };

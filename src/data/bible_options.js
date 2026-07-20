@@ -12,12 +12,14 @@ export const BIBLE_VERSIONS = {
         { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 일년일독' },
         { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 일년일독' },
         { id: 'saehangul', name: '새한글', desc: '가장 최근에 번역된 현대어 성경', tagName: '새한글 일년일독' },
+        { id: 'niv', name: 'NIV', desc: 'New International Version 영어 성경', tagName: 'NIV 일년일독' },
         { id: 'sequential', name: '개역개정(순서대로)', desc: '창세기부터 요한계시록까지 순서대로 일독', tagName: '개역개정 순서대로' }
     ],
     'nt': [  // 신약 일독 버전들
         { id: 'new', name: '새번역', desc: '쉬운 현대어로 읽을 수 있는 성경', tagName: '새번역 신약일독' },
         { id: 'easy', name: '쉬운성경', desc: '어린이도 쉽게 읽을 수 있는 성경', tagName: '쉬운성경 신약일독' },
         { id: 'saehangul', name: '새한글', desc: '가장 최근에 번역된 현대어 성경', tagName: '새한글 신약일독' },
+        { id: 'niv', name: 'NIV', desc: 'New International Version 영어 성경', tagName: 'NIV 신약일독' },
         { id: 'message', name: '메시지 성경', desc: '현대 문화와 일상 언어로 생생하게 재해석한 의역 성경', tagName: '메시지 신약일독' }
     ]
 };

@@ -27,6 +27,19 @@ const BibleReader = ({
 }) => {
     const readerRef = useRef(null);
 
+    const isEnglishPlan = (currentUser?.planId || '').endsWith('_niv');
+    const voiceStorageKey = isEnglishPlan ? 'bible_selectedVoiceURI_en_v2' : 'bible_selectedVoiceURI_ko';
+    const getVoiceLabel = (voice) => {
+        if (!isEnglishPlan) return `${voice.name} (${voice.lang})`;
+
+        const name = `${voice.name || ''} ${voice.voiceURI || ''}`.toLowerCase();
+        const gender = /alex|daniel|tom|david|mark|guy|brian|ryan|eric|roger|matthew|justin|reed/i.test(name)
+            ? '남성'
+            : '여성';
+
+        return `${gender} - ${voice.name} (${voice.lang})`;
+    };
+
     const handleReadAndScroll = async () => {
         await handleRead();
         window.setTimeout(() => {
@@ -153,7 +166,7 @@ const BibleReader = ({
                                         onChange={(e) => {
                                             const newVoiceURI = e.target.value;
                                             setSelectedVoiceURI(newVoiceURI);
-                                            localStorage.setItem('bible_selectedVoiceURI', newVoiceURI);
+                                            localStorage.setItem(voiceStorageKey, newVoiceURI);
                                             if (isSpeaking) {
                                                 const currentIndex = activeChunkIndex;
                                                 handleStop();
@@ -166,7 +179,7 @@ const BibleReader = ({
                                     >
                                         {availableVoices.map(voice => (
                                             <option key={voice.voiceURI} value={voice.voiceURI}>
-                                                {voice.name}
+                                                {getVoiceLabel(voice)}
                                             </option>
                                         ))}
                                     </select>

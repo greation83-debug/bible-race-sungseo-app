@@ -98,11 +98,13 @@ const App = () => {
     const [isAdminAccount, setIsAdminAccount] = useState(false); // 이 계정이 관리자인지 여부
 
     // --- [Hooks] Extract Logic ---
+    // NIV(영어) 플랜이면 영어 음성으로 읽어주기
+    const ttsLanguage = (currentUser?.planId || '').endsWith('_niv') ? 'en-US' : 'ko-KR';
     const {
         isSpeaking, isPaused, ttsSpeed, availableVoices, selectedVoiceURI, activeChunkIndex,
         handleSpeedChange, handleTogglePause, handleStop, handleSpeak, jumpToChunk,
         setSelectedVoiceURI
-    } = useTTS(verseData.text);
+    } = useTTS(verseData.text, ttsLanguage);
 
     const [allUsers, setAllUsers] = useState([]);             // 전체 사용자 목록 (관리자용)
 
