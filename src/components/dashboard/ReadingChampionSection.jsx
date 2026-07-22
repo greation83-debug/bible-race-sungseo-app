@@ -31,7 +31,7 @@ const ReadingChampionSection = ({ getWeeklyMVP }) => {
                         {(() => {
                             if (!streakMVP) return '-';
                             const weeklyCount = getWeeklyReadCount(streakMVP, weekStart);
-                            return `이번 주 ${weeklyCount}일`;
+                            return `이번 주 총 ${weeklyCount}일분`;
                         })()}
                     </p>
                     <p className="text-[9px] text-slate-400 mt-2 pt-2 border-t border-slate-100">이번 주 가장 많이 읽은 사람</p>
@@ -69,7 +69,7 @@ const ReadingChampionSection = ({ getWeeklyMVP }) => {
                             return (
                                 <div key={member.uid} className="flex justify-between items-center text-[10px]">
                                     <span className="text-slate-600 truncate mr-1">{idx + 2}위. {member.name}</span>
-                                    <span className="text-orange-500 font-bold shrink-0">{weeklyCount}일</span>
+                                    <span className="text-orange-500 font-bold shrink-0">{weeklyCount}일분</span>
                                 </div>
                             );
                         }) : <p className="text-[10px] text-slate-400 text-center py-2">-</p>}

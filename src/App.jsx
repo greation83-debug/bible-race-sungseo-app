@@ -8,7 +8,7 @@ import { PLAN_TYPES, BIBLE_VERSIONS } from './data/bible_options';
 import { makePseudoEmail, userDocToState, toSinoKorean, dateToOffset, offsetToDateStr, getActualDay } from './utils/helpers';
 import { calculateSubgroupStats, getWeeklyMVP, getMonthlyContest, formatSubgroupRanking, formatProgressRanking, getAdminStats } from './utils/statsUtils';
 import { getSubgroupDisplay } from './utils/dashboardUtils';
-import { generateMemosHTML, generateMemosCSV, downloadCSV, downloadPeriodStatsCSV } from './utils/exportUtils';
+import { generateMemosHTML, generateMemosCSV, generateUserMemosHTML, downloadCSV, downloadPeriodStatsCSV } from './utils/exportUtils';
 import { useUserAuth } from './hooks/useUserAuth';
 import { useBibleLogic } from './hooks/useBibleLogic';
 import { clearRaceMembersCache } from './hooks/useCommunity';
@@ -18,7 +18,6 @@ import LoginView from './components/LoginView';
 import AdminView from './components/AdminView';
 import PlanSelectionView from './components/PlanSelectionView';
 import DashboardView from './components/DashboardView';
-import MiniRoomPage from './components/miniroom/MiniRoomPage';
 import { TOTAL_DAYS, PANIC_DISTANCE, AUDIO_BASE_URL, GENESIS_1, SUPABASE_FUNCTION_URL } from './data/constants';
 import { useTTS } from './hooks/useTTS';
 
@@ -708,8 +707,8 @@ const App = () => {
                 announcementInput={announcementInput}
                 setAnnouncementInput={setAnnouncementInput}
                 saveAnnouncement={saveAnnouncement}
-                generateMemosCSV={generateMemosCSV}
-                generateMemosHTML={generateMemosHTML}
+                generateMemosCSV={() => generateMemosCSV(db)}
+                generateUserMemosHTML={(user) => generateUserMemosHTML(db, user)}
                 editingUser={editingUser}
                 setEditingUser={setEditingUser}
                 startEditUser={startEditUser}
@@ -835,17 +834,6 @@ const App = () => {
                 getSubgroupDisplay={getSubgroupDisplay}
                 generateMemosHTML={generateMemosHTML}
                 getWeeklyMVP={weeklyMVPFn}
-                setView={setView}
-            />
-        );
-    }
-
-    if (view === 'mini_room' && currentUser) {
-        return (
-            <MiniRoomPage
-                currentUser={currentUser}
-                setCurrentUser={setCurrentUser}
-                setView={setView}
             />
         );
     }

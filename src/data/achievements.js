@@ -1,3 +1,5 @@
+import { countMemoEntries } from '../utils/memoUtils';
+
 export const ACHIEVEMENTS = [
     // 읽기 시작 관련
     {
@@ -40,15 +42,15 @@ export const ACHIEVEMENTS = [
     // 묵상 메모 관련
     {
         id: 'first_memo', title: '첫 묵상', desc: '처음으로 묵상을 기록했습니다', emoji: '📝',
-        condition: (u, m) => Object.keys(m || {}).length >= 1
+        condition: (u, m) => countMemoEntries(m) >= 1
     },
     {
         id: 'memo_10', title: '묵상 10개', desc: '묵상을 10개 작성했습니다', emoji: '📚',
-        condition: (u, m) => Object.keys(m || {}).length >= 10
+        condition: (u, m) => countMemoEntries(m) >= 10
     },
     {
         id: 'memo_50', title: '묵상 50개', desc: '묵상을 50개 작성했습니다', emoji: '🎓',
-        condition: (u, m) => Object.keys(m || {}).length >= 50
+        condition: (u, m) => countMemoEntries(m) >= 50
     },
 
     // 점수 관련

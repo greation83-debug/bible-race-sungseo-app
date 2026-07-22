@@ -1,23 +1,22 @@
+import { countMemoEntries, getMemoEntries, memoEntriesToMap } from './memoUtils';
+
 export const generateMemosHTML = (userName, userMemos, userStats = {}) => {
-    const memoCount = Object.keys(userMemos).length;
-    const sortedMemos = Object.keys(userMemos).map(function (key) { return [key, userMemos[key]]; }).sort(function (a, b) { return Number(a[0]) - Number(b[0]); });
+    const memoCount = countMemoEntries(userMemos);
+    const sortedMemos = getMemoEntries(userMemos).sort((a, b) => String(a.date).localeCompare(String(b.date)));
 
     // 묵상 항목들 HTML 생성
     let memosHTML = '';
-    sortedMemos.forEach(([day, memo]) => {
+    sortedMemos.forEach((memo) => {
         const dateStr = memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : '';
-        const memoTexts = Array.isArray(memo.texts) ? memo.texts : [memo.text || ''];
 
         memosHTML += `
                     <div style="background: white; border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #e2e8f0;">
-                            <span style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 18px;">DAY ${day}</span>
+                            <span style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; padding: 8px 20px; border-radius: 25px; font-weight: bold; font-size: 18px;">${memo.readCount ? `${memo.readCount}독 · ` : ''}DAY ${memo.day}</span>
                             <span style="color: #64748b; font-size: 16px;">${dateStr}</span>
                         </div>
                         <div style="color: #475569; font-size: 17px; font-weight: 600; margin-bottom: 16px;">${memo.title || ''}</div>
-                        ${memoTexts.map((text, idx) => `
-                            <div style="color: #1e293b; font-size: 18px; line-height: 1.9; white-space: pre-wrap; ${memoTexts.length > 1 ? 'background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 12px;' : ''}">${text}</div>
-                        `).join('')}
+                        <div style="color: #1e293b; font-size: 18px; line-height: 1.9; white-space: pre-wrap;">${memo.text}</div>
                     </div>
                 `;
     });
@@ -126,22 +125,25 @@ export const generateMemosCSV = async (db) => {
 
     try {
         const snap = await db.collection('users').get();
-        let csvContent = 'Name,Subgroup,Day,Date,Title,Memo\n';
+        let csvContent = 'Name,Subgroup,ReadCount,Day,Date,Title,Memo\n';
 
-        snap.docs.forEach(doc => {
+        for (const doc of snap.docs) {
             const data = doc.data();
             const userName = data.name || 'Unknown';
             const subgroup = data.subgroupId || '-';
-            const memos = data.memos || {};
+            const memoSnap = await doc.ref.collection('memos').get();
+            const entries = [
+                ...getMemoEntries(data.memos || {}),
+                ...memoSnap.docs.map(memoDoc => ({ id: memoDoc.id, ...memoDoc.data() }))
+            ];
 
-            Object.keys(memos).forEach(function (day) {
-                var memo = memos[day];
+            entries.forEach(memo => {
                 const dateStr = memo.date ? new Date(memo.date).toLocaleDateString('ko-KR') : '';
                 const title = (memo.title || '').replace(/,/g, ';').replace(/\n/g, ' ');
                 const text = (memo.text || '').replace(/,/g, ';').replace(/\n/g, ' ');
-                csvContent += `"${userName}","${subgroup}","${day}","${dateStr}","${title}","${text}"\n`;
+                csvContent += `"${userName}","${subgroup}","${memo.readCount || ''}","${memo.day}","${dateStr}","${title}","${text}"\n`;
             });
-        });
+        }
 
         const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -154,6 +156,19 @@ export const generateMemosCSV = async (db) => {
         console.error('CSV 생성 오류:', e);
         alert('CSV 생성 중 오류가 발생했습니다.');
     }
+};
+
+export const generateUserMemosHTML = async (db, user) => {
+    const memoSnap = await db.collection('users').doc(user.uid).collection('memos').get();
+    const allMemos = memoEntriesToMap([
+        ...getMemoEntries(user.memos || {}),
+        ...memoSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    ]);
+    generateMemosHTML(user.name, allMemos, {
+        currentDay: user.currentDay,
+        score: user.score,
+        streak: user.streak
+    });
 };
 
 export const downloadCSV = (allUsers) => {

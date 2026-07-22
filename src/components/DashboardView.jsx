@@ -92,12 +92,11 @@ const DashboardView = ({
     getProgressRanking,
     getSubgroupDisplay,
     generateMemosHTML,
-    getWeeklyMVP,
-    setView // 추가
+    getWeeklyMVP
 }) => {
     if (!currentUser) return null;
 
-    const { currentDay, score, subgroupId, communityName, planId, streak } = currentUser;
+    const { currentDay, score, subgroupId, communityName, planId, streak, readCount = 1 } = currentUser;
     const [planType, version] = (planId || '1year_revised').split('_');
     const planTypeDataDashboard = PLAN_TYPES.find(p => p.id === planType);
     const planTypeName = planTypeDataDashboard ? planTypeDataDashboard.title : '성경 통독';
@@ -319,7 +318,6 @@ const DashboardView = ({
                 planTypeName={planTypeName}
                 versionName={versionName}
                 handleChangeVersionStart={handleChangeVersionStart}
-                setView={setView}
             />
 
             <div className="max-w-5xl mx-auto w-full pb-10 mt-8">
@@ -361,6 +359,7 @@ const DashboardView = ({
                             saveMemo={saveMemo}
                             viewingDay={viewingDay}
                             currentDay={currentDay}
+                            readCount={readCount}
                             memos={memos}
                         />
 

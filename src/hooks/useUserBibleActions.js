@@ -165,7 +165,26 @@ export const useUserBibleActions = (
             setAllMembersForRace(updatedMembers);
             setSubgroupStats(calculateSubgroupStats(updatedMembers));
             if (currentUser.communityId) {
-                setCommunityMembers(updatedMembers.filter(m => m.communityId === currentUser.communityId));
+                // 전체 readHistory를 보존하면서 방금 읽은 DAY를 더해 주간 읽기왕에 즉시 반영한다.
+                setCommunityMembers(prevMembers => {
+                    const found = prevMembers.some(m => m.uid === uid);
+                    if (found) {
+                        return prevMembers.map(m => m.uid === uid ? {
+                            ...m,
+                            ...memberPatch,
+                            readHistory: [...(m.readHistory || []), historyItem],
+                        } : m);
+                    }
+                    return [...prevMembers, {
+                        uid,
+                        name: currentUser.name,
+                        subgroupId: currentUser.subgroupId || null,
+                        communityId: currentUser.communityId || null,
+                        communityName: currentUser.communityName || null,
+                        ...memberPatch,
+                        readHistory: [historyItem],
+                    }];
+                });
             }
 
             // summary/global 비동기 업데이트 (다른 사용자의 다음 로드에 반영)
@@ -201,9 +220,15 @@ export const useUserBibleActions = (
 
         try {
             const today = kstTodayDateString();
+            const memoSnapshot = await db.collection('users').doc(uid).collection('memos').get();
+            for (let start = 0; start < memoSnapshot.docs.length; start += 400) {
+                const batch = db.batch();
+                memoSnapshot.docs.slice(start, start + 400).forEach(doc => batch.delete(doc.ref));
+                await batch.commit();
+            }
             await db.collection('users').doc(uid).set({
-                currentDay: 1, score: 0, streak: 0, startDate: today,
-                lastReadDate: null, memos: {}, achievements: [],
+                currentDay: 1, readCount: 1, score: 0, streak: 0, startDate: today,
+                lastReadDate: null, memos: {}, memoCount: 0, achievements: [],
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
 

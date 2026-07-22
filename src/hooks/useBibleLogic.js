@@ -19,7 +19,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         subgroupStats, setSubgroupStats, communityMembers, setCommunityMembers,
         allMembersForRace, setAllMembersForRace, announcement, loadAnnouncement,
         kakaoLink, loadKakaoLink, setKakaoLink,
-        loadAllMembers, changeSubgroup, rebuildSummary
+        loadAllMembers, loadCommunityMembersWithHistory, changeSubgroup, rebuildSummary
     } = useCommunity(currentUser, setCurrentUser);
 
     // 3. User Actions Hook
@@ -58,6 +58,11 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
             const uid = currentUser.uid;
 
             const membersPromise = loadAllMembers();
+            // 읽기왕은 날짜 수가 아니라 실제로 읽은 DAY 분량을 집계해야 하므로
+            // 현재 공동체 멤버의 전체 readHistory를 별도로 불러온다.
+            const communityMembersPromise = currentUser.communityId
+                ? loadCommunityMembersWithHistory(currentUser.communityId)
+                : Promise.resolve([]);
             const memosPromise = loadMemos(uid);
             const historyPromise = (async () => {
                 const historySnap = await db.collection('users').doc(uid).collection('history').get();
@@ -82,10 +87,12 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
             setAllMembersForRace(allMembers);
             if (allMembers && allMembers.length > 0) {
                 setSubgroupStats(calculateSubgroupStats(allMembers));
-                if (currentUser.communityId) {
-                    const myCommMembers = allMembers.filter(m => m.communityId === currentUser.communityId);
-                    setCommunityMembers(myCommMembers);
-                }
+            }
+
+            const fullCommunityMembers = await communityMembersPromise;
+            if (currentUser.communityId) {
+                const compactCommunityMembers = allMembers.filter(m => m.communityId === currentUser.communityId);
+                setCommunityMembers(fullCommunityMembers.length > 0 ? fullCommunityMembers : compactCommunityMembers);
             }
 
             await Promise.all([memosPromise, historyPromise, settingsPromise]);
@@ -96,7 +103,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         view,
         currentUser?.uid,
         // We removed viewingDay from here to prevent re-fetching on every day change
-        loadAllMembers, loadMemos, loadAnnouncement, loadKakaoLink,
+        loadAllMembers, loadCommunityMembersWithHistory, loadMemos, loadAnnouncement, loadKakaoLink,
         setAllMembersForRace, setSubgroupStats, setCommunityMembers, setReadHistory
     ]);
 

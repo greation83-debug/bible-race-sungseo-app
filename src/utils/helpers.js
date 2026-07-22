@@ -24,6 +24,7 @@ export const userDocToState = (doc) => {
         planId: (d.planId !== undefined && d.planId !== null) ? d.planId : "1year_revised",
         achievements: (d.achievements !== undefined && d.achievements !== null) ? d.achievements : [],
         memos: (d.memos !== undefined && d.memos !== null) ? d.memos : {},
+        memoCount: (d.memoCount !== undefined && d.memoCount !== null) ? d.memoCount : 0,
         dayOffset: (d.dayOffset !== undefined && d.dayOffset !== null) ? d.dayOffset : 0,
         readCount: (d.readCount !== undefined && d.readCount !== null) ? d.readCount : 1,
         readHistory: (d.readHistory !== undefined && d.readHistory !== null) ? d.readHistory : [],

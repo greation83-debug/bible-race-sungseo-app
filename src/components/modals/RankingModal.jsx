@@ -49,7 +49,7 @@ const RankingModal = ({
                                             <div className="flex-1 min-w-0 text-left"><div className="flex justify-between items-center"><span className={`font-bold text-sm truncate pr-2 ${isMyGroup ? 'text-blue-600' : 'text-slate-700'}`}>{group.name} {isMyGroup && '(우리팀)'}</span><span className="text-xs font-bold text-slate-500 shrink-0">{group.progressRate}%</span></div></div>
                                             <Icon name="arrowRight" size={16} className="text-slate-400" />
                                         </div>
-                                        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-orange-400' : 'bg-slate-300'}`} style={{ width: `${group.progressRate}%` }}></div></div>
+                                        <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden"><div className={`h-full rounded-full ${idx === 0 ? 'bg-yellow-400' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-orange-400' : 'bg-slate-300'}`} style={{ width: `${Math.min(100, group.progressRate)}%` }}></div></div>
                                     </button>
                                 );
                             });

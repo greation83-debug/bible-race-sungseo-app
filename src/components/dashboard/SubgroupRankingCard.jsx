@@ -42,7 +42,7 @@ const SubgroupRankingCard = ({
                                 <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                                     <div
                                         className={`h-full rounded-full transition-all duration-1000 ${isMyGroup ? 'bg-blue-500' : 'bg-slate-300'}`}
-                                        style={{ width: `${group.progressRate}%` }}
+                                        style={{ width: `${Math.min(100, group.progressRate)}%` }}
                                     ></div>
                                 </div>
                             </div>

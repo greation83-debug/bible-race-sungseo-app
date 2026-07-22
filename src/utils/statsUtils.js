@@ -22,7 +22,8 @@ export const calculateSubgroupStats = (members) => {
                     return sum + actualProgress;
                 }, 0) / totalCount
                 : 0;
-            const progressRate = TOTAL_DAYS > 0 ? Math.min(100, Math.round((avgDay / TOTAL_DAYS) * 100)) : 0;
+            // 실제 누적 진행률을 유지해 2독 이상인 소그룹도 100%를 넘겨 표시한다.
+            const progressRate = TOTAL_DAYS > 0 ? Math.round((avgDay / TOTAL_DAYS) * 100) : 0;
             const totalScore = subMembers.reduce((sum, m) => sum + (m.score || 0), 0);
 
             stats[`${comm.id}_${sub}`] = {

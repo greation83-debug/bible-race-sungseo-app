@@ -24,6 +24,11 @@ service cloud.firestore {
       match /history/{historyId} {
         allow read, write: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
       }
+
+      // 묵상은 글마다 별도 문서로 저장해 사용자 문서 크기 제한을 피한다.
+      match /memos/{memoId} {
+        allow read, write: if isAuthenticated() && (request.auth.uid == uid || isAdmin());
+      }
     }
 
     // 성경 본문 캐시: 로그인한 모든 사용자 읽기, 관리자만 쓰기

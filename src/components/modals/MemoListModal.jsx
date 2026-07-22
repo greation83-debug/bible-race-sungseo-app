@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from '../Icon';
+import { countMemoEntries, sortMemoEntriesNewestFirst } from '../../utils/memoUtils';
 
 const MemoListModal = ({
     show,
@@ -12,6 +13,8 @@ const MemoListModal = ({
     generateMemosHTML
 }) => {
     if (!show) return null;
+    const memoEntries = sortMemoEntriesNewestFirst(memos);
+    const memoCount = countMemoEntries(memos);
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={(e) => {
@@ -25,7 +28,7 @@ const MemoListModal = ({
                 <div className="bg-indigo-50 p-3 rounded-xl border border-indigo-100 mb-4">
                     <div className="flex justify-between items-center">
                         <div className="text-center flex-1">
-                            <p className="text-2xl font-bold text-indigo-600">{Object.keys(memos).length}</p>
+                            <p className="text-2xl font-bold text-indigo-600">{memoCount}</p>
                             <p className="text-[10px] text-slate-500">작성한 묵상</p>
                         </div>
                         <div className="text-center flex-1 border-l border-indigo-200">
@@ -39,21 +42,16 @@ const MemoListModal = ({
                     </div>
                 </div>
                 <div className="space-y-3 overflow-y-auto max-h-[45vh]">
-                    {Object.keys(memos).length > 0 ? (
-                        Object.keys(memos).map(day => [day, memos[day]]).sort((a, b) => Number(b[0]) - Number(a[0])).map(pair => {
-                            const [day, memo] = pair;
+                    {memoEntries.length > 0 ? (
+                        memoEntries.map(memo => {
                             return (
-                                <div key={day} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <div key={memo.id} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-bold text-blue-600">DAY {day} {(memo.texts && memo.texts.length || 0) > 1 && <span className="ml-1 text-purple-500">({memo.texts.length}개)</span>}</span>
+                                        <span className="text-xs font-bold text-blue-600">{memo.readCount ? `${memo.readCount}독 · ` : ''}DAY {memo.day}</span>
                                         <span className="text-[10px] text-slate-400">{new Date(memo.date).toLocaleDateString('ko-KR')}</span>
                                     </div>
                                     <p className="text-xs text-slate-500 mb-1">{memo.title}</p>
-                                    {(memo.texts || [memo.text]).map((text, idx) => (
-                                        <div key={idx} className={"text-sm text-slate-700 leading-relaxed whitespace-pre-wrap " + (idx > 0 ? 'mt-2 pt-2 border-t border-slate-200' : '')}>
-                                            {text}
-                                        </div>
-                                    ))}
+                                    <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{memo.text}</div>
                                 </div>
                             );
                         })
@@ -64,7 +62,7 @@ const MemoListModal = ({
                         </div>
                     )}
                 </div>
-                {Object.keys(memos).length > 0 && (
+                {memoCount > 0 && (
                     <button onClick={() => generateMemosHTML(currentUser.name, memos, { currentDay, score, streak })} className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl mt-4 flex items-center justify-center gap-2 hover:bg-indigo-700 transition-colors">📥 묵상 기록 다운로드</button>
                 )}
                 <button onClick={onClose} className="w-full bg-slate-100 font-bold py-3 rounded-xl mt-2 text-slate-600">닫기</button>

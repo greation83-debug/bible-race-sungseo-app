@@ -20,7 +20,6 @@ const DashboardHeader = ({
     planTypeName,
     versionName,
     handleChangeVersionStart,
-    setView, // 추가
     isAdminAccount,
     openAdminMode
 }) => {
@@ -38,7 +37,6 @@ const DashboardHeader = ({
                             <button type="button" onClick={(e) => { e.stopPropagation(); setShowScoreInfo(true); }} className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1.5 rounded-xl hover:bg-blue-100 transition-colors shrink-0">
                                 {myLevel.emoji} {score || 0}pt
                             </button>
-                            <button type="button" onClick={(e) => { e.stopPropagation(); setView('mini_room'); }} className="p-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-xl hover:bg-indigo-100 shrink-0 flex items-center gap-1" title="미니룸 입장">🏠 <span className="hidden sm:inline">미니룸</span></button>
                             {isAdminAccount && (
                                 <button type="button" onClick={(e) => { e.stopPropagation(); openAdminMode(); }} className="p-1.5 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 rounded-xl hover:bg-slate-200 shrink-0 flex items-center gap-1" title="관리자 화면">🛠️ <span className="hidden sm:inline">관리자</span></button>
                             )}

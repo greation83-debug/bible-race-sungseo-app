@@ -1,5 +1,6 @@
 import React from 'react';
 import Icon from './Icon';
+import { countMemoEntries } from '../utils/memoUtils';
 
 const AdminView = ({
     handleLogout,
@@ -18,7 +19,7 @@ const AdminView = ({
     setAnnouncementInput,
     saveAnnouncement,
     generateMemosCSV,
-    generateMemosHTML,
+    generateUserMemosHTML,
     editingUser,
     setEditingUser,
     startEditUser,
@@ -559,8 +560,9 @@ const AdminView = ({
                     </div>
 
                     {(() => {
-                        const usersWithMemos = allUsers.filter(u => u.memos && Object.keys(u.memos || {}).length > 0);
-                        const totalMemos = allUsers.reduce((sum, u) => sum + Object.keys(u.memos || {}).length, 0);
+                        const getUserMemoCount = (user) => Math.max(Number(user.memoCount || 0), countMemoEntries(user.memos || {}));
+                        const usersWithMemos = allUsers.filter(u => getUserMemoCount(u) > 0);
+                        const totalMemos = allUsers.reduce((sum, u) => sum + getUserMemoCount(u), 0);
 
                         return (
                             <div>
@@ -584,7 +586,7 @@ const AdminView = ({
                                 <h3 className="font-bold text-slate-700 mb-2">✍️ 묵상왕 TOP 10</h3>
                                 <div className="space-y-2 max-h-60 overflow-y-auto">
                                     {allUsers
-                                        .map(u => ({ ...u, memoCount: Object.keys(u.memos || {}).length }))
+                                        .map(u => ({ ...u, memoCount: getUserMemoCount(u) }))
                                         .filter(u => u.memoCount > 0)
                                         .sort((a, b) => b.memoCount - a.memoCount)
                                         .slice(0, 10)
@@ -602,7 +604,7 @@ const AdminView = ({
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-sm font-bold text-purple-600">{u.memoCount}개</span>
                                                     <button
-                                                        onClick={() => generateMemosHTML(u.name, u.memos || {}, { currentDay: u.currentDay, score: u.score, streak: u.streak })}
+                                                        onClick={() => generateUserMemosHTML(u)}
                                                         className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded hover:bg-indigo-200"
                                                     >
                                                         HTML
