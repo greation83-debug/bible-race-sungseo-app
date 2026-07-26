@@ -2,7 +2,10 @@ import { useState, useCallback } from 'react';
 import { db, firebase } from '../utils/firebase';
 import { calculateSubgroupStats } from '../utils/statsUtils';
 
-const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v1';
+const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v2';
+const LEGACY_RACE_MEMBERS_CACHE_KEYS = ['race_members_cache_v1'];
+const RACE_MEMBERS_CACHE_SCHEMA_VERSION = 2;
+const RACE_MEMBERS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 // readHistory에서 date 값만 뽑아 중복 제거 후 최근 maxCount개 반환
 const extractRecentDates = (readHistory, maxCount = 14) => {
@@ -13,11 +16,21 @@ const extractRecentDates = (readHistory, maxCount = 14) => {
     return [...new Set(dates)].slice(-maxCount);
 };
 
+const hasValidProgress = (member) => {
+    if (!member || typeof member !== 'object') return false;
+    const currentDay = Number(member.currentDay);
+    const readCount = Number(member.readCount);
+    return Number.isFinite(currentDay)
+        && currentDay >= 1
+        && Number.isFinite(readCount)
+        && readCount >= 1;
+};
+
 const compactRaceMember = (member) => ({
     uid: member.uid,
     name: member.name || '',
-    currentDay: member.currentDay || 1,
-    readCount: member.readCount || 1,
+    currentDay: Number(member.currentDay),
+    readCount: Number(member.readCount),
     subgroupId: member.subgroupId || '소속없음',
     communityId: member.communityId || '',
     communityName: member.communityName || '',
@@ -34,18 +47,35 @@ const compactRaceMember = (member) => ({
 
 const readCachedRaceMembers = () => {
     try {
+        LEGACY_RACE_MEMBERS_CACHE_KEYS.forEach(key => localStorage.removeItem(key));
         const cached = localStorage.getItem(RACE_MEMBERS_CACHE_KEY);
         if (!cached) return [];
         const parsed = JSON.parse(cached);
-        return Array.isArray(parsed.members) ? parsed.members : [];
+        const cachedAt = Number(parsed.cachedAt);
+        const isFresh = Number.isFinite(cachedAt)
+            && Date.now() - cachedAt <= RACE_MEMBERS_CACHE_TTL_MS;
+        const isValid = parsed.schemaVersion === RACE_MEMBERS_CACHE_SCHEMA_VERSION
+            && Array.isArray(parsed.members)
+            && parsed.members.length > 0
+            && parsed.members.every(hasValidProgress);
+
+        if (!isFresh || !isValid) {
+            localStorage.removeItem(RACE_MEMBERS_CACHE_KEY);
+            return [];
+        }
+        return parsed.members;
     } catch (e) {
+        try { localStorage.removeItem(RACE_MEMBERS_CACHE_KEY); } catch (ignore) {}
         return [];
     }
 };
 
 const writeCachedRaceMembers = (members) => {
     try {
+        if (!Array.isArray(members) || members.length === 0 || !members.every(hasValidProgress)) return;
+        LEGACY_RACE_MEMBERS_CACHE_KEYS.forEach(key => localStorage.removeItem(key));
         localStorage.setItem(RACE_MEMBERS_CACHE_KEY, JSON.stringify({
+            schemaVersion: RACE_MEMBERS_CACHE_SCHEMA_VERSION,
             cachedAt: Date.now(),
             members: members.map(compactRaceMember)
         }));
@@ -55,7 +85,10 @@ const writeCachedRaceMembers = (members) => {
 };
 
 export const clearRaceMembersCache = () => {
-    try { localStorage.removeItem(RACE_MEMBERS_CACHE_KEY); } catch (e) {}
+    try {
+        localStorage.removeItem(RACE_MEMBERS_CACHE_KEY);
+        LEGACY_RACE_MEMBERS_CACHE_KEYS.forEach(key => localStorage.removeItem(key));
+    } catch (e) {}
 };
 
 export const useCommunity = (currentUser, setCurrentUser) => {
@@ -72,11 +105,13 @@ export const useCommunity = (currentUser, setCurrentUser) => {
             if (summaryDoc.exists) {
                 const membersMap = summaryDoc.data().members || {};
                 const keys = Object.keys(membersMap);
-                if (keys.length > 0) {
-                    const members = keys.map(uid => compactRaceMember({ uid, ...membersMap[uid] }));
+                const rawMembers = keys.map(uid => ({ uid, ...membersMap[uid] }));
+                if (rawMembers.length > 0 && rawMembers.every(hasValidProgress)) {
+                    const members = rawMembers.map(compactRaceMember);
                     writeCachedRaceMembers(members);
                     return members;
                 }
+                console.warn('summary 진행 정보가 불완전해 사용자 원본 데이터를 조회합니다.');
             }
         } catch (e) {
             console.warn('summary 읽기 실패, 풀스캔으로 대체:', e);
@@ -85,7 +120,8 @@ export const useCommunity = (currentUser, setCurrentUser) => {
         // Fallback: users 컬렉션 풀스캔
         try {
             const snapshot = await db.collection('users').get();
-            const members = snapshot.docs.map(doc => compactRaceMember({ uid: doc.id, ...doc.data() }));
+            const rawMembers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+            const members = rawMembers.filter(hasValidProgress).map(compactRaceMember);
             writeCachedRaceMembers(members);
             return members;
         } catch (e) {
