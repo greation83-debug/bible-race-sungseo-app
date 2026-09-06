@@ -12,6 +12,7 @@ import { generateMemosHTML, generateMemosCSV, generateUserMemosHTML, downloadCSV
 import { useUserAuth } from './hooks/useUserAuth';
 import { useBibleLogic } from './hooks/useBibleLogic';
 import { clearRaceMembersCache } from './hooks/useCommunity';
+import { buildRecentReadDailyCounts } from './utils/readHistoryUtils';
 import Icon from './components/Icon';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import LoginView from './components/LoginView';
@@ -257,14 +258,34 @@ const App = () => {
     const saveEditUser = async () => {
         if (!editingUser) return;
         try {
-            await db.collection('users').doc(editingUser.uid).set({
+            const recentReadDailyCounts = buildRecentReadDailyCounts(editingUser.readHistory);
+            const userUpdate = {
                 communityId: editingUser.communityId, communityName: editingUser.communityName,
                 subgroupId: editingUser.subgroupId, planId: editingUser.planId,
                 currentDay: editingUser.currentDay, readCount: editingUser.readCount || 1,
                 score: editingUser.score, streak: editingUser.streak,
                 lastReadDate: editingUser.lastReadDate || null,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            };
+            const summaryUpdate = {
+                name: editingUser.name,
+                communityId: editingUser.communityId,
+                communityName: editingUser.communityName,
+                subgroupId: editingUser.subgroupId,
+                currentDay: editingUser.currentDay,
+                readCount: editingUser.readCount || 1,
+                score: editingUser.score || 0,
+                streak: editingUser.streak || 0,
+                lastReadDate: editingUser.lastReadDate || null,
+                recentReadDailyCounts,
+                recentReadDates: recentReadDailyCounts.map(item => item.date),
+            };
+            const batch = db.batch();
+            batch.set(db.collection('users').doc(editingUser.uid), userUpdate, { merge: true });
+            batch.set(db.collection('summary').doc('global'), {
+                members: { [editingUser.uid]: summaryUpdate }
             }, { merge: true });
+            await batch.commit();
             setAllUsers(prev => prev.map(u => u.uid === editingUser.uid ? editingUser : u));
             setEditingUser(null); alert("수정되었습니다.");
         } catch (e) { console.error(e); alert("수정 실패"); }

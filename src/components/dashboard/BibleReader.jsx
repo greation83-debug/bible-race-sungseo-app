@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import MarkdownRenderer from '../MarkdownRenderer';
+import { getCompletedReadingDays } from '../../utils/readHistoryUtils';
 
 const BibleReader = ({
     verseData,
@@ -26,6 +27,7 @@ const BibleReader = ({
     handleRead
 }) => {
     const readerRef = useRef(null);
+    const completedReadingDays = getCompletedReadingDays(currentUser);
 
     const isEnglishPlan = (currentUser?.planId || '').endsWith('_niv');
     const voiceStorageKey = isEnglishPlan ? 'bible_selectedVoiceURI_en_v2' : 'bible_selectedVoiceURI_ko';
@@ -61,10 +63,9 @@ const BibleReader = ({
 
                     <div className="text-center">
                         <h2 className="text-2xl font-bold mb-1">{verseData.loading ? '로딩중...' : verseData.title}</h2>
-                        <div className="flex items-center justify-center gap-2">
-                            {(currentUser.readCount || 1) > 1 && (
-                                <span className="text-xs bg-purple-500/90 px-2 py-0.5 rounded-full">🏆 {currentUser.readCount}독</span>
-                            )}
+                        <div className="flex flex-wrap items-center justify-center gap-2">
+                            <span className="text-xs bg-purple-500/90 px-2 py-0.5 rounded-full">🏆 {currentUser.readCount || 1}독째</span>
+                            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">누적 {completedReadingDays.toLocaleString()}일 완료</span>
                             <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">🏁 D-{daysRemaining}</span>
                         </div>
                     </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { getWeeklyReadCount } from '../../utils/statsUtils';
+import { getCompletedReadingDays } from '../../utils/readHistoryUtils';
 
 const ReadingChampionSection = ({ getWeeklyMVP }) => {
     if (typeof getWeeklyMVP !== 'function') return null;
@@ -47,11 +48,8 @@ const ReadingChampionSection = ({ getWeeklyMVP }) => {
                             if (!progressMVP) return '-';
                             const readCount = progressMVP.readCount || 1;
                             const currentDay = progressMVP.currentDay || 0;
-                            const totalDays = (readCount - 1) * 365 + currentDay;
-                            if (readCount > 1) {
-                                return `총 ${totalDays}일 (${readCount}독 ${currentDay}일)`;
-                            }
-                            return `총 ${totalDays}일`;
+                            const completedDays = getCompletedReadingDays(progressMVP);
+                            return `총 ${completedDays.toLocaleString()}일 완료 (${readCount}독째 DAY ${currentDay})`;
                         })()}
                     </p>
                     <p className="text-[9px] text-slate-400 mt-2 pt-2 border-t border-slate-100">전체 누적 읽기 1위</p>
@@ -81,11 +79,11 @@ const ReadingChampionSection = ({ getWeeklyMVP }) => {
                     <p className="text-[10px] text-slate-500 font-bold mb-2 text-center">누적 2-10위</p>
                     <div className="space-y-1">
                         {totalTop10.length > 1 ? totalTop10.slice(1, 10).map((member, idx) => {
-                            const totalDays = ((member.readCount || 1) - 1) * 365 + (member.currentDay || 0);
+                            const completedDays = getCompletedReadingDays(member);
                             return (
                                 <div key={member.uid} className="flex justify-between items-center text-[10px]">
                                     <span className="text-slate-600 truncate mr-1">{idx + 2}위. {member.name}</span>
-                                    <span className="text-blue-600 font-bold shrink-0">{totalDays}일</span>
+                                    <span className="text-blue-600 font-bold shrink-0">{completedDays.toLocaleString()}일 완료</span>
                                 </div>
                             );
                         }) : <p className="text-[10px] text-slate-400 text-center py-2">-</p>}

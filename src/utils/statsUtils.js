@@ -1,6 +1,7 @@
 import { MOCK_COMMUNITIES } from '../data/communities';
 import { TOTAL_DAYS } from '../data/constants';
 import { kstTodayDateString } from './dateUtils';
+import { getCompletedReadingDays, getHistoryDaysRead } from './readHistoryUtils';
 
 export const calculateSubgroupStats = (members) => {
     const todayStr = kstTodayDateString();
@@ -42,9 +43,10 @@ export const calculateSubgroupStats = (members) => {
     return stats;
 };
 
-// 멤버의 읽은 기록 목록 반환: readHistory가 비어 있으면 recentReadDates(날짜 문자열 배열)로 폴백
+// 관리자 원본에는 readHistory, 일반 대시보드 요약에는 최근 일별 합계를 사용한다.
 const getMemberReadEntries = (member) => {
     if (Array.isArray(member.readHistory) && member.readHistory.length > 0) return member.readHistory;
+    if (Array.isArray(member.recentReadDailyCounts)) return member.recentReadDailyCounts;
     if (Array.isArray(member.recentReadDates)) return member.recentReadDates;
     return [];
 };
@@ -79,7 +81,7 @@ export const getWeeklyMVP = (communityMembers) => {
         .map(m => ({
             ...m,
             weeklyCount: getWeeklyReadCount(m, weekStart),
-            totalCount: getMemberReadEntries(m).length
+            totalCount: getMemberReadEntries(m).reduce((sum, item) => sum + getHistoryDaysRead(item), 0)
         }))
         .filter(m => m.weeklyCount > 0)
         .sort((a, b) => {
@@ -93,7 +95,7 @@ export const getWeeklyMVP = (communityMembers) => {
     const totalWithCounts = communityMembers
         .map(m => ({
             ...m,
-            totalCount: ((m.readCount || 1) - 1) * 365 + (m.currentDay || 0)
+            totalCount: getCompletedReadingDays(m)
         }))
         .filter(m => m.totalCount > 0);
 
@@ -133,11 +135,13 @@ export const getMonthlyContest = (currentUser, communityMembers, mockCommunities
             if (totalCount === 0) return null;
 
             const totalReads = members.reduce(function (sum, member) {
-                const monthlyReads = getMemberReadEntries(member).filter(function (item) {
+                const monthlyReads = getMemberReadEntries(member).reduce(function (sum, item) {
                     var dateStr = typeof item === 'string' ? item : item.date;
                     const readDate = new Date(dateStr);
-                    return readDate >= monthStart && readDate <= now;
-                }).length;
+                    return readDate >= monthStart && readDate <= now
+                        ? sum + getHistoryDaysRead(item)
+                        : sum;
+                }, 0);
 
                 return sum + monthlyReads;
             }, 0);

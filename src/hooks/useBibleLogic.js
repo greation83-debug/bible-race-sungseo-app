@@ -1,12 +1,20 @@
-import { useEffect, useCallback } from 'react';
-import { auth, db } from '../utils/firebase';
+import { useEffect } from 'react';
+import { db } from '../utils/firebase';
 import { calculateSubgroupStats } from '../utils/statsUtils';
+import { buildRecentReadDailyCounts } from '../utils/readHistoryUtils';
 
 // Sub-hooks
 import { useBibleContent } from './useBibleContent';
 import { useMemos } from './useMemos';
 import { useCommunity } from './useCommunity';
 import { useUserBibleActions } from './useUserBibleActions';
+
+const hasSameDailyCounts = (left, right) => {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((item, index) => (
+        item.date === right[index].date && Number(item.daysRead) === Number(right[index].daysRead)
+    ));
+};
 
 export const useBibleLogic = (currentUser, setCurrentUser, view) => {
     // 1. Content Hook
@@ -19,7 +27,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         subgroupStats, setSubgroupStats, communityMembers, setCommunityMembers,
         allMembersForRace, setAllMembersForRace, announcement, loadAnnouncement,
         kakaoLink, loadKakaoLink, setKakaoLink,
-        loadAllMembers, loadCommunityMembersWithHistory, changeSubgroup, rebuildSummary
+        loadAllMembers, changeSubgroup, rebuildSummary
     } = useCommunity(currentUser, setCurrentUser);
 
     // 3. User Actions Hook
@@ -45,7 +53,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         loadContent(viewingDay);
     }, [view, currentUser?.uid, viewingDay, currentUser?.planId, currentUser?.dayOffset, loadContent]);
 
-    // [Effect 2] Initial full load when entering dashboard or user changes
+    // [Effect 2] Initial summary load when entering dashboard or user changes
     useEffect(() => {
         if (view !== 'dashboard' || !currentUser) return;
 
@@ -58,44 +66,62 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
             const uid = currentUser.uid;
 
             const membersPromise = loadAllMembers();
-            // 읽기왕은 날짜 수가 아니라 실제로 읽은 DAY 분량을 집계해야 하므로
-            // 현재 공동체 멤버의 전체 readHistory를 별도로 불러온다.
-            const communityMembersPromise = currentUser.communityId
-                ? loadCommunityMembersWithHistory(currentUser.communityId)
-                : Promise.resolve([]);
             const memosPromise = loadMemos(uid);
-            const historyPromise = (async () => {
-                const historySnap = await db.collection('users').doc(uid).collection('history').get();
-                const subCollectionHistory = historySnap.docs.map(doc => doc.data());
-
-                const userDoc = await db.collection('users').doc(uid).get();
-                const arrayFieldHistory = (userDoc.exists && userDoc.data().readHistory) || [];
-
-                // 같은 날 여러 Day를 몰아서 읽을 수 있으므로 date+day 기준으로만 중복 제거한다.
-                const combinedMap = new Map();
-                [...arrayFieldHistory, ...subCollectionHistory].forEach(item => {
-                    const dateKey = typeof item === 'string' ? item : item.date;
-                    const dayKey = typeof item === 'string' ? '' : (item.day || '');
-                    if (dateKey) combinedMap.set(`${dateKey}-${dayKey}`, item);
-                });
-
-                setReadHistory(Array.from(combinedMap.values()));
-            })();
             const settingsPromise = Promise.all([loadAnnouncement(), loadKakaoLink()]);
 
+            // 로그인 때 이미 읽은 사용자 문서를 다시 조회하지 않는다.
+            // handleRead가 사용자 문서의 readHistory와 history 하위 문서를 원자적으로 함께 갱신한다.
+            setReadHistory(Array.isArray(currentUser.readHistory) ? currentUser.readHistory : []);
+
             const allMembers = await membersPromise;
-            setAllMembersForRace(allMembers);
-            if (allMembers && allMembers.length > 0) {
-                setSubgroupStats(calculateSubgroupStats(allMembers));
+            const derivedRecentReadDailyCounts = buildRecentReadDailyCounts(currentUser.readHistory);
+            const existingCurrentMember = allMembers.find(member => member.uid === uid);
+            const currentRecentReadDailyCounts = derivedRecentReadDailyCounts.length > 0
+                ? derivedRecentReadDailyCounts
+                : (existingCurrentMember?.recentReadDailyCounts || []);
+            const currentMemberPatch = {
+                uid,
+                name: currentUser.name || '',
+                currentDay: currentUser.currentDay || 1,
+                readCount: currentUser.readCount || 1,
+                subgroupId: currentUser.subgroupId || '소속없음',
+                communityId: currentUser.communityId || '',
+                communityName: currentUser.communityName || '',
+                score: currentUser.score || 0,
+                streak: currentUser.streak || 0,
+                lastReadDate: currentUser.lastReadDate || null,
+                planId: currentUser.planId || '',
+                recentReadDailyCounts: currentRecentReadDailyCounts,
+                recentReadDates: currentRecentReadDailyCounts.map(item => item.date),
+            };
+            const effectiveMembers = existingCurrentMember
+                ? allMembers.map(member => member.uid === uid ? { ...member, ...currentMemberPatch } : member)
+                : [...allMembers, currentMemberPatch];
+
+            setAllMembersForRace(effectiveMembers);
+            if (effectiveMembers.length > 0) {
+                setSubgroupStats(calculateSubgroupStats(effectiveMembers));
             }
 
-            const fullCommunityMembers = await communityMembersPromise;
             if (currentUser.communityId) {
-                const compactCommunityMembers = allMembers.filter(m => m.communityId === currentUser.communityId);
-                setCommunityMembers(fullCommunityMembers.length > 0 ? fullCommunityMembers : compactCommunityMembers);
+                const compactCommunityMembers = effectiveMembers.filter(m => m.communityId === currentUser.communityId);
+                setCommunityMembers(compactCommunityMembers);
             }
 
-            await Promise.all([memosPromise, historyPromise, settingsPromise]);
+            // 구형 summary는 날짜만 저장해 몰아 읽은 분량을 잃었다.
+            // 현재 사용자는 이미 로드한 자신의 기록으로만 보정하며 추가 읽기는 발생시키지 않는다.
+            const shouldBackfillMySummary = !existingCurrentMember
+                || (derivedRecentReadDailyCounts.length > 0 && !hasSameDailyCounts(
+                    existingCurrentMember.recentReadDailyCounts,
+                    derivedRecentReadDailyCounts
+                ));
+            if (shouldBackfillMySummary) {
+                db.collection('summary').doc('global').set({
+                    members: { [uid]: currentMemberPatch }
+                }, { merge: true }).catch(e => console.warn('내 읽기 요약 보정 실패:', e));
+            }
+
+            await Promise.all([memosPromise, settingsPromise]);
         };
 
         loadDashboardData();
@@ -103,7 +129,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
         view,
         currentUser?.uid,
         // We removed viewingDay from here to prevent re-fetching on every day change
-        loadAllMembers, loadCommunityMembersWithHistory, loadMemos, loadAnnouncement, loadKakaoLink,
+        loadAllMembers, loadMemos, loadAnnouncement, loadKakaoLink,
         setAllMembersForRace, setSubgroupStats, setCommunityMembers, setReadHistory
     ]);
 

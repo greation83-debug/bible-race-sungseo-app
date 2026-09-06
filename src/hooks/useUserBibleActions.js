@@ -3,6 +3,7 @@ import { db, firebase } from '../utils/firebase';
 import { ACHIEVEMENTS } from '../data/achievements';
 import { calculateSubgroupStats } from '../utils/statsUtils';
 import { kstTodayDateString } from '../utils/dateUtils';
+import { addRecentReadActivity, buildRecentReadDailyCounts } from '../utils/readHistoryUtils';
 
 export const useUserBibleActions = (
     currentUser,
@@ -137,17 +138,22 @@ export const useUserBibleActions = (
 
             // loadAllMembers() 대신 로컬 낙관적 업데이트 (Firestore 풀스캔 제거)
             const myRaceEntry = allMembersForRace.find(m => m.uid === uid);
-            const prevRecentDates = (myRaceEntry && Array.isArray(myRaceEntry.recentReadDates))
-                ? myRaceEntry.recentReadDates
-                : [];
-            // 중복 제거 후 오늘 날짜를 뒤에 추가, 최근 14개만 유지 (오래된 것부터 버림)
-            const recentReadDates = [...prevRecentDates.filter(d => d !== todayStr), todayStr].slice(-14);
+            const existingRecentActivity = myRaceEntry && Array.isArray(myRaceEntry.recentReadDailyCounts)
+                && myRaceEntry.recentReadDailyCounts.length > 0
+                ? myRaceEntry.recentReadDailyCounts
+                : buildRecentReadDailyCounts(currentUser.readHistory);
+            const recentReadDailyCounts = addRecentReadActivity(
+                existingRecentActivity,
+                todayStr
+            );
+            const recentReadDates = recentReadDailyCounts.map(item => item.date);
             const memberPatch = {
                 currentDay: newProgressDay,
                 readCount: newReadCount,
                 score: newScore,
                 streak: newStreak,
                 lastReadDate: todayStr,
+                recentReadDailyCounts,
                 recentReadDates,
             };
             const updatedMembers = (() => {
@@ -165,14 +171,13 @@ export const useUserBibleActions = (
             setAllMembersForRace(updatedMembers);
             setSubgroupStats(calculateSubgroupStats(updatedMembers));
             if (currentUser.communityId) {
-                // 전체 readHistory를 보존하면서 방금 읽은 DAY를 더해 주간 읽기왕에 즉시 반영한다.
+                // 전체 기록 대신 최근 일별 합계만 유지해 주간 읽기왕에 즉시 반영한다.
                 setCommunityMembers(prevMembers => {
                     const found = prevMembers.some(m => m.uid === uid);
                     if (found) {
                         return prevMembers.map(m => m.uid === uid ? {
                             ...m,
                             ...memberPatch,
-                            readHistory: [...(m.readHistory || []), historyItem],
                         } : m);
                     }
                     return [...prevMembers, {
@@ -182,7 +187,6 @@ export const useUserBibleActions = (
                         communityId: currentUser.communityId || null,
                         communityName: currentUser.communityName || null,
                         ...memberPatch,
-                        readHistory: [historyItem],
                     }];
                 });
             }

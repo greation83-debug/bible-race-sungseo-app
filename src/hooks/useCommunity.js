@@ -1,20 +1,15 @@
 import { useState, useCallback } from 'react';
 import { db, firebase } from '../utils/firebase';
 import { calculateSubgroupStats } from '../utils/statsUtils';
+import {
+    buildRecentReadDailyCounts,
+    normalizeRecentReadDailyCounts,
+} from '../utils/readHistoryUtils';
 
-const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v2';
-const LEGACY_RACE_MEMBERS_CACHE_KEYS = ['race_members_cache_v1'];
-const RACE_MEMBERS_CACHE_SCHEMA_VERSION = 2;
+const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v3';
+const LEGACY_RACE_MEMBERS_CACHE_KEYS = ['race_members_cache_v1', 'race_members_cache_v2'];
+const RACE_MEMBERS_CACHE_SCHEMA_VERSION = 3;
 const RACE_MEMBERS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
-
-// readHistory에서 date 값만 뽑아 중복 제거 후 최근 maxCount개 반환
-const extractRecentDates = (readHistory, maxCount = 14) => {
-    if (!Array.isArray(readHistory)) return [];
-    const dates = readHistory
-        .map(item => (typeof item === 'string' ? item : (item && item.date)))
-        .filter(Boolean);
-    return [...new Set(dates)].slice(-maxCount);
-};
 
 const hasValidProgress = (member) => {
     if (!member || typeof member !== 'object') return false;
@@ -26,24 +21,25 @@ const hasValidProgress = (member) => {
         && readCount >= 1;
 };
 
-const compactRaceMember = (member) => ({
-    uid: member.uid,
-    name: member.name || '',
-    currentDay: Number(member.currentDay),
-    readCount: Number(member.readCount),
-    subgroupId: member.subgroupId || '소속없음',
-    communityId: member.communityId || '',
-    communityName: member.communityName || '',
-    score: member.score || 0,
-    streak: member.streak || 0,
-    lastReadDate: member.lastReadDate || null,
-    planId: member.planId || '',
-    readHistory: Array.isArray(member.readHistory) ? member.readHistory : [],
-    // summary 항목에 recentReadDates가 없으면(구버전) readHistory에서 최근 14개 날짜로 채움
-    recentReadDates: Array.isArray(member.recentReadDates)
-        ? member.recentReadDates
-        : extractRecentDates(member.readHistory),
-});
+const compactRaceMember = (member) => {
+    const recentReadDailyCounts = normalizeRecentReadDailyCounts(member);
+    return {
+        uid: member.uid,
+        name: member.name || '',
+        currentDay: Number(member.currentDay),
+        readCount: Number(member.readCount),
+        subgroupId: member.subgroupId || '소속없음',
+        communityId: member.communityId || '',
+        communityName: member.communityName || '',
+        score: member.score || 0,
+        streak: member.streak || 0,
+        lastReadDate: member.lastReadDate || null,
+        planId: member.planId || '',
+        // 전체 readHistory는 사용자 문서에만 두고, 공동체 화면에는 최근 일별 합계만 전달한다.
+        recentReadDailyCounts,
+        recentReadDates: recentReadDailyCounts.map(item => item.date),
+    };
+};
 
 const readCachedRaceMembers = () => {
     try {
@@ -98,7 +94,8 @@ export const useCommunity = (currentUser, setCurrentUser) => {
     const [announcement, setAnnouncement] = useState(null);
     const [kakaoLink, setKakaoLink] = useState(null);
 
-    // summary/global 문서 우선 조회 → fallback: users 풀스캔
+    // 일반 대시보드는 summary/global 한 문서만 읽는다.
+    // 전체 users 조회는 관리자가 명시적으로 집계를 재생성할 때만 허용한다.
     const loadAllMembers = useCallback(async () => {
         try {
             const summaryDoc = await db.collection('summary').doc('global').get();
@@ -111,37 +108,12 @@ export const useCommunity = (currentUser, setCurrentUser) => {
                     writeCachedRaceMembers(members);
                     return members;
                 }
-                console.warn('summary 진행 정보가 불완전해 사용자 원본 데이터를 조회합니다.');
+                console.warn('summary 진행 정보가 불완전합니다. 관리자가 집계를 재생성해야 합니다.');
             }
         } catch (e) {
-            console.warn('summary 읽기 실패, 풀스캔으로 대체:', e);
+            console.warn('summary 읽기 실패, 기기 캐시를 사용합니다:', e);
         }
-
-        // Fallback: users 컬렉션 풀스캔
-        try {
-            const snapshot = await db.collection('users').get();
-            const rawMembers = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
-            const members = rawMembers.filter(hasValidProgress).map(compactRaceMember);
-            writeCachedRaceMembers(members);
-            return members;
-        } catch (e) {
-            console.error("멤버 로딩 실패:", e);
-            return readCachedRaceMembers();
-        }
-    }, []);
-
-    // MVP 계산용: 특정 communityId의 사용자만 readHistory 포함해 로드
-    const loadCommunityMembersWithHistory = useCallback(async (communityId) => {
-        if (!communityId) return [];
-        try {
-            const snap = await db.collection('users')
-                .where('communityId', '==', communityId)
-                .get();
-            return snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
-        } catch (e) {
-            console.error('커뮤니티 멤버 로딩 실패:', e);
-            return [];
-        }
+        return readCachedRaceMembers();
     }, []);
 
     // summary/global 전체 백필 (관리자 전용)
@@ -151,6 +123,7 @@ export const useCommunity = (currentUser, setCurrentUser) => {
             const membersMap = {};
             snapshot.docs.forEach(doc => {
                 const d = doc.data();
+                const recentReadDailyCounts = buildRecentReadDailyCounts(d.readHistory);
                 membersMap[doc.id] = {
                     name: d.name || '',
                     currentDay: d.currentDay || 1,
@@ -161,7 +134,8 @@ export const useCommunity = (currentUser, setCurrentUser) => {
                     subgroupId: d.subgroupId || null,
                     communityId: d.communityId || null,
                     communityName: d.communityName || null,
-                    recentReadDates: extractRecentDates(d.readHistory),
+                    recentReadDailyCounts,
+                    recentReadDates: recentReadDailyCounts.map(item => item.date),
                 };
             });
             await db.collection('summary').doc('global').set({ members: membersMap });
@@ -235,7 +209,6 @@ export const useCommunity = (currentUser, setCurrentUser) => {
         kakaoLink,
         setKakaoLink,
         loadAllMembers,
-        loadCommunityMembersWithHistory,
         rebuildSummary,
         loadAnnouncement,
         loadKakaoLink,

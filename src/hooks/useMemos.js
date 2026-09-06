@@ -9,8 +9,8 @@ export const useMemos = (currentUser) => {
         if (!db || !uid) return {};
         try {
             const userRef = db.collection('users').doc(uid);
-            const userDoc = await userRef.get();
-            const legacyEntries = userDoc.exists ? getMemoEntries(userDoc.data().memos || {}) : [];
+            // 사용자 문서는 로그인 때 이미 읽었으므로 레거시 묵상을 다시 조회하지 않는다.
+            const legacyEntries = getMemoEntries((currentUser && currentUser.memos) || {});
             let savedEntries = [];
             try {
                 const memoSnapshot = await userRef.collection('memos').get();
@@ -26,7 +26,7 @@ export const useMemos = (currentUser) => {
             console.error("메모 불러오기 실패:", e);
         }
         return {};
-    }, []);
+    }, [currentUser && currentUser.uid, currentUser && currentUser.memos]);
 
     const saveMemo = useCallback(async (day, memoText, verseSubtitle, checkAchievements, onComplete) => {
         const uid = currentUser ? currentUser.uid : null;
