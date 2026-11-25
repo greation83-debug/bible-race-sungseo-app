@@ -46,6 +46,18 @@
       "fileCount": 365,
       "expectedDays": 365,
       "missingDays": []
+    },
+    "1year_niv": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": [],
+      "source": "firestore-verses (2026-11-25)"
+    },
+    "nt_niv": {
+      "fileCount": 365,
+      "expectedDays": 365,
+      "missingDays": [],
+      "source": "firestore-verses (2026-11-25)"
     }
   }
 }

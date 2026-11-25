@@ -49,6 +49,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // 로그인 연결표: 관리자가 암호를 초기화한 이름 → 새 계정 주소 (암호 없음)
+    // 로그인 전에 이름 하나만 조회할 수 있고, 목록 조회는 막는다.
+    match /loginAlias/{aliasId} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isAdmin();
+    }
+
     // 관리자 설정: 관리자만 읽기/쓰기
     match /config/{docId} {
       allow read: if isAdmin();

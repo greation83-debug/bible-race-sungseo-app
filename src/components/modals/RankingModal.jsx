@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from '../Icon';
 import { MOCK_COMMUNITIES } from '../../data/communities';
+import { getYearProgressDay, getYearReadCount } from '../../utils/yearReadCount';
 
 const RankingModal = ({
     show,
@@ -60,8 +61,8 @@ const RankingModal = ({
         );
     } else {
         const members = allMembersForRace.filter(m => m.subgroupId === selectedSubgroupDetail).sort((a, b) => {
-            const aTotalDays = ((a.readCount || 1) - 1) * 365 + (a.currentDay || 1);
-            const bTotalDays = ((b.readCount || 1) - 1) * 365 + (b.currentDay || 1);
+            const aTotalDays = getYearProgressDay(a);
+            const bTotalDays = getYearProgressDay(b);
             return bTotalDays - aTotalDays;
         });
         const todayStr = new Date().toDateString();
@@ -92,10 +93,10 @@ const RankingModal = ({
                                         <div className="flex items-center gap-2">
                                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-yellow-100 text-yellow-600' : idx === 1 ? 'bg-slate-200 text-slate-600' : idx === 2 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-400'}`}>{idx + 1}</span>
                                             <span className={`font-bold text-sm ${isMe ? 'text-blue-600' : 'text-slate-700'}`}>{member.name} {isMe && '(나)'}</span>
-                                            {(member.readCount || 1) > 1 && <span className="text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">{member.readCount}독</span>}
+                                            {getYearReadCount(member) > 1 && <span className="text-[10px] bg-purple-500 text-white px-1.5 py-0.5 rounded-full font-bold">{getYearReadCount(member)}독</span>}
                                             {readTodayFlag && <span className="text-green-500 text-xs">✓</span>}
                                         </div>
-                                        <div className="text-right"><p className="text-sm font-bold text-slate-700">Day {((member.readCount || 1) - 1) * 365 + member.currentDay}</p><p className="text-[10px] text-slate-400">{member.score || 0}점</p></div>
+                                        <div className="text-right"><p className="text-sm font-bold text-slate-700">Day {getYearProgressDay(member)}</p><p className="text-[10px] text-slate-400">{member.score || 0}점</p></div>
                                     </div>
                                     <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden"><div className={`h-full rounded-full ${isMe ? 'bg-blue-500' : 'bg-slate-400'}`} style={{ width: `${progressRate}%` }}></div></div>
                                     <div className="flex justify-between mt-1"><span className="text-[10px] text-slate-400">{progressRate}% 진행</span>{member.streak > 0 && <span className="text-[10px] text-orange-500 font-bold">🔥 {member.streak}일 연속</span>}</div>

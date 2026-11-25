@@ -8,6 +8,7 @@ import { useBibleContent } from './useBibleContent';
 import { useMemos } from './useMemos';
 import { useCommunity } from './useCommunity';
 import { useUserBibleActions } from './useUserBibleActions';
+import { pickYearFields } from '../utils/yearReadCount';
 
 const hasSameDailyCounts = (left, right) => {
     if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
@@ -84,6 +85,7 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
                 name: currentUser.name || '',
                 currentDay: currentUser.currentDay || 1,
                 readCount: currentUser.readCount || 1,
+                ...pickYearFields(currentUser),
                 subgroupId: currentUser.subgroupId || '소속없음',
                 communityId: currentUser.communityId || '',
                 communityName: currentUser.communityName || '',
@@ -111,6 +113,8 @@ export const useBibleLogic = (currentUser, setCurrentUser, view) => {
             // 구형 summary는 날짜만 저장해 몰아 읽은 분량을 잃었다.
             // 현재 사용자는 이미 로드한 자신의 기록으로만 보정하며 추가 읽기는 발생시키지 않는다.
             const shouldBackfillMySummary = !existingCurrentMember
+                || (existingCurrentMember.countYear ?? null) !== currentMemberPatch.countYear
+                || (existingCurrentMember.yearBaseCount ?? null) !== currentMemberPatch.yearBaseCount
                 || (derivedRecentReadDailyCounts.length > 0 && !hasSameDailyCounts(
                     existingCurrentMember.recentReadDailyCounts,
                     derivedRecentReadDailyCounts

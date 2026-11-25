@@ -27,3 +27,12 @@ vite_dev.log
 !tailwind.config.js
 !postcss.config.js
 !jsconfig.json
+
+# 관리자 키 파일은 절대 올리지 않음
+*service-account*.json
+*firebase-adminsdk*.json
+
+# 회원 자료·내부 기록은 공개 저장소에 올리지 않음
+recovery-private/
+tasks/
+ADMIN_ACCESS.md

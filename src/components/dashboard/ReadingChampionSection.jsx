@@ -1,6 +1,7 @@
 import React from 'react';
 import { getWeeklyReadCount } from '../../utils/statsUtils';
 import { getCompletedReadingDays } from '../../utils/readHistoryUtils';
+import { getYearReadCount } from '../../utils/yearReadCount';
 
 const ReadingChampionSection = ({ getWeeklyMVP }) => {
     if (typeof getWeeklyMVP !== 'function') return null;
@@ -46,7 +47,7 @@ const ReadingChampionSection = ({ getWeeklyMVP }) => {
                     <p className="text-xs text-blue-500 mb-2 font-bold">
                         {(() => {
                             if (!progressMVP) return '-';
-                            const readCount = progressMVP.readCount || 1;
+                            const readCount = getYearReadCount(progressMVP);
                             const currentDay = progressMVP.currentDay || 0;
                             const completedDays = getCompletedReadingDays(progressMVP);
                             return `총 ${completedDays.toLocaleString()}일 완료 (${readCount}독째 DAY ${currentDay})`;

@@ -1,3 +1,4 @@
+import { getYearCompletedDays } from './yearReadCount';
 const DEFAULT_RECENT_DAY_LIMIT = 35;
 
 export const getHistoryDate = (item) => {
@@ -65,8 +66,5 @@ export const addRecentReadActivity = (
     return next.slice(-maxDays);
 };
 
-export const getCompletedReadingDays = (member) => {
-    const readCount = Math.max(1, Number(member && member.readCount) || 1);
-    const currentDay = Math.min(365, Math.max(1, Number(member && member.currentDay) || 1));
-    return (readCount - 1) * 365 + (currentDay - 1);
-};
+// 올해 기준 다 읽은 날 수 (해마다 1독부터 다시 셈, yearReadCount.js가 정본)
+export const getCompletedReadingDays = (member, now) => getYearCompletedDays(member, now);

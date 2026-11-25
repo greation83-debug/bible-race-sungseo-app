@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { db, auth, firebase } from './utils/firebase';
 import { MOCK_COMMUNITIES } from './data/communities';
 import { SCHEDULE_DATA } from './data/schedules';
@@ -8,7 +8,7 @@ import { PLAN_TYPES, BIBLE_VERSIONS } from './data/bible_options';
 import { makePseudoEmail, userDocToState, toSinoKorean, dateToOffset, offsetToDateStr, getActualDay } from './utils/helpers';
 import { calculateSubgroupStats, getWeeklyMVP, getMonthlyContest, formatSubgroupRanking, formatProgressRanking, getAdminStats } from './utils/statsUtils';
 import { getSubgroupDisplay } from './utils/dashboardUtils';
-import { generateMemosHTML, generateMemosCSV, generateUserMemosHTML, downloadCSV, downloadPeriodStatsCSV } from './utils/exportUtils';
+import { resolveLoginEmail } from './utils/loginAlias';
 import { useUserAuth } from './hooks/useUserAuth';
 import { useBibleLogic } from './hooks/useBibleLogic';
 import { clearRaceMembersCache } from './hooks/useCommunity';
@@ -16,11 +16,16 @@ import { buildRecentReadDailyCounts } from './utils/readHistoryUtils';
 import Icon from './components/Icon';
 import MarkdownRenderer from './components/MarkdownRenderer';
 import LoginView from './components/LoginView';
-import AdminView from './components/AdminView';
 import PlanSelectionView from './components/PlanSelectionView';
 import DashboardView from './components/DashboardView';
 import { TOTAL_DAYS, PANIC_DISTANCE, AUDIO_BASE_URL, GENESIS_1, SUPABASE_FUNCTION_URL } from './data/constants';
 import { useTTS } from './hooks/useTTS';
+import { buildYearBaseFields, pickYearFields } from './utils/yearReadCount';
+import { writeDailySetting } from './utils/settingsCache';
+
+// 관리자 화면·내보내기는 성도 첫 화면 묶음에서 빼고 필요할 때만 받는다.
+const AdminView = lazy(() => import('./components/AdminView'));
+const loadExportUtils = () => import('./utils/exportUtils');
 
 
 const App = () => {
@@ -107,6 +112,7 @@ const App = () => {
     } = useTTS(verseData.text, ttsLanguage);
 
     const [allUsers, setAllUsers] = useState([]);             // 전체 사용자 목록 (관리자용)
+    const [allUsersFull, setAllUsersFull] = useState(false);  // users 전체 문서까지 읽었는지 (summary 미리보기면 false)
 
     const [editingUser, setEditingUser] = useState(null);     // 편집 중인 사용자
     const [adminFilter, setAdminFilter] = useState('all');    // 관리자 필터: 전체/부서별
@@ -192,6 +198,7 @@ const App = () => {
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             setAnnouncement(announcementInput.enabled ? announcementInput : null);
+            writeDailySetting('announcement', announcementInput.enabled ? { ...announcementInput, updatedAt: null } : null);
             alert('광고가 저장되었습니다!');
         } catch (e) {
             console.error("광고 저장 실패:", e);
@@ -208,6 +215,7 @@ const App = () => {
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             setKakaoLink(kakaoLinkInput);
+            writeDailySetting('kakao', kakaoLinkInput || null);
             alert('카카오 링크가 저장되었습니다!');
         } catch (e) {
             console.error("카카오 링크 저장 실패:", e);
@@ -239,6 +247,35 @@ const App = () => {
 
 
 
+    // 관리자: 회원 암호 초기화 (새 계정으로 기록을 옮김) — 코드는 관리자만 따로 받는다.
+    const resetUserPassword = async (user, newPassword, onProgress) => {
+        const { adminResetPassword } = await import('./utils/passwordReset');
+        const result = await adminResetPassword({
+            db, firebase, adminUid: currentUser && currentUser.uid, user, newPassword, onProgress,
+        });
+        setAllUsers(prev => prev.map(u => u.uid === user.uid ? { ...u, uid: result.newUid } : u));
+        return result;
+    };
+
+    // 내보내기 코드는 버튼을 누를 때만 받는다.
+    const adminDownloadCSV = (users) => {
+        if (!allUsersFull) { alert('회원 목록을 아직 불러오는 중입니다. 잠시 후 다시 눌러주세요.'); return; }
+        loadExportUtils().then(m => m.downloadCSV(users));
+    };
+
+    // 묵상 CSV: 읽기 건수가 많으니 예상 건수를 먼저 보여주고 확인받는다.
+    const adminGenerateMemosCSV = async () => {
+        if (!allUsersFull) { alert('회원 목록을 아직 불러오는 중입니다. 잠시 후 다시 눌러주세요.'); return; }
+        const m = await loadExportUtils();
+        const estimate = m.estimateMemosCSVReads(allUsers);
+        const ok = window.confirm(
+            `묵상 CSV를 만들려면 Firestore를 약 ${estimate.toLocaleString()}건 읽습니다.\n`
+            + `(회원 ${allUsers.length}명의 묵상을 모두 읽음, 무료 하루 한도 50,000건)\n\n계속할까요?`
+        );
+        if (!ok) return;
+        await m.generateMemosCSV(db, allUsers);
+    };
+
     const deleteUser = async (uid, userName) => {
         if (confirm(`${userName}님의 데이터를 정말 삭제하시겠습니까?`)) {
             try {
@@ -253,16 +290,34 @@ const App = () => {
         }
     };
 
-    const startEditUser = (user) => setEditingUser({ ...user });
+    const startEditUser = (user) => {
+        // 요약(summary) 미리보기에는 일부 칸만 있어서 그대로 저장하면 안 된다.
+        if (!allUsersFull || user.fromSummary) { alert('회원 목록을 아직 불러오는 중입니다. 잠시 후 다시 눌러주세요.'); return; }
+        setEditingUser({ ...user });
+    };
 
     const saveEditUser = async () => {
         if (!editingUser) return;
         try {
             const recentReadDailyCounts = buildRecentReadDailyCounts(editingUser.readHistory);
+            // 관리자가 평생 독수(readCount)를 고쳐도 올해 독수 기준값이 어긋나지 않게 맞춘다.
+            const newReadCount = editingUser.readCount || 1;
+            const originalUser = allUsers.find(u => u.uid === editingUser.uid) || editingUser;
+            const yearFields = {
+                ...pickYearFields(editingUser),
+                ...(buildYearBaseFields(editingUser, new Date(), originalUser.readCount || 1) || {}),
+            };
+            if (yearFields.countYear !== null && yearFields.yearBaseCount > newReadCount) {
+                yearFields.yearBaseCount = newReadCount;
+            }
+            const yearUpdate = yearFields.countYear !== null ? yearFields : {};
+            const savedEditingUser = { ...editingUser, ...yearUpdate };
             const userUpdate = {
+                name: editingUser.name,
                 communityId: editingUser.communityId, communityName: editingUser.communityName,
                 subgroupId: editingUser.subgroupId, planId: editingUser.planId,
-                currentDay: editingUser.currentDay, readCount: editingUser.readCount || 1,
+                currentDay: editingUser.currentDay, readCount: newReadCount,
+                ...yearUpdate,
                 score: editingUser.score, streak: editingUser.streak,
                 lastReadDate: editingUser.lastReadDate || null,
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -273,7 +328,8 @@ const App = () => {
                 communityName: editingUser.communityName,
                 subgroupId: editingUser.subgroupId,
                 currentDay: editingUser.currentDay,
-                readCount: editingUser.readCount || 1,
+                readCount: newReadCount,
+                ...yearUpdate,
                 score: editingUser.score || 0,
                 streak: editingUser.streak || 0,
                 lastReadDate: editingUser.lastReadDate || null,
@@ -286,7 +342,7 @@ const App = () => {
                 members: { [editingUser.uid]: summaryUpdate }
             }, { merge: true });
             await batch.commit();
-            setAllUsers(prev => prev.map(u => u.uid === editingUser.uid ? editingUser : u));
+            setAllUsers(prev => prev.map(u => u.uid === editingUser.uid ? savedEditingUser : u));
             setEditingUser(null); alert("수정되었습니다.");
         } catch (e) { console.error(e); alert("수정 실패"); }
     };
@@ -298,12 +354,34 @@ const App = () => {
      회원가입, 로그인, 로그아웃 등 사용자 인증 관련 비즈니스 로직입니다.
     */
 
-    // 관리자 화면용 데이터 로딩 (백그라운드, 화면 전환을 막지 않음)
+    // 관리자 화면용 데이터 로딩 (관리자 화면을 열 때만, 화면 전환을 막지 않음)
+    // summary/global(1건)로 먼저 표를 보여주고, 전체 회원 문서는 뒤이어 한 번만 읽는다.
     const loadAdminData = () => {
         if (!db) return;
+        let fullLoaded = false;
+
+        db.collection('summary').doc('global').get().then(summaryDoc => {
+            if (fullLoaded || !summaryDoc.exists) return;
+            const membersMap = summaryDoc.data().members || {};
+            const preview = Object.keys(membersMap).map(uid => ({
+                ...membersMap[uid],
+                uid,
+                currentDay: membersMap[uid].currentDay || 1,
+                readCount: membersMap[uid].readCount || 1,
+                readHistory: [],
+                memos: {},
+                fromSummary: true,
+            }));
+            if (preview.length > 0) {
+                setAllUsers(prev => (prev.length > 0 && !prev[0].fromSummary ? prev : preview));
+                setAllUsersFull(false);
+            }
+        }).catch(e => console.warn('요약 회원 목록 로딩 실패:', e));
 
         db.collection('users').get().then(snap => {
+            fullLoaded = true;
             setAllUsers(snap.docs.map(doc => userDocToState(doc)));
+            setAllUsersFull(true);
         }).catch(e => console.warn('회원 목록 로딩 실패:', e));
 
         db.collection('settings').doc('announcement').get().then(announcementDoc => {
@@ -328,7 +406,7 @@ const App = () => {
 
     // 관리자 화면 열기 (대시보드 헤더의 관리자 버튼)
     const openAdminMode = () => {
-        if (allUsers.length === 0) loadAdminData();
+        if (!allUsersFull) loadAdminData();
         setIsAdmin(true);
     };
 
@@ -379,7 +457,8 @@ const App = () => {
 
         try {
             // 계정 식별은 이름만 사용 (생년월일은 회원 정보로만 저장)
-            const email = makePseudoEmail(name);
+            // 관리자가 암호를 초기화한 이름이면 새 계정 주소로 로그인한다.
+            const { email, aliased } = await resolveLoginEmail(db, name);
 
             let cred = null;
 
@@ -389,6 +468,10 @@ const App = () => {
                 if ((err && err.code === 'auth/user-not-found') || (err && err.code === 'auth/invalid-login-credentials') || (err && err.code === 'auth/invalid-credential')) {
                     if (loginTab === 'login') {
                         setErrorMsg("이름 또는 암호가 올바르지 않습니다.");
+                        return;
+                    }
+                    if (aliased) {
+                        setErrorMsg("이미 사용 중인 이름입니다. 로그인 탭에서 로그인하거나 다른 이름을 사용해주세요.");
                         return;
                     }
                     try {
@@ -420,7 +503,7 @@ const App = () => {
                     // 관리자 계정 표시만 하고, 로그인은 일반 사용자와 동일하게 대시보드로 진행
                     // (대시보드 헤더의 관리자 버튼으로 관리자 화면 진입)
                     setIsAdminAccount(true);
-                    loadAdminData();
+                    // 회원 전체 조회는 관리자 화면을 실제로 열 때만 한다(로그인 때 204건 읽기 방지).
                 }
             } catch (adminErr) {
                 console.warn('관리자 확인 실패, 일반 사용자로 진행:', adminErr);
@@ -712,10 +795,11 @@ const App = () => {
 
     if (isAdmin) {
         return (
+            <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-500 font-bold">관리자 화면 여는 중...</div>}>
             <AdminView
                 handleLogout={handleLogout}
                 goUserMode={() => setIsAdmin(false)}
-                downloadCSV={downloadCSV}
+                downloadCSV={adminDownloadCSV}
                 adminViewMode={adminViewMode}
                 setAdminViewMode={setAdminViewMode}
                 adminFilter={adminFilter}
@@ -728,13 +812,14 @@ const App = () => {
                 announcementInput={announcementInput}
                 setAnnouncementInput={setAnnouncementInput}
                 saveAnnouncement={saveAnnouncement}
-                generateMemosCSV={() => generateMemosCSV(db)}
-                generateUserMemosHTML={(user) => generateUserMemosHTML(db, user)}
+                generateMemosCSV={adminGenerateMemosCSV}
+                generateUserMemosHTML={(user) => loadExportUtils().then(m => m.generateUserMemosHTML(db, user))}
                 editingUser={editingUser}
                 setEditingUser={setEditingUser}
                 startEditUser={startEditUser}
                 saveEditUser={saveEditUser}
                 deleteUser={deleteUser}
+                resetUserPassword={resetUserPassword}
                 lastSyncInfo={lastSyncInfo}
                 setLastSyncInfo={setLastSyncInfo}
                 syncProgress={syncProgress}
@@ -746,10 +831,11 @@ const App = () => {
                 kakaoLinkInput={kakaoLinkInput}
                 setKakaoLinkInput={setKakaoLinkInput}
                 saveKakaoLink={saveKakaoLink}
-                downloadPeriodStatsCSV={downloadPeriodStatsCSV}
+                downloadPeriodStatsCSV={(...args) => loadExportUtils().then(m => m.downloadPeriodStatsCSV(...args))}
                 rebuildSummary={rebuildSummary}
                 db={db}
             />
+            </Suspense>
         );
     }
 
@@ -853,7 +939,7 @@ const App = () => {
                 getSubgroupRanking={() => formatSubgroupRanking(subgroupStats)}
                 getProgressRanking={() => formatProgressRanking(subgroupStats)}
                 getSubgroupDisplay={getSubgroupDisplay}
-                generateMemosHTML={generateMemosHTML}
+                generateMemosHTML={(...args) => loadExportUtils().then(m => m.generateMemosHTML(...args))}
                 getWeeklyMVP={weeklyMVPFn}
             />
         );

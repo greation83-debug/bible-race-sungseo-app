@@ -1,6 +1,7 @@
 import React from 'react';
 import Icon from './Icon';
 import { countMemoEntries } from '../utils/memoUtils';
+import { getYearProgressDay, getYearReadCount } from '../utils/yearReadCount';
 
 const AdminView = ({
     handleLogout,
@@ -25,6 +26,7 @@ const AdminView = ({
     startEditUser,
     saveEditUser,
     deleteUser,
+    resetUserPassword,
     lastSyncInfo,
     setLastSyncInfo,
     syncProgress,
@@ -43,6 +45,26 @@ const AdminView = ({
     const [startDate, setStartDate] = React.useState('');
     const [endDate, setEndDate] = React.useState('');
     const [rebuilding, setRebuilding] = React.useState(false);
+    const [resetTarget, setResetTarget] = React.useState(null);
+    const [resetPw, setResetPw] = React.useState('');
+    const [resetStatus, setResetStatus] = React.useState('');
+
+    const handleResetPassword = async () => {
+        if (!resetTarget || resetStatus) return;
+        if (resetPw.length < 6) { alert('암호는 6자리 이상이어야 합니다.'); return; }
+        if (!confirm(`${resetTarget.name}님의 암호를 "${resetPw}"(으)로 바꿀까요?`)) return;
+        setResetStatus('시작하는 중...');
+        try {
+            await resetUserPassword(resetTarget, resetPw, setResetStatus);
+            alert(`✅ ${resetTarget.name}님의 암호가 바뀌었습니다.\n\n이름: ${resetTarget.name}\n새 암호: ${resetPw}\n\n읽기 기록과 묵상은 그대로 옮겨졌습니다.\n성도님께 이 이름과 암호로 로그인하시라고 알려드리세요.`);
+            setResetTarget(null);
+            setResetPw('');
+        } catch (e) {
+            alert('암호 초기화 실패: ' + ((e && e.message) || e));
+        } finally {
+            setResetStatus('');
+        }
+    };
 
     const handleRebuildSummary = async () => {
         if (typeof rebuildSummary !== 'function' || rebuilding) return;
@@ -263,8 +285,8 @@ const AdminView = ({
                                         if (adminSortBy === 'name') {
                                             return a.name.localeCompare(b.name);
                                         } else if (adminSortBy === 'day') {
-                                            const aTotalDays = ((a.readCount || 1) - 1) * 365 + (a.currentDay || 1);
-                                            const bTotalDays = ((b.readCount || 1) - 1) * 365 + (b.currentDay || 1);
+                                            const aTotalDays = getYearProgressDay(a);
+                                            const bTotalDays = getYearProgressDay(b);
                                             return bTotalDays - aTotalDays;
                                         } else if (adminSortBy === 'score') {
                                             return (b.score || 0) - (a.score || 0);
@@ -318,9 +340,9 @@ const AdminView = ({
                                                             </td>
                                                             <td className="px-3 py-2 text-center text-xs">
                                                                 {(() => {
-                                                                    const readCount = u.readCount || 1;
+                                                                    const readCount = getYearReadCount(u);
                                                                     const currentDay = u.currentDay || 1;
-                                                                    const totalDays = (readCount - 1) * 365 + currentDay;
+                                                                    const totalDays = getYearProgressDay(u);
                                                                     if (readCount > 1) {
                                                                         return (
                                                                             <div className="flex items-center justify-center gap-1">
@@ -362,16 +384,16 @@ const AdminView = ({
 
                 <div className="bg-white rounded-xl shadow-lg p-6">
                     <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                        👑 완주자 명예의 전당 ({allUsers.filter(u => u.currentDay >= 365 || (u.readCount || 1) >= 2).length}명)
+                        👑 완주자 명예의 전당 ({allUsers.filter(u => u.currentDay >= 365 || getYearReadCount(u) >= 2).length}명)
                     </h2>
                     {(() => {
                         const finishers = allUsers
-                            .filter(u => u.currentDay >= 365 || (u.readCount || 1) >= 2)
+                            .filter(u => u.currentDay >= 365 || getYearReadCount(u) >= 2)
                             .sort((a, b) => (b.score || 0) - (a.score || 0));
                         return finishers.length > 0 ? (
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 {finishers.map((u, idx) => {
-                                    const readCount = u.readCount || 1;
+                                    const readCount = getYearReadCount(u);
                                     return (
                                         <div key={u.uid} className={`p-4 rounded-xl text-center border-2 ${idx === 0 ? 'bg-yellow-50 border-yellow-300' : idx === 1 ? 'bg-slate-50 border-slate-300' : idx === 2 ? 'bg-orange-50 border-orange-300' : 'bg-white border-slate-100'}`}>
                                             <div className="text-2xl mb-1">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅'}</div>
@@ -618,10 +640,30 @@ const AdminView = ({
                     })()}
                 </div>
 
+                {resetTarget && (
+                    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => !resetStatus && setResetTarget(null)}>
+                        <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+                            <h3 className="text-xl font-bold text-slate-800 mb-4 border-b pb-2">🔑 암호 초기화</h3>
+                            <p className="text-sm text-slate-600 mb-4"><strong>{resetTarget.name}</strong>님의 암호를 새로 정합니다. 읽기 기록과 묵상은 그대로 유지됩니다.</p>
+                            <label className="block text-sm font-bold text-slate-600 mb-2">새 암호 (6자리 이상)</label>
+                            <input type="text" inputMode="numeric" value={resetPw} onChange={e => setResetPw(e.target.value.trim())} placeholder="성도님이 원하시는 숫자" className="w-full border border-slate-300 rounded-lg p-3 text-lg font-mono mb-1" autoFocus disabled={!!resetStatus} />
+                            <p className="text-xs text-slate-400 mb-4">※ 바꾼 뒤 성도님께 이 암호를 알려드리세요. 암호는 앱에 저장되지 않습니다.</p>
+                            <div className="flex gap-2">
+                                <button onClick={handleResetPassword} disabled={!!resetStatus || resetPw.length < 6} className="flex-1 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 disabled:opacity-50 font-bold">{resetStatus || '암호 바꾸기'}</button>
+                                <button onClick={() => setResetTarget(null)} disabled={!!resetStatus} className="flex-1 bg-slate-200 text-slate-600 py-3 rounded-lg hover:bg-slate-300 font-bold">취소</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {editingUser && (
                     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
                         <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
                             <h3 className="font-bold text-lg border-b pb-2">회원 정보 수정 ({editingUser.name})</h3>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">이름</label>
+                                <input type="text" value={editingUser.name || ''} onChange={e => setEditingUser({ ...editingUser, name: e.target.value })} className="w-full border rounded p-2 text-sm" />
+                            </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 mb-1">소속 공동체</label>
                                 <select value={editingUser.communityId} onChange={e => {
@@ -646,7 +688,7 @@ const AdminView = ({
                                     <input type="number" min="1" max="365" value={editingUser.currentDay || 1} onChange={e => setEditingUser({ ...editingUser, currentDay: parseInt(e.target.value) || 1 })} className="w-full border rounded p-2 text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-slate-500 mb-1">독수 (readCount)</label>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">평생 독수 (readCount) · 올해 {getYearReadCount(editingUser)}독</label>
                                     <input type="number" min="1" value={editingUser.readCount || 1} onChange={e => setEditingUser({ ...editingUser, readCount: parseInt(e.target.value) || 1 })} className="w-full border rounded p-2 text-sm" />
                                 </div>
                             </div>
@@ -691,8 +733,8 @@ const AdminView = ({
                                     const sorted = [...allUsers].sort((a, b) => {
                                         if (adminSortBy === 'name') return a.name.localeCompare(b.name);
                                         if (adminSortBy === 'day') {
-                                            const aTotalDays = ((a.readCount || 1) - 1) * 365 + (a.currentDay || 1);
-                                            const bTotalDays = ((b.readCount || 1) - 1) * 365 + (b.currentDay || 1);
+                                            const aTotalDays = getYearProgressDay(a);
+                                            const bTotalDays = getYearProgressDay(b);
                                             return bTotalDays - aTotalDays;
                                         }
                                         if (adminSortBy === 'score') return (b.score || 0) - (a.score || 0);
@@ -706,9 +748,9 @@ const AdminView = ({
 
                                     return sorted.map((u, idx) => {
                                         const readToday = u.lastReadDate === new Date().toDateString();
-                                        const readCount = u.readCount || 1;
+                                        const readCount = getYearReadCount(u);
                                         const currentDay = u.currentDay || 1;
-                                        const totalDays = (readCount - 1) * 365 + currentDay;
+                                        const totalDays = getYearProgressDay(u);
                                         return (
                                             <tr key={u.uid} className={`border-b hover:bg-slate-50 ${readToday ? 'bg-green-50' : ''}`}>
                                                 <td className="px-3 py-3 text-center text-xs text-slate-400 font-mono italic">{idx + 1}</td>
@@ -728,6 +770,7 @@ const AdminView = ({
                                                 <td className="px-3 py-3 text-center text-xs text-slate-400">{u.lastReadDate ? new Date(u.lastReadDate).toLocaleDateString('ko-KR') : '-'}</td>
                                                 <td className="px-3 py-3 text-center">
                                                     <div className="flex justify-center gap-1">
+                                                        <button onClick={() => { setResetTarget(u); setResetPw(''); }} className="text-purple-500 hover:text-purple-700 p-1 bg-purple-50 rounded" title="암호 초기화"><Icon name="refresh" size={14} /></button>
                                                         <button onClick={() => startEditUser(u)} className="text-blue-500 hover:text-blue-700 p-1 bg-blue-50 rounded" title="정보 수정"><Icon name="edit" size={14} /></button>
                                                         <button onClick={() => deleteUser(u.uid, u.name)} className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded" title="삭제"><Icon name="trash" size={14} /></button>
                                                     </div>

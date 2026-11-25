@@ -1,3 +1,5 @@
+import { readDailySetting, writeDailySetting } from '../utils/settingsCache';
+import { pickYearFields } from '../utils/yearReadCount';
 import { useState, useCallback } from 'react';
 import { db, firebase } from '../utils/firebase';
 import { calculateSubgroupStats } from '../utils/statsUtils';
@@ -6,9 +8,9 @@ import {
     normalizeRecentReadDailyCounts,
 } from '../utils/readHistoryUtils';
 
-const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v3';
-const LEGACY_RACE_MEMBERS_CACHE_KEYS = ['race_members_cache_v1', 'race_members_cache_v2'];
-const RACE_MEMBERS_CACHE_SCHEMA_VERSION = 3;
+const RACE_MEMBERS_CACHE_KEY = 'race_members_cache_v4';
+const LEGACY_RACE_MEMBERS_CACHE_KEYS = ['race_members_cache_v1', 'race_members_cache_v2', 'race_members_cache_v3'];
+const RACE_MEMBERS_CACHE_SCHEMA_VERSION = 4;
 const RACE_MEMBERS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
 
 const hasValidProgress = (member) => {
@@ -28,6 +30,7 @@ const compactRaceMember = (member) => {
         name: member.name || '',
         currentDay: Number(member.currentDay),
         readCount: Number(member.readCount),
+        ...pickYearFields(member),
         subgroupId: member.subgroupId || '소속없음',
         communityId: member.communityId || '',
         communityName: member.communityName || '',
@@ -128,6 +131,7 @@ export const useCommunity = (currentUser, setCurrentUser) => {
                     name: d.name || '',
                     currentDay: d.currentDay || 1,
                     readCount: d.readCount || 1,
+                    ...pickYearFields(d),
                     score: d.score || 0,
                     streak: d.streak || 0,
                     lastReadDate: d.lastReadDate || null,
@@ -146,25 +150,36 @@ export const useCommunity = (currentUser, setCurrentUser) => {
         }
     }, []);
 
+    // 공지·카톡 링크는 하루(KST 날짜) 동안 기기에 저장해 두고 다시 읽지 않는다.
     const loadAnnouncement = useCallback(async () => {
+        const cached = readDailySetting('announcement');
+        if (cached !== undefined) {
+            setAnnouncement(cached);
+            return;
+        }
         try {
             const doc = await db.collection('settings').doc('announcement').get();
-            if (doc.exists && doc.data().enabled) {
-                setAnnouncement(doc.data());
-            } else {
-                setAnnouncement(null);
-            }
+            const data = doc.exists ? doc.data() : null;
+            // Firestore 시간값은 JSON 저장이 안 되므로 빼고 저장한다.
+            const value = data && data.enabled ? { ...data, updatedAt: null } : null;
+            setAnnouncement(value);
+            writeDailySetting('announcement', value);
         } catch (e) {
             console.error("공지 로딩 실패:", e);
         }
     }, []);
 
     const loadKakaoLink = useCallback(async () => {
+        const cached = readDailySetting('kakao');
+        if (cached !== undefined) {
+            if (cached) setKakaoLink(cached);
+            return;
+        }
         try {
             const doc = await db.collection('settings').doc('kakao').get();
-            if (doc.exists) {
-                setKakaoLink(doc.data().url);
-            }
+            const url = doc.exists ? (doc.data().url || null) : null;
+            if (url) setKakaoLink(url);
+            writeDailySetting('kakao', url);
         } catch (e) {
             console.error("카카오 링크 로딩 실패:", e);
         }

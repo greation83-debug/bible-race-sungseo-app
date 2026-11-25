@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { getYearReadCount } from '../../utils/yearReadCount';
 
 const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, getSubgroupDisplay }) => {
     const clampMapPos = (position) => Math.max(14, Math.min(position, 86));
@@ -15,7 +16,7 @@ const RaceMap = ({ racers, totalRacers = racers.length, departmentChampions, get
         const lastXByLane = lanes.map(() => -100);
         const sorted = [...racers]
             .map((racer, idx) => {
-                const racerReadCount = racer.readCount || 1;
+                const racerReadCount = racer.yearReadCount || getYearReadCount(racer);
                 const is2ndRound = racerReadCount >= 2;
                 const displayDay = is2ndRound ? racer.currentDay : racer.day;
                 return {

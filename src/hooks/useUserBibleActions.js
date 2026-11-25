@@ -4,6 +4,7 @@ import { ACHIEVEMENTS } from '../data/achievements';
 import { calculateSubgroupStats } from '../utils/statsUtils';
 import { kstTodayDateString } from '../utils/dateUtils';
 import { addRecentReadActivity, buildRecentReadDailyCounts } from '../utils/readHistoryUtils';
+import { buildYearBaseFields, getYearReadCount, pickYearFields } from '../utils/yearReadCount';
 
 export const useUserBibleActions = (
     currentUser,
@@ -91,10 +92,15 @@ export const useUserBibleActions = (
 
         const historyItem = { date: todayStr, day: vDay, score: addedScore };
 
+        // 새해 첫 읽기라면(올해 기준값이 아직 없으면) 독수가 오르기 전 값을 올해 기준으로 남긴다.
+        const yearBaseFields = buildYearBaseFields(currentUser, new Date(), currentReadCount) || {};
+        const yearFields = { ...pickYearFields(currentUser), ...yearBaseFields };
+
         // Firestore용 (sentinel 포함) - 클라이언트 상태에 사용 금지
         const firestoreUpdateData = {
             currentDay: newProgressDay,
             readCount: newReadCount,
+            ...yearBaseFields,
             score: firebase.firestore.FieldValue.increment(addedScore),
             streak: newStreak,
             lastReadDate: todayStr,
@@ -106,6 +112,7 @@ export const useUserBibleActions = (
         const localUpdateData = {
             currentDay: newProgressDay,
             readCount: newReadCount,
+            ...yearBaseFields,
             score: newScore,
             streak: newStreak,
             lastReadDate: todayStr,
@@ -150,6 +157,7 @@ export const useUserBibleActions = (
             const memberPatch = {
                 currentDay: newProgressDay,
                 readCount: newReadCount,
+                ...yearFields,
                 score: newScore,
                 streak: newStreak,
                 lastReadDate: todayStr,
@@ -205,7 +213,8 @@ export const useUserBibleActions = (
             }, { merge: true }).catch(e => console.warn('summary 업데이트 실패:', e));
 
             if (completedRound) {
-                alert(`🎉 축하합니다! ${newReadCount - 1}독을 완료하셨습니다!\n\n이제 ${newReadCount}독을 시작합니다! 🏃‍♂️`);
+                const newYearReadCount = getYearReadCount(updatedUser);
+                alert(`🎉 축하합니다! ${newYearReadCount - 1}독을 완료하셨습니다!\n\n이제 ${newYearReadCount}독을 시작합니다! 🏃‍♂️`);
             }
 
             setShowConfetti(true);
@@ -230,15 +239,16 @@ export const useUserBibleActions = (
                 memoSnapshot.docs.slice(start, start + 400).forEach(doc => batch.delete(doc.ref));
                 await batch.commit();
             }
+            const restartYearFields = buildYearBaseFields(null, new Date(), 1) || {};
             await db.collection('users').doc(uid).set({
-                currentDay: 1, readCount: 1, score: 0, streak: 0, startDate: today,
+                currentDay: 1, readCount: 1, ...restartYearFields, score: 0, streak: 0, startDate: today,
                 lastReadDate: null, memos: {}, memoCount: 0, achievements: [],
                 updatedAt: firebase.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
 
             setCurrentUser(prev => ({
                 ...prev, currentDay: 1, score: 0, streak: 0, startDate: today,
-                lastReadDate: null, achievements: [], readCount: 1
+                lastReadDate: null, achievements: [], readCount: 1, ...restartYearFields
             }));
             if (setMemos) setMemos({});
             if (setReadHistory) setReadHistory([]);

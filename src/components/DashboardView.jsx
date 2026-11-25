@@ -1,3 +1,4 @@
+import { getYearProgressDay, getYearReadCount } from '../utils/yearReadCount';
 import React, { useMemo } from 'react';
 import { TOTAL_DAYS } from '../data/constants';
 import { BIBLE_VERSIONS, PLAN_TYPES } from '../data/bible_options';
@@ -145,9 +146,7 @@ const DashboardView = ({
     const { racers, departmentChampions } = useMemo(() => {
         const raceMemberSource = allMembersForRace.length > 0 ? allMembersForRace : [currentUser];
         const allRacersSorted = raceMemberSource.map(m => {
-            const readCount = m.readCount || 1;
-            const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
-            return { ...m, day: actualProgress, isMe: m.uid === currentUser.uid };
+            return { ...m, day: getYearProgressDay(m), yearReadCount: getYearReadCount(m), isMe: m.uid === currentUser.uid };
         }).sort((a, b) => b.day - a.day);
 
         const topOverall = allRacersSorted.slice(0, 12);

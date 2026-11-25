@@ -2,6 +2,7 @@ import { MOCK_COMMUNITIES } from '../data/communities';
 import { TOTAL_DAYS } from '../data/constants';
 import { kstTodayDateString } from './dateUtils';
 import { getCompletedReadingDays, getHistoryDaysRead } from './readHistoryUtils';
+import { getYearProgressDay } from './yearReadCount';
 
 export const calculateSubgroupStats = (members) => {
     const todayStr = kstTodayDateString();
@@ -18,9 +19,7 @@ export const calculateSubgroupStats = (members) => {
             // 누적 진행률 계산 (2독 이상 반영)
             const avgDay = totalCount > 0
                 ? subMembers.reduce((sum, m) => {
-                    const readCount = m.readCount || 1;
-                    const actualProgress = (readCount - 1) * 365 + (m.currentDay || 1);
-                    return sum + actualProgress;
+                    return sum + getYearProgressDay(m);
                 }, 0) / totalCount
                 : 0;
             // 실제 누적 진행률을 유지해 2독 이상인 소그룹도 100%를 넘겨 표시한다.

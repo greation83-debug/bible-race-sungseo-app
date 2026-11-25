@@ -27,6 +27,8 @@ export const userDocToState = (doc) => {
         memoCount: (d.memoCount !== undefined && d.memoCount !== null) ? d.memoCount : 0,
         dayOffset: (d.dayOffset !== undefined && d.dayOffset !== null) ? d.dayOffset : 0,
         readCount: (d.readCount !== undefined && d.readCount !== null) ? d.readCount : 1,
+        countYear: (d.countYear !== undefined && d.countYear !== null) ? d.countYear : null,
+        yearBaseCount: (d.yearBaseCount !== undefined && d.yearBaseCount !== null) ? d.yearBaseCount : null,
         readHistory: (d.readHistory !== undefined && d.readHistory !== null) ? d.readHistory : [],
     };
 };

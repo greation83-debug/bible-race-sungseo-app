@@ -120,18 +120,31 @@ export const generateMemosHTML = (userName, userMemos, userStats = {}) => {
     URL.revokeObjectURL(url);
 };
 
-export const generateMemosCSV = async (db) => {
+// 묵상 CSV에 드는 Firestore 읽기 예상 건수.
+// 회원마다 memos 하위 문서를 전부 읽고(빈 경우도 최소 1건), 회원 목록이 없으면 users도 읽는다.
+export const estimateMemosCSVReads = (users, needUsersQuery = false) => {
+    const list = Array.isArray(users) ? users : [];
+    const memoReads = list.reduce((sum, u) => {
+        const count = Math.max(Number(u && u.memoCount) || 0, countMemoEntries((u && u.memos) || {}));
+        return sum + Math.max(1, count);
+    }, 0);
+    return memoReads + (needUsersQuery ? list.length : 0);
+};
+
+// users: 관리자 화면에 이미 읽어 둔 회원 목록(uid·name·subgroupId·memos). 주면 users를 다시 읽지 않는다.
+export const generateMemosCSV = async (db, users) => {
     if (!db) return;
 
     try {
-        const snap = await db.collection('users').get();
+        const sourceUsers = Array.isArray(users) && users.length > 0
+            ? users.map(u => ({ id: u.uid, data: u }))
+            : (await db.collection('users').get()).docs.map(doc => ({ id: doc.id, data: doc.data() }));
         let csvContent = 'Name,Subgroup,ReadCount,Day,Date,Title,Memo\n';
 
-        for (const doc of snap.docs) {
-            const data = doc.data();
+        for (const { id, data } of sourceUsers) {
             const userName = data.name || 'Unknown';
             const subgroup = data.subgroupId || '-';
-            const memoSnap = await doc.ref.collection('memos').get();
+            const memoSnap = await db.collection('users').doc(id).collection('memos').get();
             const entries = [
                 ...getMemoEntries(data.memos || {}),
                 ...memoSnap.docs.map(memoDoc => ({ id: memoDoc.id, ...memoDoc.data() }))

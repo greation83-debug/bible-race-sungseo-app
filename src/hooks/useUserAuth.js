@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { auth, db } from '../utils/firebase';
 import { userDocToState } from '../utils/helpers';
+import { buildYearBaseFields } from '../utils/yearReadCount';
 
 export const useUserAuth = () => {
     const [currentUser, setCurrentUser] = useState(null);
@@ -33,6 +34,13 @@ export const useUserAuth = () => {
                             user.readCount = (user.readCount || 1) + extraRounds;
                             needsUpdate.currentDay = user.currentDay;
                             needsUpdate.readCount = user.readCount;
+                        }
+                        // 새해 첫 접속: 올해 독수 기준값(countYear·yearBaseCount)을 본인 문서에 남긴다.
+                        // readCount·currentDay·기록은 그대로 두고 화면의 "N독"만 1독부터 다시 센다.
+                        var yearBaseFields = buildYearBaseFields(user, new Date());
+                        if (yearBaseFields) {
+                            Object.assign(user, yearBaseFields);
+                            Object.assign(needsUpdate, yearBaseFields);
                         }
                         if (Object.keys(needsUpdate).length > 0) {
                             db.collection('users').doc(firebaseUser.uid).update(needsUpdate);

@@ -4,6 +4,7 @@ import { SUPABASE_FUNCTION_URL, GENESIS_1, AUDIO_BASE_URL } from '../data/consta
 import { BIBLE_VERSIONS, PLAN_TYPES } from '../data/bible_options';
 import { getActualDay } from '../utils/helpers';
 import { fetchStaticBibleText } from '../utils/bibleTextCache';
+import { getYearReadCount } from '../utils/yearReadCount';
 
 const ENABLE_NOTION_RUNTIME_FALLBACK = false;
 const CACHE_LOOKUP_TIMEOUT_MS = 20000;
@@ -283,7 +284,8 @@ export const useBibleContent = (currentUser) => {
         setVerseData(prev => ({ ...prev, loading: true }));
 
         try {
-            const { planId, dayOffset = 0, readCount = 1 } = currentUser;
+            const { planId, dayOffset = 0 } = currentUser;
+            const readCount = getYearReadCount(currentUser);
             const [planType, version] = (planId || '1year_revised').split('_');
             const planTypeData = PLAN_TYPES.find(p => p.id === planType);
             const planTypeName = planTypeData ? planTypeData.title : '성경 통독';
